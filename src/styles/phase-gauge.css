@@ -39,12 +39,10 @@
   color: var(--noir-paper);
 }
 
-.mf-game-menu__sound {
+.mf-game-menu__tools {
   display: flex;
-  min-height: 52px;
   align-items: center;
-  justify-content: space-between;
-  color: var(--gray-50);
+  gap: var(--space-sm);
 }
 
 .mf-game-phase-header__actions {

@@ -140,7 +140,6 @@ describe("알약 문구(P24-25)", () => {
       "붙일 사람을 눌러요",
       "하루 한 장, 아침에 떨어져요",
       "역할을 읽고 준비를 눌러요",
-      "단서를 눌러 살펴봐요",
       "가까이서 의심딱지를 눌러요",
       "모두 요청하면 투표해요",
       "45초 뒤엔 절반만 넘으면 돼요",
@@ -416,7 +415,7 @@ describe("첫날 실험방 연습", () => {
 
   it("첫날 안에 단서를 보고 의심딱지를 붙인 뒤 투표 한 번과 제시어 공개를 거친다", () => {
     expect(TUTORIAL_PLAYTEST_SCENES.map((scene) => scene.id)).toEqual([
-      "roles", "keyword", "answers", "postit", "discussion", "verdict", "answerReveal", "night", "end",
+      "roles", "keyword", "postit", "discussion", "verdict", "answerReveal", "night", "end",
     ]);
     const postit = tutorialView("postit", "b", T0, 0, playtest);
     expect(postit).toMatchObject({ map: "bar", playtest: true, day: { n: 1, suspects: [{ from: 5, to: 4 }] } });

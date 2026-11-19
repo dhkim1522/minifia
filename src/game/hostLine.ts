@@ -160,9 +160,6 @@ function playtestHostLine(view: RoomView): string | undefined {
     case "keyword":
       if (view.me.answer?.final) return "모두의 단서를 기다려요";
       return view.me.keyword === undefined ? "주제를 보고 단서를 써요" : "제시어 없이 단서를 써요";
-    case "discussion":
-      if (view.day?.n === 1 && !isGhost(view)) return "모두의 단서를 살펴봐요";
-      break;
     case "verdict":
       if (view.day?.firstBallot?.result) return "";
       if (view.day?.firstBallot && !isGhost(view)) return "한 명을 고르거나 건너뛰어요";

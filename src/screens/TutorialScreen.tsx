@@ -46,7 +46,6 @@ function selectorFor(target: TutorialTargetId, scene: TutorialSceneId, playtest:
   switch (target) {
     case "role-ready": return "[data-role-ready]";
     case "send": return "[data-answer-send]";
-    case "clues-btn": return '[data-playtest-action="clues"]';
     case "endDiscussion": return "[data-end-discussion]";
     case "first-ballot": return "[data-first-ballot] [data-face], [data-first-ballot-hold]";
     case "yes": return '[data-verdict="yes"]';
@@ -108,7 +107,7 @@ export function TutorialScreen({ onExit, playtest = false }: { onExit: () => voi
   const root = useRef<HTMLDivElement>(null);
   useFixedRoomHeight(root);
   const clickTool = useCallback((target: TutorialTargetId) => {
-    const selector = selectorFor(target, target === "suspect-btn" ? "postit" : "answers", playtest);
+    const selector = selectorFor(target, "postit", playtest);
     root.current?.querySelector<HTMLButtonElement>(selector)?.click();
   }, [playtest]);
   const { cursor, scene, beat, target, steps, send, openTool, go } = useTutorialScene(clickTool, playtest);

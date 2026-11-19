@@ -125,7 +125,7 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
       const bannerZ = banner ? getComputedStyle(banner).zIndex : null;
       return {
         viewport: vp,
-        button: { count: btns.length, rect, disc: box(b) /* 16-06: 상자가 곧 52 원 면이다 */, pill: !!b?.classList.contains("mv-sound--pill") },
+        button: { count: btns.length, rect, disc: rect },
         // 14페이즈: 소리 단추는 자막 띠 아래 독에 선다 — 띠가 있으면 띠 면 아랫변이 기준이다
         header: { bottom: bandEl ? bandEl.getBoundingClientRect().bottom : header ? header.getBoundingClientRect().bottom : null, buttons: headerButtons.filter((x) => x.rect) },
         test: box(document.querySelector(".mf-lobby__test .mf-tt")),
@@ -138,8 +138,8 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
   }
 
   /**
-   * sound-unlock (D-21): 홈에는 단추가 없고, [방 만들기] 탭 → 훅 running · 단추 on, 단추 토글(ui.toggle 로그), 끈 채 새로고침 → 알약 없음,
-   * 켠 채 새로고침 → 알약 → 아무 데나 탭 → running, 탭 숨김 → suspended / 보임 → running, 단추 위치·겹침(SU1~SU7, 재접속 띠 위에서도).
+   * sound-unlock (D-21): 홈에는 단추가 없고, [방 만들기] 탭 → 훅 running · 단추 on, 단추 토글(ui.toggle 로그), 끈 채 새로고침 → 음소거 아이콘,
+   * 켠 채 새로고침 → 잠긴 음소거 아이콘 → 아무 데나 탭 → running, 탭 숨김 → suspended / 보임 → running, 단추 위치·겹침(SU1~SU7, 재접속 띠 위에서도).
    * 방 없는 새 컨텍스트로 시작해 UI 탭으로 방을 만든다. 소리 출력은 보지 않고 훅의 상태·요청 로그만 읽는다.
    */
   async function soundUnlockFlow(ctx) {
@@ -187,36 +187,30 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
       rec("sound-unlock/toggle", "SK3a", "단추 탭 → 훅 off · 단추 off", off.ok && (await buttonState(page)) === "off", off.detail);
       rec("sound-unlock/toggle", "SK3b", "로그 맨 앞이 ui.toggle(played 참), 그 뒤 played 참 없음", !!toggle && toggle.id === "ui.toggle" && toggle.played === true && laterPlayed.length === 0, `log ${JSON.stringify(log.map((e) => `${e.id}:${e.played}`))}`);
 
-      // ④ 끈 채 새로고침 → 알약 없음(끈 사람에게 다시 권하지 않는다)
+      // ④ 끈 채 새로고침 → 음소거 아이콘
       await page.reload({ waitUntil: "domcontentloaded" });
       const offReload = await attempt(async () => {
         await page.locator(BTN).first().waitFor({ timeout: 10000 });
         await sleep(600);
         const state = await buttonState(page);
         const text = ((await page.locator(BTN).first().textContent()) ?? "").trim();
-        // 16-04(TOOL-04): 이름표(한 단어 라벨)는 없어졌다 — 끈 단추에는 알약의 글('소리 켜기')도 라벨도 없다
         return state === "off" && text === "" ? true : { ok: false, detail: `state ${state} · 글 '${text}'` };
       });
-      rec("sound-unlock/reload-off", "SK4", "끈 채 새로고침 → data-sound-state=off, 알약(글 '소리 켜기') 없이 글 자체가 없음(아이콘 단추)", offReload.ok, offReload.detail);
+      rec("sound-unlock/reload-off", "SK4", "끈 채 새로고침 → 음소거 아이콘, data-sound-state=off", offReload.ok, offReload.detail);
 
-      // ⑤ 켠 채 새로고침 → 알약(locked) → 아무 데나 탭 → running
+      // ⑤ 켠 채 새로고침 → 음소거 아이콘(locked) → 아무 데나 탭 → running
       await page.locator(BTN).first().click();
       const on = await hookIs(page, "running");
       rec("sound-unlock/reload-on", "SK5a", "off 에서 단추 탭 → 켜짐 · 훅 running", on.ok, on.detail);
       await page.reload({ waitUntil: "domcontentloaded" });
-      const pill = await attempt(async () => {
+      const locked = await attempt(async () => {
         await page.locator(BTN).first().waitFor({ timeout: 10000 });
         const state = await buttonState(page);
         const text = ((await page.locator(BTN).first().textContent()) ?? "").trim();
         const hook = await page.evaluate(() => window.__mfSound?.state ?? null);
-        return state === "locked" && text === "소리 켜기" && hook === "locked" ? true : { ok: false, detail: `state ${state} · 글 '${text}' · 훅 ${hook}` };
+        return state === "locked" && text === "" && hook === "locked" ? true : { ok: false, detail: `state ${state} · 글 '${text}' · 훅 ${hook}` };
       });
-      rec("sound-unlock/reload-on", "SK5b", "켠 채 새로고침 → locked, 알약 글 '소리 켜기', 훅 locked", pill.ok, pill.detail);
-      const pillBox = await page.evaluate(() => {
-        const f = document.querySelector("[data-sound-button]")?.getBoundingClientRect();
-        return f ? { width: Math.round(f.width * 10) / 10, height: Math.round(f.height * 10) / 10 } : null;
-      });
-      rec("sound-unlock/reload-on", "SK5i", "참고: 알약 크기", true, pillBox ? `${pillBox.width}x${pillBox.height}` : "측정 못함", true);
+      rec("sound-unlock/reload-on", "SK5b", "켠 채 새로고침 → 아이콘만 보이고 상태와 훅이 locked", locked.ok, locked.detail);
       await page.touchscreen.tap(Math.round(w / 2), 6);
       const woke = await hookIs(page, "running");
       rec("sound-unlock/reload-on", "SK5c", `화면 아무 곳 탭 → ${HOOK_WAIT_MS / 1000}초 안에 running · 단추 on`, woke.ok && (await buttonState(page)) === "on", woke.detail);

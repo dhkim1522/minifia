@@ -143,10 +143,8 @@ describe("열 단추 표식·모양 (V-2)", () => {
     }
   });
 
-  it("CSS: 소리 잠김 알약은 단추 상자 자신이 늘어나고 독이 오른쪽 정렬이라 오른쪽 변이 움직이지 않는다", () => {
+  it("CSS: 소리 단추는 독의 오른쪽에 고정된다", () => {
     expect(body(".mv-host__dock")).toMatch(/justify-content:\s*flex-end/);
-    expect(body(".mv-sound--pill")).toMatch(/width:\s*auto/);
-    expect(body(".mv-sound--pill")).toMatch(/min-width:\s*112px/);
   });
 
   it("CSS: 독 위 간격 12 = 띠 아래 간격 8 + 안쪽 위 여백 4 (독 아랫변 = 띠 아랫변 + 64)", () => {

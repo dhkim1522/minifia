@@ -790,7 +790,6 @@ describe("RoomScreen: 첫날 토론의 공개 답과 결과 정답 줄", () => {
   };
   const sheet = (): HTMLElement | null => document.querySelector<HTMLElement>("dialog");
   const evidence = (): HTMLElement | null => document.querySelector<HTMLElement>("[data-discussion-evidence]");
-  const toggle = (): HTMLButtonElement => document.querySelector<HTMLButtonElement>('[data-playtest-action="clues"]')!;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -800,62 +799,27 @@ describe("RoomScreen: 첫날 토론의 공개 답과 결과 정답 줄", () => {
     stage.props = null;
   });
 
-  it("첫 토론은 채팅을 고정하고 단서와 역할 기록을 각각 열 수 있다", () => {
-    connectionMock.current = conn({ view: play("dayAnnounce") });
-    const { rerender, container } = mount();
+  it("토론에는 재열람 도구가 없고 공개 답은 역할 카드 기록에서 읽는다", () => {
+    connectionMock.current = conn({ view: play("discussion") });
+    const { container } = mount();
     expect(evidence()).toBeNull();
-    expect(sheet()).toBeNull();
-    setView(play("discussion"));
-    again(rerender);
-    expect(sheet()).toBeNull();
-    expect(toggle().getAttribute("aria-expanded")).toBe("false");
-    expect(evidence()).toBeNull();
-    const chat = container.querySelector("[data-chat-input]");
-    fireEvent.click(toggle());
-    expect(toggle().getAttribute("aria-expanded")).toBe("true");
-    expect(evidence()?.querySelectorAll("[data-evidence-row]")).toHaveLength(rows.length);
-    expect(container.querySelector("[data-chat-input]")).toBe(chat);
-    expect(container.querySelector<HTMLInputElement>("[data-chat-input]")?.disabled).toBe(false);
+    expect(container.querySelector('[data-playtest-action="clues"]')).toBeNull();
+    expect(container.querySelector("[data-chat-input]")).not.toBeNull();
     fireEvent.click(container.querySelector("[data-game-menu]")!);
     fireEvent.click(container.querySelector("[data-game-menu-role]")!);
     fireEvent.click(container.querySelector('[data-rolecard-tab="records"]')!);
     expect(sheet()?.getAttribute("aria-label")).toBe("모두의 기록");
+    expect(sheet()?.querySelectorAll("[data-answer-row]")).toHaveLength(rows.length);
   });
 
-  it("답 목록을 접으면 토론 뷰 갱신 중에도 접힌 채이며 찬반에 들어가면 사라진다", () => {
+  it("토론 중 재접속해도 채팅 위에 단서 창이 열리지 않는다", () => {
     connectionMock.current = conn({ view: play("dayAnnounce") });
-    const { rerender } = mount();
-    setView(play("discussion"));
-    again(rerender);
-    fireEvent.click(toggle());
-    expect(evidence()).not.toBeNull();
-    fireEvent.click(toggle());
-    setView({ ...play("discussion"), serverNow: 2000 });
-    again(rerender);
-    expect(toggle().getAttribute("aria-expanded")).toBe("false");
-    setView(play("verdict"));
-    again(rerender);
-    expect(evidence()).toBeNull();
-  });
-
-  it("첫 토론 중 새로고침하면 모달 없이 공개 답을 다시 볼 수 있다", () => {
-    connectionMock.current = conn({ view: play("discussion") });
-    mount();
-    expect(sheet()).toBeNull();
-    expect(evidence()).toBeNull();
-    fireEvent.click(toggle());
-    expect(evidence()).not.toBeNull();
-  });
-
-  it("같은 연결에서 epoch 가 바뀌며(재접속) 도착한 discussion 도 열리지 않는다", () => {
-    connectionMock.current = conn({ view: play("dayAnnounce") });
-    const { rerender } = mount();
+    const { rerender, container } = mount();
     setView(play("discussion"), 2);
     again(rerender);
     expect(sheet()).toBeNull();
     expect(evidence()).toBeNull();
-    fireEvent.click(toggle());
-    expect(evidence()).not.toBeNull();
+    expect(container.querySelector('[data-playtest-action="clues"]')).toBeNull();
   });
 
   it("2일차에는 첫날 답을 다시 위에 띄우지 않는다", () => {
@@ -885,25 +849,6 @@ describe("RoomScreen: 첫날 토론의 공개 답과 결과 정답 줄", () => {
     setView(play("discussion", { answers: false }));
     again(rerender);
     expect(evidence()).toBeNull();
-  });
-
-  it("새 판의 첫 토론에서는 지난 단서 패널을 닫고 다시 열 수 있다", () => {
-    connectionMock.current = conn({ view: play("dayAnnounce") });
-    const { rerender } = mount();
-    setView(play("discussion"));
-    again(rerender);
-    fireEvent.click(toggle());
-    expect(toggle().getAttribute("aria-expanded")).toBe("true");
-    setView(play("lobby", { round: 2 }));
-    again(rerender);
-    setView(play("dayAnnounce", { round: 2 }));
-    again(rerender);
-    setView(play("discussion", { round: 2 }));
-    again(rerender);
-    act(() => { vi.advanceTimersByTime(EXIT_CURTAIN_MS); });
-    expect(toggle().getAttribute("aria-expanded")).toBe("false");
-    fireEvent.click(toggle());
-    expect(toggle().getAttribute("aria-expanded")).toBe("true");
   });
 
   it("결과(ended): 정답이 있으면 띠 줄이 `제시어 · 해리포터`, 시간 행은 없다", () => {

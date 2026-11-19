@@ -169,51 +169,27 @@ describe("GameMap — 내 마피아 의상", () => {
   });
 });
 
-describe("GameMap — 아침 유언 인용", () => {
-  it("첫날 단서가 모두 비어 있으면 단서 도구를 표시하지 않는다", () => {
-    const view = makeView();
-    view.day!.keyword = { genre: "영화", answers: [{ seat: 1, order: 1, text: null }] };
-    const { container } = mount(view);
-    expect(container.querySelector('[data-playtest-action="clues"]')).toBeNull();
-  });
-
-  it("둘째 날 토론에는 이번 아침 피해자의 공개 유언만 표시한다", () => {
+describe("GameMap — 토론 기록", () => {
+  it.each([false, true])("아침에 받은 공개 유언은 채팅 기록에 남고 인용 도구가 없다 (실험방 %s)", (playtest) => {
     const store = new WorldStore();
     const chat = new ChatStore();
     const send = vi.fn();
-    const frame = (view: RoomView) => <GameMap view={view} store={store} chat={chat} send={send} />;
-    const morning = makeView({ phase: "morning", n: 1, dead: [1, 2] });
+    const frame = (view: RoomView) => <GameMap view={playtest ? { ...view, playtest: true } : view} store={store} chat={chat} send={send} />;
+    const morning = makeView({ phase: "morning", n: 1, dead: [2] });
     morning.day!.morning = { eliminated: 2 };
     const { container, rerender } = render(frame(morning));
-    const evidence = () => container.querySelector<HTMLElement>("[data-discussion-evidence]");
-    const input = () => container.querySelector<HTMLInputElement>("[data-chat-input]")!;
-    expect(evidence()).toBeNull();
-    act(() => {
-      chat.apply({ t: "chatLog", lines: [
-        { ch: "all", k: "will", at: NOW - 60_000, seat: 1, seq: 1, text: "지난 처형 유언" },
-        { ch: "all", k: "note", at: NOW, seat: 2, seq: 2, text: "아침 쪽지" },
-      ] }, 1, NOW);
-    });
-    rerender(frame(makeView({ n: 2, dead: [1, 2] })));
-    expect(container.querySelector('[data-playtest-action="clues"]')).toBeNull();
-    expect(evidence()).toBeNull();
     act(() => chat.apply({ t: "chatLog", lines: [
-      { ch: "all", k: "will", at: NOW, seat: 2, seq: 3, text: "이번 아침 유언" },
+      { ch: "all", k: "will", at: NOW, seat: 2, seq: 1, text: "남겨 둔 말" },
     ] }, 1, NOW));
-    const record = container.querySelector<HTMLButtonElement>('[data-playtest-action="clues"]')!;
-    expect(record.textContent).toBe("아침 유언");
-    fireEvent.click(record);
-    expect(evidence()?.textContent).toBe("아침 유언서준이번 아침 유언");
-    fireEvent.click(evidence()!.querySelector("[data-evidence-quote]")!);
-    expect(input().value).toBe("서준 “이번 아침 유언”");
-    expect(send.mock.calls.some(([message]) => message.t === "chat")).toBe(false);
-    rerender(frame(makeView({ n: 3, dead: [1, 2] })));
-    expect(evidence()).toBeNull();
+    rerender(frame(makeView({ n: 2, dead: [2] })));
+    expect(container.querySelector("[data-chat-log]")?.textContent).toContain("남겨 둔 말");
+    expect(container.querySelector('[data-playtest-action="clues"], [data-discussion-evidence]')).toBeNull();
+    expect(endButton(container)).not.toBeNull();
   });
 });
 
 describe("GameMap — 실험방 토론 도구", () => {
-  it("단서와 반응을 열어도 채팅 입력·도구·초안을 유지하고 조합이 끝난 뒤 인용한다", () => {
+  it("첫날 반응을 보내도 채팅 초안과 토론 스킵이 유지된다", () => {
     const send = vi.fn();
     const view: RoomView = { ...makeView({ count: 4 }), playtest: true };
     view.day!.keyword = { genre: "영화", answers: [{ seat: 1, order: 1, text: "공개된 단서" }] };
@@ -228,9 +204,7 @@ describe("GameMap — 실험방 토론 도구", () => {
     expect(container.querySelector("[data-chat-open]")).toBeNull();
     fireEvent.change(input, { target: { value: "내 초안" } });
     input.focus();
-    fireEvent.click(action("clues"), { detail: 1 });
-    expect(activeSurface()).toBe("clues");
-    expect(document.activeElement).toBe(input);
+    expect(action("clues")).toBeNull();
     fireEvent.click(action("reaction"), { detail: 1 });
     expect(activeSurface()).toBe("reaction");
     fireEvent.click(getByRole("button", { name: "최고" }));
@@ -241,18 +215,6 @@ describe("GameMap — 실험방 토론 도구", () => {
     expect(endButton(container)).not.toBeNull();
     expect(document.activeElement).toBe(input);
 
-    fireEvent.click(action("clues"), { detail: 1 });
-    fireEvent.compositionStart(input);
-    fireEvent.keyDown(input, { key: "Escape", isComposing: true });
-    expect(activeSurface()).toBe("clues");
-    fireEvent.click(container.querySelector("[data-evidence-quote]")!);
-    expect(input.value).toBe("내 초안");
-    expect(container.querySelector("[data-playtest-surface] [role='status']")?.textContent).toBe("입력을 마친 뒤 눌러 주세요");
-    fireEvent.compositionEnd(input);
-    fireEvent.click(container.querySelector("[data-evidence-quote]")!);
-    expect(activeSurface()).toBeUndefined();
-    expect(input.value).toMatch(/^내 초안 .*“공개된 단서”$/);
-    expect(document.activeElement).toBe(input);
     expect(send.mock.calls.some(([message]) => message.t === "chat")).toBe(false);
   });
 
@@ -587,7 +549,7 @@ describe("GameMap — 스테이지 사각형 측정과 키보드 (CHAT-05, 08-13
     expect(stage.props?.stageInsets).toEqual({ top: 62, bottom: KB_PANEL + 336 });
   });
 
-  it("키보드가 열려 있을 때 단서 도구를 누르면 초안을 유지하고 키보드를 접는다", () => {
+  it("키보드가 열려 있을 때 반응 도구를 누르면 초안을 유지하고 키보드를 접는다", () => {
     const vv = installVV(INNER_H);
     const view = makeView();
     view.day!.keyword = { genre: "영화", answers: [{ seat: 0, text: "무대", order: 1 }] };
@@ -595,11 +557,11 @@ describe("GameMap — 스테이지 사각형 측정과 키보드 (CHAT-05, 08-13
     focusWithKeyboard(container, vv, 336);
     const input = inputOf(container);
     fireEvent.change(input, { target: { value: "쓰던 말" } });
-    fireEvent.click(container.querySelector('[data-playtest-action="clues"]')!);
+    fireEvent.click(container.querySelector('[data-playtest-action="reaction"]')!);
     advance(20);
     expect(document.activeElement).not.toBe(input);
     expect(input.value).toBe("쓰던 말");
-    expect(container.querySelector('[data-playtest-surface="clues"]')).not.toBeNull();
+    expect(container.querySelector('[data-playtest-surface="reaction"]')).not.toBeNull();
   });
 
   it("키보드 열림 경계(lift 60) 아래에서는 기록 칸이 92px이고, 블러하면 92px로 돌아온다", () => {

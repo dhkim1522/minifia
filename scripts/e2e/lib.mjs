@@ -2226,16 +2226,16 @@ export function soundRenderChecks(results, limits = SOUND_RENDER_LIMITS) {
 // ---- 12페이즈 소리 단추 sound-unlock (12-07, 결정 D-4·D-21, UI-SPEC B-1·B-2) ----
 
 /** 소리 단추 기하(16-06 V-2·V-4): 상자가 곧 면이라 누르기 = 시각 지름 52 ±1, 자막 띠 아랫변에서 12 아래 ±2, 오른쪽 여백 16 ±2, 알약 높이 52 · 폭 112 이상 */
-export const SOUND_BUTTON_GEOMETRY = Object.freeze({ tap: 52, disc: 52, discTol: 1, gap: 12, margin: 16, posTol: 2, pillH: 52, pillMinW: 112 });
+export const SOUND_BUTTON_GEOMETRY = Object.freeze({ tap: 52, disc: 52, discTol: 1, gap: 12, margin: 16, posTol: 2 });
 const SOUND_NAMES = Object.freeze({ on: "소리 끄기", off: "소리 켜기", locked: "소리 켜기" });
 
 /**
  * 방 화면 소리 단추 위치·겹침·접근성 (sound-unlock). 사각형은 { left, top, width, height }.
- * viewport = { w, h } · button = { count, rect(누르기 영역), disc(시각 원/알약), pill } · header = { bottom(헤더 아래 끝), buttons[{kind, rect}] } ·
+ * viewport = { w, h } · button = { count, rect(누르기 영역), disc(보이는 타일) } · header = { bottom(헤더 아래 끝), buttons[{kind, rect}] } ·
  * test = [테스트] 사각형|null · toast = TopToast 글자 사각형|null · bannerHit = { present, covers(띠가 단추 중심을 덮음), hitIsButton(그 점의 최상단이 단추) } · labels = { state, name, pressed }.
- * SU1 정확히 하나 · SU2 누르기 ≥ 44×44 · SU3 위 = 헤더 아래 끝 + 8 (±2) · 오른쪽 여백 16 (±2) · SU4 헤더 단추·[테스트]·TopToast 와 겹침 0 ·
+ * SU1 정확히 하나 · SU2 누르기 ≥ 52×52 · SU3 위 = 헤더 아래 끝 + 12 (±2) · 오른쪽 여백 16 (±2) · SU4 헤더 단추·[테스트]·TopToast 와 겹침 0 ·
  * SU5 재접속 띠가 단추 중심을 덮을 때 최상단이 단추 자신(띠가 없거나 덮지 않으면 확인한 것이 없어 실패 — 공허한 통과 금지) ·
- * SU6 시각 지름 36 (±1), 알약이면 높이 44 · 폭 112 이상 · SU7 접근성 이름이 상태에 맞음(on '소리 끄기' · off/locked '소리 켜기', aria-pressed).
+ * SU6 타일 폭·높이 52 (±1) · SU7 접근성 이름이 상태에 맞음(on '소리 끄기' · off/locked '소리 켜기', aria-pressed).
  */
 export function soundButtonChecks({ viewport, button, header, test, toast, bannerHit, labels } = {}) {
   const G = SOUND_BUTTON_GEOMETRY;
@@ -2245,7 +2245,7 @@ export function soundButtonChecks({ viewport, button, header, test, toast, banne
     SU3: `위 = 헤더(자막 띠가 있으면 띠) 아래 끝 + ${G.gap} · 오른쪽 여백 ${G.margin} (±${G.posTol})`,
     SU4: "헤더 단추·[테스트]·토스트 글자와 겹침 0",
     SU5: "재접속 띠가 떠 있어도 단추 중심의 최상단이 단추 자신",
-    SU6: `시각 지름 ${G.disc}±${G.discTol} (알약은 높이 ${G.pillH} · 폭 ${G.pillMinW} 이상)`,
+    SU6: `타일 폭·높이 ${G.disc}±${G.discTol}`,
     SU7: "접근성 이름·aria-pressed 가 상태에 맞음",
   };
   const okRect = (r) => !!r && allNum(r.left, r.top, r.width, r.height);
@@ -2281,13 +2281,8 @@ export function soundButtonChecks({ viewport, button, header, test, toast, banne
   out.push(result("SU5", L.SU5, bad5));
   const d = button.disc;
   const bad6 = [];
-  if (button.pill === true) {
-    if (Math.abs(d.height - G.pillH) > G.discTol) bad6.push(`알약 높이 ${fmt(d.height)}`);
-    if (d.width < G.pillMinW) bad6.push(`알약 폭 ${fmt(d.width)}`);
-  } else {
-    if (Math.abs(d.width - G.disc) > G.discTol) bad6.push(`지름(폭) ${fmt(d.width)}`);
-    if (Math.abs(d.height - G.disc) > G.discTol) bad6.push(`지름(높이) ${fmt(d.height)}`);
-  }
+  if (Math.abs(d.width - G.disc) > G.discTol) bad6.push(`폭 ${fmt(d.width)}`);
+  if (Math.abs(d.height - G.disc) > G.discTol) bad6.push(`높이 ${fmt(d.height)}`);
   out.push(result("SU6", L.SU6, bad6));
   const want = SOUND_NAMES[labels.state];
   const bad7 = [];
@@ -2318,16 +2313,16 @@ export const SIDE_COLUMN_EXCEPTIONS = Object.freeze([]);
 /**
  * 오른쪽 열 판정 (SC1~SC6). 사각형은 { left, top, width, height, right, bottom }.
  * s = { viewport {w,h} · screen "lobby"|"result"|"game" · host 방장 화면인가 ·
- *       buttons [{ side, rect, pill? }]([data-side-button]) · band 자막 띠 면 사각형|null · panelTop 아래 패널 윗변|null ·
+ *       buttons [{ side, rect }]([data-side-button]) · band 자막 띠 면 사각형|null · panelTop 아래 패널 윗변|null ·
  *       head [{ kind, rect }] 머리 단추(나가기·공유) · expectHead 머리 단추 개수(기본 2) · test [테스트] 사각형|null }.
- * SC1 열 단추는 지름 52±1 원(알약 소리는 높이 52±1·폭 112 이상) · SC2 열 단추끼리·자막 띠(좌우·아래 8 여유)·아래 패널(윗변 − 8)·머리 단추·[테스트] 와 교차 0(예외 조합은 SIDE_COLUMN_EXCEPTIONS) ·
+ * SC1 열 단추는 52±1 정사각 타일 · SC2 열 단추끼리·자막 띠(좌우·아래 8 여유)·아래 패널(윗변 − 8)·머리 단추·[테스트] 와 교차 0(예외 조합은 SIDE_COLUMN_EXCEPTIONS) ·
  * SC3 방장·참가자 모두 소리·옷장(대기실·결과), 게임 화면은 소리 하나. 맵·봇이 열에 있으면 실패(19페이즈: 방장 전용은 왼쪽 줄). 순서는 sound·dress ·
  * SC4 머리에는 44 정사각 단추뿐(개수 expectHead) · SC5 열 윗변 = 띠 아랫변 + 12 ±2, 가장 오른쪽 단추의 오른쪽 여백 16 ±1 ·
  * SC6 열 안 간격 12 ±1, 두 열이면 열 사이 12 ±1, 첫 열(오른쪽)은 두 칸 이상.
  */
 export function sideColumnChecks(s = {}) {
   const L = {
-    SC1: `열 단추는 지름 ${SIDE_BUTTON_SIZE}±1 원(소리 알약은 높이 ${SIDE_BUTTON_SIZE}·폭 ${SOUND_BUTTON_GEOMETRY.pillMinW} 이상)`,
+    SC1: `열 단추는 ${SIDE_BUTTON_SIZE}±1 정사각 타일`,
     SC2: "열 단추끼리·자막 띠(좌우·아래 8 이내)·아래 패널·머리 단추·[테스트]와 교차 0",
     SC3: "방장·참가자 모두 소리·옷장(게임 화면은 소리만) · 순서 소리·옷장",
     SC4: "머리 단추는 44 정사각뿐(나가기·공유)",
@@ -2342,13 +2337,11 @@ export function sideColumnChecks(s = {}) {
     (s.test === null || s.test === undefined || rectOk(s.test)) && (s.panelTop === null || s.panelTop === undefined || isNum(s.panelTop));
   if (!valid) return Object.entries(L).map(([id, label]) => noMeasure(id, label, "viewport·screen·host·buttons[{side, rect}]·band·panelTop·head·test"));
   const out = [];
-  // 소리 잠김 알약(8초)은 왼쪽으로 늘어나므로 교차·열 판정에는 오른쪽 52 몫만 쓴다(오른쪽 변은 움직이지 않는다). 크기(SC1)는 상자 전체로 본다
-  const btns = s.buttons.map((b) => ({ side: b.side, raw: b.rect, pill: b.pill === true, r: b.pill === true ? { left: right(b.rect) - SIDE_BUTTON_SIZE, top: b.rect.top, width: SIDE_BUTTON_SIZE, height: b.rect.height, right: right(b.rect), bottom: bottom(b.rect) } : b.rect }));
+  const btns = s.buttons.map((b) => ({ side: b.side, r: b.rect }));
   const D = SIDE_BUTTON_SIZE;
   const bad1 = [];
-  for (const b of btns) {
-    const wOk = b.pill ? b.raw.width + OVERLAP_EPS >= SOUND_BUTTON_GEOMETRY.pillMinW : Math.abs(b.raw.width - D) <= 1;
-    if (!wOk || Math.abs(b.raw.height - D) > 1) bad1.push(`${b.side} ${fmt(b.raw.width)}x${fmt(b.raw.height)}`);
+  for (const { side, r } of btns) {
+    if (Math.abs(r.width - D) > 1 || Math.abs(r.height - D) > 1) bad1.push(`${side} ${fmt(r.width)}x${fmt(r.height)}`);
   }
   out.push(result("SC1", L.SC1, bad1));
 

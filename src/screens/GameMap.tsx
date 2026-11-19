@@ -39,7 +39,6 @@ import { BADGE_TEXT, chipsOf, claimLook, floatLabel } from "../game/badgeView";
 import { WHISPER_TEXT } from "../game/whisperView";
 import { SUSPECT_TEXT, suspectStacks } from "../game/suspectView";
 import { headerFor } from "../game/dayView";
-import { discussionEvidenceOf, type MorningVictim } from "../game/discussionEvidence";
 import { callTargetsOf, playtestResultLine } from "../game/hostLine";
 import { blockModeOf, isMyTurn, turnStageOf, turnTopLine } from "../game/pickTurn";
 import { isMySpeakTurn, pointSeatsOf, quoteOf, revealCounts, SHOWDOWN_COPY, showdownStageOf, speakerOf } from "../game/showdownView";
@@ -254,18 +253,6 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const kbOpen = kbLifted && !kbInSheet;
   const motion = useMyMotion(store, view.me.seat, () => Date.now() + offset);
   const { typingSeats, liveWhisperIn, ...binding } = useChat({ store: chat, connection: { send, canSend }, view, motion });
-
-  // 아침 결과는 이후 뷰에서 사라진다. 공개 피해자 좌석만 기억하고, 본문은 공개 채팅의 유언 카드에서 읽는다.
-  const [morningVictim, setMorningVictim] = useState<MorningVictim | null>(null);
-  const eliminated = view.phase === "morning" ? view.day?.morning?.eliminated : undefined;
-  const day = view.day?.n;
-  useEffect(() => {
-    if (eliminated === undefined || day === undefined) return;
-    setMorningVictim({ round: view.round ?? 1, day: day + 1, seat: eliminated });
-  }, [eliminated, day, view.round]);
-  const evidence = (timeless && !playtest) || view.phase !== "discussion" ? undefined : (
-    discussionEvidenceOf(view, morningVictim, chat.visibleLines("all", Date.now()))
-  );
 
   // 안내 한 줄: 단계가 시작되면 보이고 2.5초 뒤 접힌다. 단계가 바뀔 때마다 다시 보인다.
   // 지목은 내 차례가 시작될 때도 다시 보인다(UI-SPEC A-4 "의심되는 사람을 눌러요"): myTurnNo = 내 차례의 번호, 아니면 undefined.
@@ -806,7 +793,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           offset={offset}
           send={send}
           canSend={canSend}
-          binding={evidence === undefined ? binding : { ...binding, evidence }}
+          binding={binding}
           logHeight={LOG_H}
           kbOpen={kbOpen}
           lifted={kbLifted}

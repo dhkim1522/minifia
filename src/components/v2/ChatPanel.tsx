@@ -3,13 +3,10 @@ import "../../styles/v2.css";
 import { CHAT_MAX_GRAPHEMES } from "../../../shared/game/chatRules";
 import { CHAT_TEXT } from "../../game/chatText";
 import { AUTO_SCROLL_SLOP_PX, DUP_SUBMIT_MS, IME_WAIT_MS, LOG_FADE_H, LOG_H, LOG_OPEN_MAX, OPEN_STAGE_MIN, TAIL_WINDOW_MS } from "../../game/chatUi";
-import type { DiscussionEvidence as Evidence, DiscussionEvidenceRow } from "../../game/discussionEvidence";
-import { appendEvidenceQuote } from "../../game/discussionEvidence";
 import type { EmoteId } from "../../../shared/protocol";
 import { EMOTE_TEXT } from "../../game/chatText";
 import { EmoteTray } from "./EmoteTray";
 import { ChatLines } from "./ChatLines";
-import { DiscussionEvidence, type QuoteResult } from "./DiscussionEvidence";
 import { V2Icon, type V2IconName } from "./V2Icon";
 
 // 채팅 패널(기록 칸 + 입력줄). design/v2.0/design-system/components/bundle.js 의 ChatPanel 과
@@ -97,14 +94,11 @@ export interface ChatPanelProps {
   locked?: boolean;
   /** 입력줄 맨 오른쪽(보내기·깃펜 뒤)에 놓을 요소. 결과 화면의 다시 하기 알약(11-12). 없으면 자리도 없다 */
   trailing?: ReactNode;
-  /** 토론 중 읽을 수 있는 공개 근거. 인용을 누르면 입력칸에 추가한다. */
-  evidence?: Evidence;
-  collapseEvidenceOnSmallScreen?: boolean;
   keepLogHeightOnFocus?: boolean;
   /** 토론에서는 기록을 항상 스크롤할 수 있고 고정 높이를 유지한다. */
   fixedLog?: boolean;
-  /** 토론 도구가 같은 입력칸에 단서를 안전하게 인용할 때 쓴다. */
-  renderTools?: (addQuote: (row: DiscussionEvidenceRow) => QuoteResult) => ReactNode;
+  /** 기록 칸 위 토론 조작 줄 */
+  tools?: ReactNode;
 }
 
 interface ChannelUi {
@@ -121,7 +115,7 @@ function channelUi(channel: "all" | "mafia" | "ghost"): ChannelUi {
 }
 
 export function ChatPanel(props: ChatPanelProps) {
-  const { messages, value, onChange, onSend, channel = "all", logHeight, compact, sendDisabled, sendDim, notice, quiet, inputId, inputRef, onWill, willOpen, willSaved, callInput, callWill, trailing, locked, fixedLog, renderTools } = props;
+  const { messages, value, onChange, onSend, channel = "all", logHeight, compact, sendDisabled, sendDim, notice, quiet, inputId, inputRef, onWill, willOpen, willSaved, callInput, callWill, trailing, locked, fixedLog, tools } = props;
   const fieldRef = useRef<HTMLInputElement | null>(null);
   const logRef = useRef<HTMLDivElement | null>(null);
   const composingRef = useRef(false);
@@ -208,17 +202,6 @@ export function ChatPanel(props: ChatPanelProps) {
     fieldRef.current = el;
     if (typeof inputRef === "function") inputRef(el);
     else if (inputRef) (inputRef as { current: HTMLInputElement | null }).current = el;
-  };
-
-  const addQuote = ({ name, text }: DiscussionEvidenceRow): QuoteResult => {
-    const p = latest.current;
-    const el = fieldRef.current;
-    if (!el || !p.onSend || p.locked || text === null || composingRef.current || pendingRef.current !== null) return "busy";
-    const quoted = appendEvidenceQuote(el.value, { name, text }, el.maxLength);
-    if (quoted === undefined) return "full";
-    p.onChange(quoted);
-    el.focus({ preventScroll: true });
-    return "added";
   };
 
   // 값은 언제나 DOM 입력칸에서 읽는다(조합이 끝난 뒤의 값).
@@ -352,10 +335,7 @@ export function ChatPanel(props: ChatPanelProps) {
 
   return (
     <section className={rootCls} data-chat-panel="" data-chat-channel={channel} {...(locked ? { "data-chat-locked": "" } : {})}>
-      {renderTools?.(addQuote)}
-      {props.evidence && onSend && !locked ? (
-        <DiscussionEvidence key={props.evidence.key} evidence={props.evidence} hidden={!!compact} collapseOnSmallScreen={props.collapseEvidenceOnSmallScreen === true} onQuote={addQuote} />
-      ) : null}
+      {tools}
       <div
         className={open ? "mv-chat__logbox is-open" : "mv-chat__logbox"}
         // 숫자 한 곳은 chatUi.ts 다 — CSS 가 읽는 변수로 넘긴다(.mv-chat__log.is-open 의 clamp)

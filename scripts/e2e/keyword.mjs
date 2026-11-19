@@ -178,19 +178,14 @@ function listProblems(rows, who) {
   return bad;
 }
 
-/**
- * KW8 모두의 단서. [첫날 단서]를 눌러 모달 없이 공개 답과 채팅을 읽고, 누르면 자동 전송 없이 현재 초안에 인용한다.
- * 접기 상태, 별도 기록 탭, 제출 순·'단서 없음' 순서가 참가 화면에서 일치하는지도 본다.
- */
+/** KW8 토론 화면에는 고정 채팅과 스킵만 남고, 공개 답은 역할 기록에서 확인한다. */
 export function kw8AnswerList(pages) {
-  const label = "토론에서 단서를 열면 공개 답과 고정 채팅이 함께 보이고 인용은 초안에만 들어간다";
+  const label = "토론에 단서 도구가 없고 고정 채팅과 역할 기록을 볼 수 있다";
   if (!Array.isArray(pages) || pages.length === 0) return noMeasure("KW8", label, "페이지");
   const bad = [];
   for (const p of pages) {
-    if (p.initiallyClosed !== true) bad.push(`${p.who} 토론 진입 시 단서가 자동으로 열림`);
-    if (p.listOpen !== true || p.dialogOpen !== false || p.inputVisible !== true || p.logVisible !== true) bad.push(`${p.who} 단서·채팅을 함께 볼 수 없음`);
-    if (p.quoted !== true) bad.push(`${p.who} 인용 초안 오류`);
-    if (p.collapsed !== true) bad.push(`${p.who} 인용 뒤 목록이 접히지 않음`);
+    if (p.clueCount !== 0 || p.dialogOpen !== false) bad.push(`${p.who} 토론 중 단서 도구나 창이 보임`);
+    if (p.inputVisible !== true || p.logVisible !== true) bad.push(`${p.who} 토론 채팅을 쓸 수 없음`);
     if (p.hasTab !== true) bad.push(`${p.who} 탭 '단서와 의심' 없음`);
     bad.push(...listProblems(p.rows, p.who));
   }
@@ -199,9 +194,9 @@ export function kw8AnswerList(pages) {
   return result("KW8", label, bad);
 }
 
-/** KW9(P23-9) 재접속. m = { autoOpened(재접속 뒤 단서가 저절로 열림), rowsBefore, rowsAfter(아이콘으로 연 목록) } */
+/** KW9(P23-9) 재접속. m = { autoOpened(재접속 뒤 단서가 저절로 열림), rowsBefore, rowsAfter(역할 기록 탭) } */
 export function kw9Reconnect(m) {
-  const label = "토론 중 재접속하면 단서를 아이콘으로 열어 같은 목록을 본다";
+  const label = "토론에 재접속해도 단서 도구가 없고 역할 기록의 공개 답이 유지된다";
   if (!m || !Array.isArray(m.rowsBefore) || !Array.isArray(m.rowsAfter) || m.rowsBefore.length === 0 || m.rowsAfter.length === 0) return noMeasure("KW9", label, "재접속 전·뒤 목록");
   const bad = [];
   if (m.autoOpened === true) bad.push("재접속 뒤 단서가 저절로 열림");
@@ -392,24 +387,17 @@ const readAnswerSheet = (page) =>
     };
   });
 
-const readDiscussionEvidence = (page) =>
+const readDiscussionTools = (page) =>
   page.evaluate(() => {
     const input = document.querySelector("[data-chat-input]");
     const box = input?.getBoundingClientRect();
     const log = document.querySelector("[data-chat-log]");
     const logBox = log?.getBoundingClientRect();
-    const evidence = document.querySelector("[data-discussion-evidence]");
-    const rows = [...evidence?.querySelectorAll("[data-evidence-row]") ?? []].map((row) => ({
-      order: Number(row.getAttribute("data-evidence-order")),
-      seat: Number(row.getAttribute("data-evidence-seat")),
-      none: row.hasAttribute("data-evidence-none"),
-    }));
     return {
-      listOpen: document.querySelector('[data-playtest-action="clues"]')?.getAttribute("aria-expanded") === "true" && !!evidence,
+      clueCount: document.querySelectorAll('[data-playtest-action="clues"], [data-discussion-evidence]').length,
       dialogOpen: !!document.querySelector("dialog.mf-dialog--open"),
       inputVisible: !!box && document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2) === input && !input.disabled,
       logVisible: !!logBox && logBox.height > 0 && log.contains(document.elementFromPoint(logBox.left + logBox.width / 2, logBox.top + logBox.height / 2)),
-      rows,
     };
   });
 
@@ -557,45 +545,31 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       await at("방장 보내기", () => typeAndSend(hp, "다른말"));
       await hp.waitForSelector('[data-answer-state="sent"]', { timeout: 4000 }).catch(() => {});
 
-      // 사람 전원이 낸 뒤 토론에서 공개 답과 채팅을 동시에 읽고 인용할 수 있다(KW8).
+      // 사람 전원이 낸 뒤 토론의 채팅과 역할 기록에 남은 답을 확인한다(KW8).
       await Promise.all(pages.map((p) => p.tracker.waitFor((v) => v.phase === "discussion", 12_000, "낮 시작 → 토론")));
       const sheets = [];
       for (const p of pages) {
-        const clues = p.page.locator('[data-playtest-action="clues"]');
-        const initiallyClosed = (await clues.getAttribute("aria-expanded")) === "false";
-        await at(`KW8 ${p.who} 단서`, () => clues.click({ timeout: 4000 }));
-        await p.page.waitForSelector("[data-evidence-quote]", { timeout: 4000 });
-        const evidence = await readDiscussionEvidence(p.page);
-        const quote = p.page.locator("[data-evidence-quote]").first();
-        const name = await quote.locator(".mf-discussion-evidence__name").innerText();
-        const answer = await quote.locator(".mf-discussion-evidence__text").innerText();
-        const input = p.page.locator("[data-chat-input]");
-        await input.fill("제 생각은");
-        await quote.click();
-        const draft = `제 생각은 ${name} “${answer}”`;
-        const quoted = await input.inputValue() === draft && !(await p.page.locator("[data-chat-log]").innerText()).includes(draft);
-        const collapsed = !(await readDiscussionEvidence(p.page)).listOpen;
-        await input.fill("");
-        await input.blur();
+        await p.page.waitForSelector("[data-playtest-discussion]", { timeout: 4000 });
+        const tools = await readDiscussionTools(p.page);
         await at(`KW8 ${p.who} 내 역할과 기록`, () => openRoleCard(p.page));
         await at(`KW8 ${p.who} 단서와 의심 탭`, () => p.page.locator('dialog.mf-dialog--open [data-rolecard-tab="records"]').click({ timeout: 4000 }));
         const sh = await readAnswerSheet(p.page);
         await closeOpenSheet(p.page);
-        sheets.push({ who: p.who, ...evidence, initiallyClosed, quoted, collapsed, hasTab: sh.tabs === 1 && rowsKey(sh.rows ?? []) === rowsKey(evidence.rows) });
+        sheets.push({ who: p.who, ...tools, rows: sh.rows, hasTab: sh.tabs === 1 });
       }
       rec1(rec, `${id}/answers`, kw8AnswerList(sheets));
 
-      // KW9: 참가자 재접속 — 단서 아이콘으로 같은 목록을 다시 연다. 그 연결 프레임에서 시민은 키워드를 받는다(KW13 대조군)
+      // KW9: 참가자 재접속 — 역할 기록에서 같은 목록을 다시 연다. 그 연결 프레임에서 시민은 키워드를 받는다(KW13 대조군)
       const rowsBefore = sheets[0].rows;
       await gp.reload({ waitUntil: "domcontentloaded" });
       await untilGame(gp, (x) => x.phase === "discussion", 10_000, "재접속 뒤 토론");
       await sleep(1800);
-      const beforeOpen = await readDiscussionEvidence(gp);
-      if (!beforeOpen.listOpen) await at("KW9 단서", () => gp.locator('[data-playtest-action="clues"]').click({ timeout: 4000 }));
-      await gp.waitForSelector("[data-evidence-quote]", { timeout: 4000 });
-      const afterOpen = await readDiscussionEvidence(gp);
-      rec1(rec, `${id}/reconnect`, kw9Reconnect({ autoOpened: beforeOpen.listOpen || beforeOpen.dialogOpen, rowsBefore, rowsAfter: afterOpen.rows }));
-      await gp.locator('[data-playtest-action="clues"]').click({ timeout: 4000 });
+      const beforeOpen = await readDiscussionTools(gp);
+      await at("KW9 내 역할과 기록", () => openRoleCard(gp));
+      await at("KW9 기록 탭", () => gp.locator('dialog.mf-dialog--open [data-rolecard-tab="records"]').click({ timeout: 4000 }));
+      const afterOpen = await readAnswerSheet(gp);
+      rec1(rec, `${id}/reconnect`, kw9Reconnect({ autoOpened: beforeOpen.clueCount !== 0 || beforeOpen.dialogOpen, rowsBefore, rowsAfter: afterOpen.rows }));
+      await closeOpenSheet(gp);
 
       // KW13: 정답 공개 전 마피아 프레임에 키워드 문자열 0, view 키 집합(키워드 단계 스냅샷)
       await sleep(300);

@@ -87,9 +87,6 @@
 .tut-room .mf-turn__bar { display: none; }
 .tut-room .mf-turn { top: calc(var(--mf-host-bottom, 106px) + var(--space-sm)); }
 
-/* 실험방 연습에서 단서를 읽는 동안 좁아진 무대의 이름표를 숨긴다. */
-.tut-room[data-first-round-playtest]:has([data-playtest-surface="clues"]) .mf-world__tag { visibility: hidden; }
-
 /* 기록은 게임의 시트를 쓰되 상단의 그만두기와 소리 단추를 계속 쓸 수 있다. */
 .tut-room .mf-dialog { position: absolute; z-index: var(--z-overlay); pointer-events: none; }
 .tut-room .mf-sheet.mf-sheet--rolecard {

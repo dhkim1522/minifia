@@ -59,11 +59,6 @@
   background: var(--noir-action);
   color: var(--noir-accent);
 }
-.mf-discussion-panel .mf-playtest__record {
-  padding-inline: 7px;
-  color: var(--noir-silver);
-  background: transparent;
-}
 @media (max-width: 359px) {
   .mf-discussion-panel .mf-playtest__toolbar { gap: 4px; padding-inline: 8px; }
   .mf-discussion-panel .mf-playtest__action--skip { padding-inline: 6px; }
@@ -94,7 +89,6 @@
 .mf-game__panel--kb .mf-playtest__surface { max-height: clamp(44px, calc(var(--mf-room-h, 844px) - var(--mf-kb-lift, 0px) - 168px), 180px); }
 .mf-playtest__surface:focus-visible { outline: 2px solid var(--noir-paper); outline-offset: -2px; }
 .mf-playtest__surface[data-suspect-guidance] { padding: 6px 8px; }
-.mf-playtest__surface .mf-discussion-evidence { border: 0; background: transparent; }
 .mf-playtest__reactions .mv-emote-tray { position: static; grid-auto-rows: var(--tap-min); gap: 4px; padding: 0; border: 0; background: transparent; box-shadow: none; }
 .mf-playtest__reactions[data-quick-reactions] .mv-emote-tray { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .mf-playtest__ghost-chat { min-width: 0; padding: 4px 6px; border: 1px solid var(--noir-line); border-radius: 8px; background: var(--noir-inset); }

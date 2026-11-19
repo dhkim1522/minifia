@@ -1,4 +1,4 @@
-// 12-07: 소리 단추 — 세 상태·알약 8초 접힘·토글 저장·표식 (B-1, B-2, D-5, D-6, T-12-23).
+// 12-07: 소리 단추 — 세 상태·아이콘·토글 저장·표식 (B-1, B-2, D-5, D-6, T-12-23).
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -72,45 +72,29 @@ describe("SoundButton 세 상태 (B-1, B-2)", () => {
     expect(b.textContent).toBe("");
   });
 
-  it("locked: 알약 — 글 '소리 켜기', 이름 '소리 켜기', aria-pressed 거짓", () => {
+  it("locked와 off는 같은 음소거 아이콘과 접근성 상태를 사용한다", () => {
+    mount({ on: false });
+    const mutedIcon = button().querySelector("svg")!.innerHTML;
+    cleanup();
     mount();
-    const b = button();
+    const b = screen.getByRole("button", { name: "소리 켜기" });
     expect(b.getAttribute("data-sound-state")).toBe("locked");
-    expect(b.getAttribute("aria-label")).toBe("소리 켜기");
     expect(b.getAttribute("aria-pressed")).toBe("false");
-    expect(b.textContent).toBe("소리 켜기");
-    expect(b.classList.contains("mv-sound--pill")).toBe(true);
-  });
-
-  it("알약은 8초 뒤 아이콘 단추로 접힌다. 접힌 뒤에도 locked 이고 눌러서 켠다", () => {
-    const rig = mount();
-    act(() => void vi.advanceTimersByTime(7999));
-    expect(button().textContent).toBe("소리 켜기");
-    act(() => void vi.advanceTimersByTime(1));
-    const b = button();
     expect(b.textContent).toBe("");
-    expect(b.classList.contains("mv-sound--pill")).toBe(false);
-    expect(b.getAttribute("data-sound-state")).toBe("locked");
-    expect(b.getAttribute("aria-label")).toBe("소리 켜기");
+    expect(b.querySelector("svg")!.innerHTML).toBe(mutedIcon);
     fireEvent.click(b);
-    expect(rig.engine.state()).toBe("running");
-    expect(button().getAttribute("data-sound-state")).toBe("on");
+    expect(b.getAttribute("data-sound-state")).toBe("on");
+    expect(b.querySelector("svg")!.innerHTML).not.toBe(mutedIcon);
   });
 
-  it("다시 locked 가 되면 알약이 다시 보이고 8초를 새로 센다", () => {
+  it("재생이 중단되면 글 없이 음소거 아이콘으로 바뀌고 다시 누를 수 있다", () => {
     const rig = mount({ unlocked: true });
     act(() => rig.fake.ctx().setState("interrupted"));
-    expect(button().textContent).toBe("소리 켜기");
-    act(() => void vi.advanceTimersByTime(8000));
-    expect(button().textContent).toBe("");
-    act(() => rig.fake.ctx().setState("running"));
-    expect(button().getAttribute("data-sound-state")).toBe("on");
-    act(() => rig.fake.ctx().setState("interrupted"));
-    expect(button().textContent).toBe("소리 켜기");
-    act(() => void vi.advanceTimersByTime(7999));
-    expect(button().textContent).toBe("소리 켜기");
-    act(() => void vi.advanceTimersByTime(1));
-    expect(button().textContent).toBe("");
+    const b = screen.getByRole("button", { name: "소리 켜기" });
+    expect(b.getAttribute("aria-pressed")).toBe("false");
+    expect(b.textContent).toBe("");
+    fireEvent.click(b);
+    expect(b.getAttribute("data-sound-state")).toBe("on");
   });
 
   it("AudioContext 를 만들 수 없는 환경이면 DOM 에 없다", () => {

@@ -439,7 +439,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
     <div ref={roomRef} className="mf-root mf-room" data-first-round-playtest={reducedControls ? "" : undefined}>
       {view && banner !== "hidden" && <ReconnectBanner mode={banner} floating={shown?.phase === "lobby"} />}
       {playtestHeader ? null : shown && !shown.resting && status !== "replaced" && status !== "failed" ? (
-        <HostBand view={shown} offset={connection.offset} cardSeen={seenFront} sound={sound.supported && !discussionMenu && (shown.playtest !== true || shown.phase === "ended") ? sound : null} epoch={connection.epoch} headerGauge={headerGauge} />
+        <HostBand view={shown} offset={connection.offset} cardSeen={seenFront} sound={sound.supported && !menuAvailable ? sound : null} epoch={connection.epoch} headerGauge={headerGauge} />
       ) : view && sound.supported ? (
         // 쉬는 사람·안내 화면에는 띠가 없다(T-14-04). 소리 단추만 옛 자리의 독으로 둔다
         <HostDock sound={sound} />
@@ -449,11 +449,13 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
         <Sheet label="게임 메뉴" showClose onClose={() => setGameMenu(null)}>
           <h2 className="mf-t-heading mf-sheet__title">게임 메뉴</h2>
           <div className="mf-sheet__actions">
-            <Button variant="secondary" block data-game-menu-role="" onClick={() => {
-              setGameMenu(null);
-              setRoleCard({ open: true, tab: "role" });
-            }}>내 역할과 기록</Button>
-            {sound.supported ? <div className="mf-game-menu__sound"><span>소리</span><SoundButton sound={sound} /></div> : null}
+            <div className="mf-game-menu__tools">
+              <Button variant="secondary" block data-game-menu-role="" onClick={() => {
+                setGameMenu(null);
+                setRoleCard({ open: true, tab: "role" });
+              }}>내 역할과 기록</Button>
+              {sound.supported ? <SoundButton sound={sound} /> : null}
+            </div>
             <Button variant="text" block onClick={() => setGameMenu("leave")}>방 나가기</Button>
           </div>
         </Sheet>

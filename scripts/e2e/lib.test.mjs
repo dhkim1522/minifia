@@ -2994,7 +2994,7 @@ const sRect = (left, top, width, height) => ({ left, top, width, height });
 function soundIn(over = {}) {
   return {
     viewport: { w: 360, h: 560 },
-    button: { count: 1, rect: sRect(292, 74, 52, 52), disc: sRect(292, 74, 52, 52), pill: false },
+    button: { count: 1, rect: sRect(292, 74, 52, 52), disc: sRect(292, 74, 52, 52) },
     header: { bottom: 62, buttons: [{ kind: "leave", rect: sRect(16, 18, 44, 44) }, { kind: "role", rect: sRect(300, 18, 44, 44) }] },
     test: sRect(16, 70, 90, 44),
     toast: sRect(110, 88, 140, 36),
@@ -3049,16 +3049,15 @@ test("soundButtonChecks SU5: 재접속 띠가 떠 있을 때 단추 중심의 �
   assert.deepEqual(suFails(soundIn({ bannerHit: { present: true, covers: false, hitIsButton: false } })), ["SU5"]);
 });
 
-test("soundButtonChecks SU6: 시각 지름 52 (±1) — 경계 51 / 53 통과, 50.99 / 53.01 실패. 알약이면 높이 52 · 폭 112 이상", () => {
+test("soundButtonChecks SU6: 시각 지름 52 (±1) — 경계 51 / 53 통과, 50.99 / 53.01 실패", () => {
   const d = (w, h) => suFails(soundIn({ button: { ...soundIn().button, disc: sRect(292, 74, w, h) } }));
   assert.deepEqual(d(51, 51), []);
   assert.deepEqual(d(53, 53), []);
   assert.deepEqual(d(50.99, 52), ["SU6"]);
   assert.deepEqual(d(52, 53.01), ["SU6"]);
-  const pill = (w, h) => suFails(soundIn({ button: { count: 1, rect: sRect(224, 74, 120, 52), disc: sRect(224, 74, w, h), pill: true }, labels: { state: "locked", name: "소리 켜기", pressed: "false" }, toast: null }));
-  assert.deepEqual(pill(120, 52), []);
-  assert.deepEqual(pill(111.9, 52), ["SU6"]);
-  assert.deepEqual(pill(120, 50), ["SU6"]);
+  const locked = soundIn({ labels: { state: "locked", name: "소리 켜기", pressed: "false" } });
+  assert.deepEqual(suFails(locked), []);
+  assert.deepEqual(suFails({ ...locked, button: { ...locked.button, disc: sRect(292, 74, 112, 52) } }), ["SU6"]);
 });
 
 test("soundButtonChecks SU7: 접근성 이름이 상태에 맞는다 — on '소리 끄기'(pressed true), off·locked '소리 켜기'(pressed false)", () => {
@@ -4003,14 +4002,13 @@ test("sideColumnChecks: 참가자(소리·옷장 둘)와 게임 화면(소리 �
   assert.deepEqual(scFails(sideIn({ screen: "game", host: false, buttons: [b("sound", 135)], test: null })), []);
 });
 
-test("SC1: 지름 52±1 원이 아니면 실패 — 경계 51 / 53 통과, 50.99 실패. 소리 알약은 높이 52·폭 112 이상", () => {
+test("SC1: 지름 52±1 원이 아니면 실패 — 경계 51 / 53 통과, 50.99 실패", () => {
   const withDress = (w, h) => sideIn({ buttons: sideIn().buttons.map((x) => (x.side === "dress" ? { ...x, rect: rect(292 + (52 - w), 199, w, h) } : x)) });
   assert.deepEqual(scFails(withDress(51, 51)).includes("SC1"), false);
   assert.deepEqual(scFails(withDress(50.99, 52)).includes("SC1"), true);
   assert.deepEqual(scFails(withDress(52, 44)).includes("SC1"), true);
-  const pill = (w) => sideIn({ buttons: sideIn().buttons.map((x) => (x.side === "sound" ? { ...x, rect: rect(344 - w, 135, w, 52), pill: true } : x)) });
-  assert.deepEqual(scFails(pill(120)), []);
-  assert.deepEqual(scFails(pill(111)), ["SC1"]);
+  const wide = sideIn({ buttons: sideIn().buttons.map((b) => b.side === "sound" ? { ...b, rect: rect(232, 135, 112, 52) } : b) });
+  assert.ok(scFails(wide).includes("SC1"));
 });
 
 test("SC2: 열 단추끼리·띠 주변 8·아래 패널·머리 단추·[테스트] 와 겹치면 실패, 맞닿기만 하면 통과", () => {

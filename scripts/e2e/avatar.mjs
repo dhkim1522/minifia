@@ -5,12 +5,6 @@
 import { chooseRole, chooseVerdict, hitsInputSurface, leaveLobby, openTestSheet, sampleWorld, screensOfWorld, SetupError, setBots, settle, skipTo, sleep, startGame, tapWorld, typeAndSendChat, waitChatLine, waitWorldReady } from "./browser.mjs";
 import { dressChecks, dressLockChecks, emoteDeliveryChecks, emoteTrayChecks, floatTrayChecks, worldTapRanking } from "./lib.mjs";
 
-/**
- * 소리 알약(잠긴 소리 단추가 몇 초 동안 119 폭 알약)이 접힐 때까지 기다린 뒤 오른쪽 열을 누른다(문턱은 그대로 — 일시 상태가 끝난 뒤를 본다).
- * 17-10 의 방장 패널 스위치 줄(+76)과 방장 열 두 줄 접힘은 19페이즈에서 없어졌다(결정 0086 — 방장 패널 222, 오른쪽 열은 방장도 둘).
- */
-const waitSoundPillFolded = (page) => page.waitForSelector(".mv-sound--pill", { state: "detached", timeout: 9000 }).catch(() => {});
-
 /** 동작 하나를 보낸 뒤 두 페이지가 프레임을 받기까지 기다리는 상한(ms). 계획: 1.5초 안 */
 const ARRIVE_MS = 1500;
 /** 연타 무시를 확인하는 관찰 시간(ms) */
@@ -184,7 +178,6 @@ export function makeAvatarFlows(helpers) {
       await Promise.all([ht.waitFor((v) => v.players.length === 2, 5000, "방장 쪽 인원 2"), gt.waitFor((v) => v.players.length === 2, 5000, "손님 쪽 인원 2")]);
       await Promise.all([waitWorldReady(hp, 2), waitWorldReady(gp, 2)]);
       await Promise.all([settle(hp), settle(gp)]);
-      await waitSoundPillFolded(hp);
       // 19-08: 방장 패널이 참가자와 같은 222 가 되어(결정 0086) 17-10 의 낮은 폰(360x560) 방장 예외(EP4·방장 쪽 목적지 후보)를 없앴다 — 여섯 크기 모두 그대로 판정한다.
 
       // AE1: 두 페이지 모두 버튼 + 판 기하
@@ -333,7 +326,6 @@ export function makeAvatarFlows(helpers) {
       await Promise.all([ht.waitFor((v) => v.players.length === 2, 5000, "방장 쪽 인원 2"), gt.waitFor((v) => v.players.length === 2, 5000, "손님 쪽 인원 2")]);
       await Promise.all([waitWorldReady(hp, 2), waitWorldReady(gp, 2)]);
       await Promise.all([settle(hp), settle(gp)]);
-      await waitSoundPillFolded(hp);
 
       /** 닫힌 때의 버튼을 읽고(AD1) 눌러 시트를 연 뒤 시트·카드를 읽어(AD2) 같은 검사 줄로 기록한다. 끝나면 시트는 열려 있다. */
       const measure = async (who, page) => {

@@ -137,10 +137,10 @@ const rows = [
   { order: 3, seat: 2, none: true },
   { order: 4, seat: 3, none: true },
 ];
-const pg = (who, over = {}) => ({ who, initiallyClosed: true, listOpen: true, dialogOpen: false, inputVisible: true, logVisible: true, quoted: true, collapsed: true, hasTab: true, rows, ...over });
-test("KW8: 단서 열기, 고정 채팅, 인용 뒤 접기, 기록 탭과 정렬을 검사한다", () => {
+const pg = (who, over = {}) => ({ who, clueCount: 0, dialogOpen: false, inputVisible: true, logVisible: true, hasTab: true, rows, ...over });
+test("KW8: 단서 도구 제거, 고정 채팅, 기록 탭과 정렬을 검사한다", () => {
   assert.equal(kw8AnswerList([pg("시민"), pg("마피아")]).ok, true);
-  for (const over of [{ initiallyClosed: false }, { listOpen: false }, { dialogOpen: true }, { inputVisible: false }, { logVisible: false }, { quoted: false }, { collapsed: false }]) {
+  for (const over of [{ clueCount: 1 }, { dialogOpen: true }, { inputVisible: false }, { logVisible: false }]) {
     assert.equal(kw8AnswerList([pg("시민"), pg("마피아", over)]).ok, false);
   }
   assert.equal(kw8AnswerList([pg("시민", { hasTab: false }), pg("마피아")]).ok, false);
@@ -150,7 +150,7 @@ test("KW8: 단서 열기, 고정 채팅, 인용 뒤 접기, 기록 탭과 정렬
   assert.equal(kw8AnswerList([pg("시민", { rows: rows.map((r) => ({ ...r, none: true })) }), pg("마피아")]).ok, false);
   assert.ok(noMeasure(kw8AnswerList([])));
 });
-test("KW9: 재접속 뒤 단서가 자동으로 안 열리고 아이콘으로 같은 목록이면 통과", () => {
+test("KW9: 재접속 뒤 토론 도구가 없고 기록 탭 목록이 같으면 통과", () => {
   assert.equal(kw9Reconnect({ autoOpened: false, rowsBefore: rows, rowsAfter: rows }).ok, true);
   assert.equal(kw9Reconnect({ autoOpened: true, rowsBefore: rows, rowsAfter: rows }).ok, false);
   assert.equal(kw9Reconnect({ autoOpened: false, rowsBefore: rows, rowsAfter: rows.slice(0, 3) }).ok, false);

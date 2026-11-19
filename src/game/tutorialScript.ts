@@ -25,7 +25,7 @@ export type TutorialSceneId = "roles" | "keyword" | "answers" | "discussion" | "
 export type TutorialBeatId = "start" | "a" | "b" | "c";
 
 /** 링 대상의 안정 id(E2E 표식 data-tutorial-target 값) */
-export type TutorialTargetId = "role-ready" | "send" | "clues-btn" | "endDiscussion" | "first-ballot" | "yes" | "tag-4" | "face-0" | "night-done" | "suspect-btn";
+export type TutorialTargetId = "role-ready" | "send" | "endDiscussion" | "first-ballot" | "yes" | "tag-4" | "face-0" | "night-done" | "suspect-btn";
 
 /** 장면 소리 큐 — 새 레시피 없이 기존 ui.* 만 쓴다(P24-31) */
 export type TutorialCue = "ui.card" | "ui.tap" | "ui.host";
@@ -109,7 +109,6 @@ export const TUTORIAL_PILLS = {
   "postit.pick": "붙일 사람을 눌러요",
   "postit.fall": "하루 한 장, 아침에 떨어져요",
   "roles.ready": "역할을 읽고 준비를 눌러요",
-  "answers.open": "단서를 눌러 살펴봐요",
   "postit.tool": "가까이서 의심딱지를 눌러요",
   "discussion.unanimous": "모두 요청하면 투표해요",
   "discussion.majority": `${PLAYTEST_DISCUSSION_MIN_MS / 1000}초 뒤엔 절반만 넘으면 돼요`,
@@ -285,10 +284,6 @@ export const TUTORIAL_PLAYTEST_SCENES: readonly TutorialScene[] = [
   },
   sceneOf("keyword"),
   {
-    id: "answers", kind: "do", ms: 16000, autoActMs: TUTORIAL_AUTO_ACT_MS, targets: ["clues-btn"],
-    beats: [beat("a", 0, "answers.open"), beat("b", null, "answers.suspect", { holdMs: 3600 })],
-  },
-  {
     ...sceneOf("postit"),
     beats: [
       beat("start", 0, "postit.tool"),
@@ -335,8 +330,6 @@ export function autoAct(id: TutorialSceneId, at?: TutorialBeatId, playtest = fal
       return playtest && at === "c" ? { target: "role-ready", msg: { t: "roleReady" }, steps: 1, next: null } : null;
     case "keyword":
       return { target: "send", msg: { t: "answer", text: TUTORIAL_MY_ANSWER, final: true }, steps: 1, next: null };
-    case "answers":
-      return playtest && (at === undefined || at === "a") ? { target: "clues-btn", msg: null, steps: 0, next: "b" } : null;
     case "discussion":
       return { target: "endDiscussion", msg: { t: "endDiscussion", on: true }, steps: playtest ? TUTORIAL_CAST.seats.length : END_STEPS, next: null };
     case "verdict":

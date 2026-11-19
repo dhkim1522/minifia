@@ -2,7 +2,6 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { EmoteId } from "../../shared/protocol";
 import { ChatPanel } from "../components/v2/ChatPanel";
-import { DiscussionEvidence } from "../components/v2/DiscussionEvidence";
 import { EmoteTray } from "../components/v2/EmoteTray";
 import { HeadCount } from "../components/v2/HeadCount";
 import { V2Icon } from "../components/v2/V2Icon";
@@ -12,7 +11,6 @@ import { SUSPECT_TEXT } from "../game/suspectView";
 import type { SuspectApi } from "../net/useSuspect";
 import type { ChatPanelBinding } from "./GamePanel";
 
-type Surface = "clues" | "reaction";
 const QUICK_REACTIONS = ["praise", "deny", "surprise"] as const;
 
 export interface DiscussionToolsProps {
@@ -30,13 +28,12 @@ export interface DiscussionToolsProps {
 }
 
 export function DiscussionPanel({ binding, kbOpen, playtest, callInput, onInputFocus, inputRef, suspect, skip, will }: DiscussionToolsProps) {
-  const [surface, setSurface] = useState<Surface | null>(null);
+  const [reactionsOpen, setReactionsOpen] = useState(false);
   const [reacted, setReacted] = useState("");
-  const { evidence, ...composer } = binding;
   const surfaceId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
-  const focus = useRef<Surface | "surface" | null>(null);
+  const focus = useRef<"reaction" | "surface" | null>(null);
   const reactions = playtest ? QUICK_REACTIONS : binding.emotes ?? [];
   const reactionLabel = playtest ? "반응" : EMOTE_TEXT.button;
 
@@ -49,48 +46,48 @@ export function DiscussionPanel({ binding, kbOpen, playtest, callInput, onInputF
     } else if (target !== null) {
       panelRef.current?.querySelector<HTMLButtonElement>(`[data-playtest-action="${target}"]`)?.focus({ preventScroll: true });
     }
-  }, [surface]);
+  }, [reactionsOpen]);
 
   useEffect(() => {
-    if (surface === null) return;
+    if (!reactionsOpen) return;
     const closeOnOutsidePress = (event: PointerEvent) => {
-      if (event.target instanceof Node && !panelRef.current?.contains(event.target)) setSurface(null);
+      if (event.target instanceof Node && !panelRef.current?.contains(event.target)) setReactionsOpen(false);
     };
     document.addEventListener("pointerdown", closeOnOutsidePress);
     return () => document.removeEventListener("pointerdown", closeOnOutsidePress);
-  }, [surface]);
+  }, [reactionsOpen]);
 
   useEffect(() => {
-    if (binding.sendDisabled) setSurface((current) => current === "reaction" ? null : current);
+    if (binding.sendDisabled) setReactionsOpen(false);
   }, [binding.sendDisabled]);
 
-  const toggleSurface = (next: Surface, keyboard: boolean) => {
+  const toggleReactions = (keyboard: boolean) => {
     suspect?.off();
-    if (surface === next) {
-      setSurface(null);
+    if (reactionsOpen) {
+      setReactionsOpen(false);
       return;
     }
     if (kbOpen) inputRef?.current?.blur();
     if (keyboard) focus.current = "surface";
-    setSurface(next);
+    setReactionsOpen(true);
   };
   const pickReaction = (id: EmoteId) => {
     binding.onEmote?.(id);
     if (playtest) setReacted(`${EMOTE_SHORT[id]} 반응`);
     if (surfaceRef.current?.contains(document.activeElement)) focus.current = "reaction";
-    setSurface(null);
+    setReactionsOpen(false);
   };
 
   return (
     <div ref={panelRef} className="mf-playtest__discussion" data-playtest-discussion="" onKeyDownCapture={(event) => {
-      if (event.key !== "Escape" || event.nativeEvent.isComposing || surface === null) return;
+      if (event.key !== "Escape" || event.nativeEvent.isComposing || !reactionsOpen) return;
       event.stopPropagation();
-      if (surfaceRef.current?.contains(document.activeElement)) focus.current = surface;
-      setSurface(null);
+      if (surfaceRef.current?.contains(document.activeElement)) focus.current = "reaction";
+      setReactionsOpen(false);
     }}>
       {playtest ? <span className="mf-sr-only" role="status">{reacted}</span> : null}
       <ChatPanel
-        {...composer}
+        {...binding}
         logHeight={kbOpen ? DISCUSSION_KB_LOG_H : DISCUSSION_LOG_H}
         compact={kbOpen}
         fixedLog
@@ -98,20 +95,10 @@ export function DiscussionPanel({ binding, kbOpen, playtest, callInput, onInputF
         {...(inputRef ? { inputRef } : {})}
         {...(callInput ? { callInput: true } : {})}
         {...(onInputFocus ? { onInputFocus } : {})}
-        renderTools={(addQuote) => (
+        tools={
           <div className="mf-playtest__tools">
             <div className="mf-playtest__toolbar" role="group" aria-label="토론 도구">
-              {evidence ? (
-                <button
-                  type="button" className="mf-playtest__action mf-playtest__record" data-playtest-action="clues"
-                  aria-expanded={surface === "clues"} aria-controls={surface === "clues" ? surfaceId : undefined}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={(event) => toggleSurface("clues", event.detail === 0)}
-                >
-                  {evidence.label}
-                </button>
-              ) : null}
-              {reactions.length > 0 && binding.onEmote ? <button type="button" className="mf-playtest__action" data-playtest-action="reaction" data-emote-button="" aria-label={reactionLabel} aria-expanded={surface === "reaction"} aria-pressed={surface === "reaction"} aria-controls={surface === "reaction" ? surfaceId : undefined} aria-disabled={binding.sendDisabled || undefined} onMouseDown={(event) => event.preventDefault()} onClick={(event) => { if (!binding.sendDisabled) toggleSurface("reaction", event.detail === 0); }}>
+              {reactions.length > 0 && binding.onEmote ? <button type="button" className="mf-playtest__action" data-playtest-action="reaction" data-emote-button="" aria-label={reactionLabel} aria-expanded={reactionsOpen} aria-pressed={reactionsOpen} aria-controls={reactionsOpen ? surfaceId : undefined} aria-disabled={binding.sendDisabled || undefined} onMouseDown={(event) => event.preventDefault()} onClick={(event) => { if (!binding.sendDisabled) toggleReactions(event.detail === 0); }}>
                 <V2Icon name="face" size={22} />
               </button> : null}
               {suspect ? <button type="button" className="mf-playtest__action" data-playtest-action="suspect" data-suspect-btn="" data-suspect-stuck={suspect.used ? "" : undefined} aria-label={suspect.used ? SUSPECT_TEXT.moved : SUSPECT_TEXT.ready} aria-pressed={suspect.mode} aria-disabled={suspect.disabled || undefined} onMouseDown={(event) => { if (suspect.disabled) event.preventDefault(); }} onClick={() => {
@@ -121,14 +108,14 @@ export function DiscussionPanel({ binding, kbOpen, playtest, callInput, onInputF
                 }
                 // 이름표로 대상을 골라야 해서 입력칸 초점을 푼다. 초안은 채팅 훅에서 보관한다.
                 inputRef?.current?.blur();
-                setSurface(null);
+                setReactionsOpen(false);
                 suspect.toggleMode();
               }}>
                 <V2Icon name="postit" size={22} />
                 {suspect.used ? <i className="mv-chat__will-dot" aria-hidden="true" /> : null}
               </button> : null}
               {will ? <button type="button" className="mf-playtest__action" data-will-button="" aria-label={will.saved ? CHAT_TEXT.willSaved : CHAT_TEXT.will} aria-pressed={will.open} aria-disabled={binding.sendDisabled || undefined} onMouseDown={(event) => event.preventDefault()} onClick={(event) => {
-                setSurface(null);
+                setReactionsOpen(false);
                 will.request(event.currentTarget);
               }}>
                 <V2Icon name="quill" size={22} />
@@ -147,18 +134,13 @@ export function DiscussionPanel({ binding, kbOpen, playtest, callInput, onInputF
               ) : null}
             </div>
             {suspect?.mode ? <p className="mf-playtest__surface mf-playtest__feedback" data-suspect-guidance="" role="status">{suspect.targets.size === 0 ? SUSPECT_TEXT.tooFar : SUSPECT_TEXT.modeHint}</p> : null}
-            {surface === "clues" && evidence ? (
-              <div id={surfaceId} ref={surfaceRef} className="mf-playtest__surface" data-playtest-surface="clues" role="region" aria-label={evidence.label} tabIndex={-1}>
-                <DiscussionEvidence key={evidence.key} evidence={evidence} expanded canQuote={Boolean(binding.onSend)} onQuote={addQuote} onQuoted={() => setSurface(null)} />
-              </div>
-            ) : null}
-            {surface === "reaction" ? (
+            {reactionsOpen ? (
               <div id={surfaceId} ref={surfaceRef} className="mf-playtest__surface mf-playtest__reactions" data-playtest-surface="reaction" data-quick-reactions={playtest ? "" : undefined} tabIndex={-1}>
                 <EmoteTray ids={reactions} columns={playtest ? 3 : 5} onPick={pickReaction} disabled={binding.sendDisabled === true || binding.emoteBlocked === true} playing={binding.emotePlaying ?? null} />
               </div>
             ) : null}
           </div>
-        )}
+        }
       />
     </div>
   );

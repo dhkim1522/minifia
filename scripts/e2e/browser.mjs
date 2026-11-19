@@ -623,7 +623,7 @@ export async function readLobbyFrame(page) {
 }
 
 /**
- * 오른쪽 열(16-06): 보이는 [data-side-button] 의 표식 값·사각형(소리 알약이면 pill)과 sideColumnChecks 가 함께 보는 띠 면·아래 패널 윗변·머리 단추·[테스트] 사각형을 한 번에 읽는다.
+ * 오른쪽 열(16-06): 보이는 [data-side-button] 의 표식 값·사각형과 sideColumnChecks 가 함께 보는 띠 면·아래 패널 윗변·머리 단추·[테스트] 사각형을 한 번에 읽는다.
  * 반환은 sideColumnChecks 입력의 일부 { buttons, band, panelTop, head, test } — viewport·screen·host·mapsOn·botsOn 은 부르는 쪽이 더한다.
  */
 export function readSideColumn(page) {
@@ -636,7 +636,7 @@ export function readSideColumn(page) {
     const shown = (el) => getComputedStyle(el).visibility !== "hidden" && el.getBoundingClientRect().width > 0;
     const panel = document.querySelector(".mf-lobby__panel, .mf-result__panel");
     return {
-      buttons: [...document.querySelectorAll("[data-side-button]")].filter(shown).map((el) => ({ side: el.getAttribute("data-side-button"), rect: rect(el), pill: el.classList.contains("mv-sound--pill") })),
+      buttons: [...document.querySelectorAll("[data-side-button]")].filter(shown).map((el) => ({ side: el.getAttribute("data-side-button"), rect: rect(el) })),
       band: rect(document.querySelector("[data-host-band] .mv-host__band")),
       panelTop: panel ? panel.getBoundingClientRect().top : null,
       head: [...document.querySelectorAll(".mf-lobby__header button, .mf-result__header button, .mf-game__header button")].filter(shown).map((el) => ({ kind: el.getAttribute("aria-label") ?? "?", rect: rect(el) })),
@@ -693,7 +693,7 @@ export function readHostRail(page) {
       test: rect(document.querySelector(".mf-lobby__test .mf-tt, .mf-game__test .mf-tt")),
       toast: rect(toastEl),
       toastText: toastEl ? (toastEl.textContent ?? "").trim() : null,
-      side: [...document.querySelectorAll("[data-side-button]")].filter(shown).map((el) => ({ side: el.getAttribute("data-side-button"), rect: rect(el), borderColor: getComputedStyle(el).borderTopColor, pill: el.classList.contains("mv-sound--pill") })),
+      side: [...document.querySelectorAll("[data-side-button]")].filter(shown).map((el) => ({ side: el.getAttribute("data-side-button"), rect: rect(el), borderColor: getComputedStyle(el).borderTopColor })),
       panelToggles: panel ? panel.querySelectorAll(".tut-toggle").length : null,
     };
   });
