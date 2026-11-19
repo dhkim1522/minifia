@@ -323,7 +323,8 @@ describe("봇 행동", () => {
     const r = await seatQuiet(1, { testMode: true });
     send(r.host, { t: "testBots", count: 4 });
     await nextFrame(r.host, lobbyOf(6));
-    send(r.host, { t: "testRole", role: "mafia" });
+    await sendAndSettle(r.host, { t: "testRole", role: "mafia" });
+    await sendAndSettle(r.host, { t: "testBotVote", exec: "no", pick: "random" });
     await start(r);
     // 손님이 두 번째 마피아를 받으면 봇 한 명과 역할을 교환해 채널 격리 사례를 고정한다.
     await writeRoomEdit(env.ROOM.getByName(r.code), (room) => {
@@ -335,7 +336,7 @@ describe("봇 행동", () => {
         p.seat === guest.seat ? { ...p, role: bot.role } : p.seat === bot.seat ? { ...p, role: guest.role } : p,
       );
     });
-    await skipDayToNight(r);
+    await skipThrough(r, "night");
     const bots = await botsOf(r.code);
     const mafiaBot = bots.find((b) => (b as unknown as { role?: string }).role === "mafia")!;
     const citizenBot = bots.find((b) => (b as unknown as { role?: string }).role !== "mafia")!;
