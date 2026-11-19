@@ -146,7 +146,7 @@ export function Home({ onEnterRoom }: HomeProps) {
       <main className="mf-root mf-entry mf-home" style={{ "--entry-height": `${viewportHeight}px` } as CSSProperties}>
         <header className="mf-entry__head">
           <h1 className="mf-t-display">미니피아</h1>
-          <p className="mf-entry__subtitle">이 테이블에 마피아가 있다.</p>
+          <p className="mf-entry__subtitle">우리 중 누가 마피아일까?</p>
         </header>
         <div className="mf-entry__actions">
           <form className="mf-entry__form" onSubmit={openJoin}>

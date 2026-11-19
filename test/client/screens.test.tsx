@@ -39,7 +39,7 @@ describe("Home 첫 화면 (S-01, 결정 0014)", () => {
   it("구성: 입장 배경, 소개와 서비스 이름, [방 만들기], 방 코드 칸과 [참가]. 닉네임 칸과 카드는 없다", () => {
     const { container } = render(<Home onEnterRoom={vi.fn()} />);
     expect(screen.getByRole("heading", { name: "미니피아" })).toBeTruthy();
-    expect(screen.getByText("이 테이블에 마피아가 있다.")).toBeTruthy();
+    expect(screen.getByText("우리 중 누가 마피아일까?")).toBeTruthy();
     expect(createRoomButton()).toBeTruthy();
     expect(codeInput().getAttribute("placeholder")).toBe("4자리 숫자");
     expect(codeInput().getAttribute("inputmode")).toBe("numeric");

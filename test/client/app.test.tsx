@@ -110,7 +110,7 @@ describe("App 입장 정보 이어받기 (E1 resume, Pitfall 22)", () => {
     window.history.replaceState(null, "", "/");
     vi.stubGlobal("fetch", vi.fn(async () => notFound()));
     render(<App />);
-    await see("이 테이블에 마피아가 있다.");
+    await see("우리 중 누가 마피아일까?");
     expect(stored()).toBe("null");
     expect(screen.getByRole("heading", { name: "미니피아" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "방 만들기" })).toBeTruthy();
