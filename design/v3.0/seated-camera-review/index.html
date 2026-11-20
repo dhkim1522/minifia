@@ -9,24 +9,25 @@
 <body>
   <main class="review">
     <header class="review-title">
-      <p>미니피아 고정 좌석 시안</p>
-      <h1>재즈 바 시점 비교</h1>
-      <p>같은 8인 테이블입니다. 얼굴을 눌러 시선을 옮기거나 의심딱지를 붙여보세요.</p>
+      <h1>재즈 바 고정 좌석 시안</h1>
     </header>
-    <div class="variants">
-      <nav aria-label="재즈 바 배경과 소품 비교">
-        <a data-art="original" href="?art=original">초기 공간</a>
-        <a data-art="polished" href="?art=polished">이전 공간</a>
-        <a data-art="detailed" href="?art=detailed">정교화 공간</a>
-      </nav>
-      <nav aria-label="캐릭터 모델 비교">
-        <a data-model="original" href="?model=original">기존 모델</a>
-        <a data-model="detail" href="?model=detail">정교화 모델</a>
-      </nav>
-      <select class="preview-animal" aria-label="같은 자리에서 볼 캐릭터">
-        <option value="">캐릭터 가까이 보기</option>
-      </select>
-    </div>
+    <details class="comparison-options" open>
+      <summary>공간·캐릭터 비교</summary>
+      <div class="variants">
+        <nav aria-label="재즈 바 배경과 소품 비교">
+          <a data-art="original" href="?art=original">초기 공간</a>
+          <a data-art="polished" href="?art=polished">이전 공간</a>
+          <a data-art="detailed" href="?art=detailed">정교화 공간</a>
+        </nav>
+        <nav aria-label="캐릭터 모델 비교">
+          <a data-model="original" href="?model=original">기존 모델</a>
+          <a data-model="detail" href="?model=detail">정교화 모델</a>
+        </nav>
+        <select class="preview-animal" aria-label="같은 자리에서 볼 캐릭터">
+          <option value="">캐릭터 가까이 보기</option>
+        </select>
+      </div>
+    </details>
     <nav class="views" aria-label="시점 선택"></nav>
     <div class="comparison"></div>
   </main>

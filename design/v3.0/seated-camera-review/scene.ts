@@ -259,11 +259,16 @@ export async function mountScene(
   renderer.shadowMap.needsUpdate = true;
   host.append(renderer.domElement);
 
-  const chip = document.createElement("span");
-  chip.className = "scene-tag";
-  chip.setAttribute("aria-hidden", "true");
-  Object.assign(chip.style, { position: "absolute", transform: "translate(-50%, -100%)", pointerEvents: "none" });
-  host.append(chip);
+  function createTag(className: string): HTMLSpanElement {
+    const tag = document.createElement("span");
+    tag.className = className;
+    tag.setAttribute("aria-hidden", "true");
+    tag.hidden = true;
+    host.append(tag);
+    return tag;
+  }
+  const chip = createTag("scene-tag");
+  const suspectChip = createTag("scene-marker");
 
   const camera = new PerspectiveCamera(68, 1, 0.07, 28);
   camera.position.copy(cameraSpot(mode));
@@ -271,16 +276,18 @@ export async function mountScene(
   const ray = new Raycaster();
   const ndc = new Vector2();
   const currentAim = aimAt(camera.position, speaker);
+  const displayedAim = { ...currentAim };
   let desiredAim = currentAim;
   let fromAim = currentAim;
   let atTime = 0;
   let focus = speaker;
+  let marked: number | null = null;
   let frame = 0;
   let visible = true;
   let lastDraw = -Infinity;
   let width = 0;
   let height = 0;
-  let drag: { x: number; y: number; yaw: number; active: boolean } | null = null;
+  let drag: { id: number; x: number; y: number; aim: typeof currentAim | null } | null = null;
   const projected = new Vector3();
   const position = new Vector3();
   const targets = actors.flatMap((actor, i) => i === 0 ? [] : actor.pickMeshes);
@@ -294,17 +301,41 @@ export async function mountScene(
   noteOnTable.visible = false;
   root.add(noteOnTable);
 
+  function tagPlacement(index: number) {
+    if (index === 0) return null;
+    const actor = actors[index]!;
+    actor.head.getWorldPosition(position);
+    position.y = actor.headTop;
+    projected.copy(position).project(camera);
+    const left = (projected.x * 0.5 + 0.5) * width;
+    const top = (0.5 - projected.y * 0.5) * height - 6;
+    if (projected.z < -1 || projected.z > 1 || left < 22 || left > width - 22 || top > height - 14) return null;
+    const name = people[index]!.name;
+    const suspect = index === marked;
+    const halfWidth = 9 + (name.length * 6) + (suspect ? 8 : 0);
+    return { name, suspect, halfWidth, left: MathUtils.clamp(left, halfWidth, width - halfWidth), top: Math.max(54, top) };
+  }
+
+  function showTag(tag: HTMLSpanElement, placement: ReturnType<typeof tagPlacement>): void {
+    tag.hidden = placement === null;
+    if (!placement) return;
+    if (tag.textContent !== placement.name) tag.textContent = placement.name;
+    tag.toggleAttribute("data-marked", placement.suspect);
+    tag.style.left = `${placement.left}px`;
+    tag.style.top = `${placement.top}px`;
+  }
+
   function draw(t: number): void {
     if (!width || !height) return;
     const elapsed = atTime ? Math.min((t - atTime) / (focusDuration * 1000), 1) : 1;
     const progress = elapsed * elapsed * (3 - 2 * elapsed);
-    const yaw = MathUtils.lerp(fromAim.yaw, desiredAim.yaw, progress);
-    const pitch = MathUtils.lerp(fromAim.pitch, desiredAim.pitch, progress);
+    displayedAim.yaw = MathUtils.lerp(fromAim.yaw, desiredAim.yaw, progress);
+    displayedAim.pitch = MathUtils.lerp(fromAim.pitch, desiredAim.pitch, progress);
     if (mode === "wide") camera.lookAt(0, 0.93, 0);
     else camera.lookAt(
-      camera.position.x + Math.sin(yaw),
-      camera.position.y + Math.tan(pitch),
-      camera.position.z - Math.cos(yaw),
+      camera.position.x + Math.sin(displayedAim.yaw),
+      camera.position.y + Math.tan(displayedAim.pitch),
+      camera.position.z - Math.cos(displayedAim.yaw),
     );
     camera.updateMatrixWorld();
 
@@ -321,18 +352,12 @@ export async function mountScene(
     }
 
     renderer.render(root, camera);
-    const target = actors[focus]!;
-    target.head.getWorldPosition(position);
-    position.y = target.headTop;
-    projected.copy(position).project(camera);
-    const left = (projected.x * 0.5 + 0.5) * width;
-    const top = (0.5 - projected.y * 0.5) * height - 6;
-    chip.hidden = focus === 0 || projected.z > 1 || left < 22 || left > width - 22 || top > height - 14;
-    if (!chip.hidden) {
-      chip.textContent = people[focus]!.name;
-      chip.style.left = `${left}px`;
-      chip.style.top = `${Math.max(54, top)}px`;
-    }
+    const focusedTag = tagPlacement(focus);
+    const markedTag = marked === null || marked === focus ? null : tagPlacement(marked);
+    const overlap = focusedTag && markedTag && Math.abs(focusedTag.top - markedTag.top) < 28
+      && Math.abs(focusedTag.left - markedTag.left) < focusedTag.halfWidth + markedTag.halfWidth + 4;
+    showTag(chip, focusedTag);
+    showTag(suspectChip, overlap ? null : markedTag);
     host.dataset.ready = "true";
   }
 
@@ -367,42 +392,42 @@ export async function mountScene(
 
   function beginAim(next: { yaw: number; pitch: number }, immediate: boolean): void {
     const now = performance.now();
-    const elapsed = atTime ? Math.min((now - atTime) / (focusDuration * 1000), 1) : 1;
-    const mix = elapsed * elapsed * (3 - 2 * elapsed);
-    fromAim = {
-      yaw: MathUtils.lerp(fromAim.yaw, desiredAim.yaw, mix),
-      pitch: MathUtils.lerp(fromAim.pitch, desiredAim.pitch, mix),
-    };
+    fromAim = { ...displayedAim };
     desiredAim = next;
     atTime = immediate || reduceMotion.matches ? 0 : now;
     draw(now);
   }
 
   renderer.domElement.addEventListener("pointerdown", event => {
-    if (!event.isPrimary || event.button !== 0) return;
+    if (!event.isPrimary || event.button !== 0 || drag) return;
     renderer.domElement.setPointerCapture(event.pointerId);
-    drag = { x: event.clientX, y: event.clientY, yaw: desiredAim.yaw, active: false };
+    drag = { id: event.pointerId, x: event.clientX, y: event.clientY, aim: null };
   });
   renderer.domElement.addEventListener("pointermove", event => {
-    if (!drag || mode === "wide") return;
+    if (!drag || drag.id !== event.pointerId || mode === "wide") return;
     const dx = event.clientX - drag.x;
     const dy = event.clientY - drag.y;
-    if (!drag.active && (Math.abs(dx) < 7 || Math.abs(dx) < Math.abs(dy))) return;
-    drag.active = true;
-    beginAim({ yaw: MathUtils.clamp(drag.yaw - dx * 0.0047, -maxYaw, maxYaw), pitch: -0.11 }, true);
+    if (!drag.aim) {
+      if (Math.abs(dx) < 7 || Math.abs(dx) < Math.abs(dy)) return;
+      drag.aim = { ...displayedAim };
+    }
+    beginAim({ yaw: MathUtils.clamp(drag.aim.yaw - dx * 0.0047, -maxYaw, maxYaw), pitch: drag.aim.pitch }, true);
   });
   if (mode !== "wide") renderer.domElement.addEventListener("touchmove", event => {
     const touch = event.touches[0];
     if (!touch || !drag || !event.cancelable) return;
     const dx = Math.abs(touch.clientX - drag.x);
     const dy = Math.abs(touch.clientY - drag.y);
-    if (drag.active || (dx >= 7 && dx > dy)) event.preventDefault();
+    if (drag.aim || (dx >= 7 && dx > dy)) event.preventDefault();
   }, { passive: false });
   renderer.domElement.addEventListener("pointerup", event => {
-    const hasDrag = drag && (drag.active || Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > 8);
+    if (!drag || drag.id !== event.pointerId) return;
+    const start = drag;
     drag = null;
-    if (hasDrag) return;
+    if (!event.isPrimary || event.button !== 0 || start.aim
+      || Math.hypot(event.clientX - start.x, event.clientY - start.y) > 8) return;
     const rect = renderer.domElement.getBoundingClientRect();
+    if (event.clientX < rect.left || event.clientX >= rect.right || event.clientY < rect.top || event.clientY >= rect.bottom) return;
     ndc.set((event.clientX - rect.left) / rect.width * 2 - 1, 1 - (event.clientY - rect.top) / rect.height * 2);
     ray.setFromCamera(ndc, camera);
     const hit = ray.intersectObjects(targets, false)[0];
@@ -410,16 +435,21 @@ export async function mountScene(
     const index = owners.get(hit.object);
     if (index !== undefined) onPick(index);
   });
-  renderer.domElement.addEventListener("pointercancel", () => { drag = null; });
+  function cancelDrag(event: PointerEvent): void {
+    if (drag?.id === event.pointerId) drag = null;
+  }
+  renderer.domElement.addEventListener("pointercancel", cancelDrag);
+  renderer.domElement.addEventListener("lostpointercapture", cancelDrag);
 
   return {
     lookAt(index) {
       if (!people[index]) return;
       focus = index;
-      const height = mode === "eye" && preview && index === previewSeat ? 1.24 : undefined;
+      const height = mode === "eye" && preview && index === previewSeat ? 1.28 : undefined;
       beginAim(aimAt(camera.position, index, height), mode === "wide");
     },
     mark(index) {
+      marked = index;
       actors.forEach((actor, i) => actor.character.setNotes(i === index ? [0] : [], { animate: false }));
       noteOnTable.visible = index !== null;
       if (index !== null) {

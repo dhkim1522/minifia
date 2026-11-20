@@ -22,6 +22,9 @@ function portrait(index: number): string {
 const template = find<HTMLTemplateElement>(document, '#panel');
 const nav = find(document, '.views');
 const comparison = find(document, '.comparison');
+const options = find<HTMLDetailsElement>(document, '.comparison-options');
+const singleView = matchMedia('(max-width: 1040px)');
+options.open = !singleView.matches;
 const query = new URLSearchParams(location.search);
 const requestedArt = query.get('art');
 const art = requestedArt === 'original' || requestedArt === 'polished' ? requestedArt : 'detailed';
@@ -45,25 +48,52 @@ const styleLinks = Array.from(document.querySelectorAll<HTMLAnchorElement>('.var
 find(document, `[data-art="${art}"]`).setAttribute('aria-current', 'true');
 find(document, `[data-model="${model}"]`).setAttribute('aria-current', 'true');
 const controllers: Partial<Record<ViewMode, Awaited<ReturnType<typeof mountScene>>>> = {};
-const panels = new Map<ViewMode, { section: HTMLElement; tab: HTMLButtonElement; players: HTMLButtonElement[]; mark: HTMLButtonElement }>();
+const started = new Set<ViewMode>();
+const panels = new Map<ViewMode, {
+  section: HTMLElement; world: HTMLElement; tab: HTMLButtonElement; players: HTMLButtonElement[]; mark: HTMLButtonElement;
+}>();
 const defaultFocus = previewAnimal ? previewSeat : 2;
 const requestedFocus = Number(query.get('focus') ?? defaultFocus);
 const requestedView = query.get('view');
+const requestedMark = Number(query.get('mark'));
 let activeMode: ViewMode = requestedView === 'shoulder' || requestedView === 'wide' ? requestedView : 'eye';
 let focus = people[requestedFocus] ? requestedFocus : defaultFocus;
 let marking = false;
-let marked: number | null = null;
+let marked: number | null = requestedMark > 0 && people[requestedMark] ? requestedMark : null;
 
-function sync(): void {
+function startScene(world: HTMLElement, mode: ViewMode): void {
+  if (started.has(mode)) return;
+  started.add(mode);
+  void mountScene(world, mode, people, choose, {
+    art, detailed: model === 'detail', preview: Boolean(previewAnimal),
+  }).then(controller => {
+    controllers[mode] = controller;
+    controller.lookAt(focus);
+    controller.mark(marked);
+  }).catch(error => {
+    console.error(error);
+    const message = document.createElement('div');
+    message.className = 'world-error';
+    message.textContent = '이 브라우저에서 3D 시안을 열 수 없어요.';
+    world.replaceChildren(message);
+  });
+}
+
+function reviewUrl(room: string = art, characters: string = model): string {
+  const params = new URLSearchParams({ art: room, model: characters, focus: String(focus), view: activeMode });
+  if (previewAnimal) params.set('animal', previewAnimal);
+  if (marked !== null) params.set('mark', String(marked));
+  return `?${params}${location.hash}`;
+}
+
+function sync(remember = false): void {
   const person = people[focus]!;
-  for (const link of styleLinks) {
-    const params = new URLSearchParams({ art: link.dataset.art ?? art, model: link.dataset.model ?? model, focus: String(focus), view: activeMode });
-    if (previewAnimal) params.set('animal', previewAnimal);
-    link.href = `?${params}`;
-  }
+  if (remember) history.replaceState(history.state, '', reviewUrl());
+  for (const link of styleLinks) link.href = reviewUrl(link.dataset.art, link.dataset.model);
   for (const [mode, panel] of panels) {
     panel.tab.setAttribute('aria-pressed', String(mode === activeMode));
     panel.section.classList.toggle('active', mode === activeMode);
+    if (!singleView.matches || mode === activeMode) startScene(panel.world, mode);
     find(panel.section, '.quote strong').textContent = focus === 0 ? `${person.name} · 나` : person.name;
     find(panel.section, '.quote p').textContent = person.line;
     find<HTMLImageElement>(panel.section, '.quote img').src = portrait(focus);
@@ -93,7 +123,7 @@ function choose(index: number): void {
     controller.lookAt(focus);
     controller.mark(marked);
   }
-  sync();
+  sync(true);
 }
 
 for (const mode of ['eye', 'shoulder', 'wide'] as const) {
@@ -112,7 +142,7 @@ for (const mode of ['eye', 'shoulder', 'wide'] as const) {
   tab.textContent = view.short;
   tab.addEventListener('click', () => {
     activeMode = mode;
-    sync();
+    sync(true);
   });
   nav.append(tab);
 
@@ -138,25 +168,15 @@ for (const mode of ['eye', 'shoulder', 'wide'] as const) {
     marking = !marking;
     sync();
   });
-  panels.set(mode, { section, tab, players, mark });
-  comparison.append(section);
-
   const world = find(section, '.world');
   world.setAttribute('aria-label', view.name);
   world.toggleAttribute('data-lookable', mode !== 'wide');
-  void mountScene(world, mode, people, choose, {
-    art, detailed: model === 'detail', preview: Boolean(previewAnimal),
-  }).then(controller => {
-    controllers[mode] = controller;
-    controller.lookAt(focus);
-    controller.mark(marked);
-  }).catch(error => {
-    console.error(error);
-    const message = document.createElement('div');
-    message.className = 'world-error';
-    message.textContent = '이 브라우저에서 3D 시안을 열 수 없어요.';
-    world.replaceChildren(message);
-  });
+  panels.set(mode, { section, world, tab, players, mark });
+  comparison.append(section);
 }
 
+singleView.addEventListener('change', () => {
+  options.open = !singleView.matches;
+  sync();
+});
 sync();

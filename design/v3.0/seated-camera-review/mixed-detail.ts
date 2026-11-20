@@ -36,8 +36,8 @@ export function makePenguinDetail(): Group {
     const side = Math.abs(x);
     const center = 0.139 + 0.052 * smoothstep(y, -0.17, 0.19);
     const vertical = ((y + 0.06) / 0.292) ** 2;
-    const left = smoothstep(((x + center) / 0.244) ** 2 + vertical, 0.70, 1.15);
-    const right = smoothstep(((x - center) / 0.244) ** 2 + vertical, 0.70, 1.15);
+    const left = smoothstep(((x + center) / 0.244) ** 2 + vertical, 0.60, 1.25);
+    const right = smoothstep(((x - center) / 0.244) ** 2 + vertical, 0.60, 1.25);
     const mask = (1 - left * right) * smoothstep(unit.z, 0.18, 0.53);
     const cheek = bell(side - 0.258, 0.071) * bell(y + 0.13, 0.058) * mask;
     out.copy(blue).lerp(crown, 0.40 * smoothstep(unit.y, 0.05, 0.87)).lerp(ivory, mask).lerp(rose, 0.67 * cheek);

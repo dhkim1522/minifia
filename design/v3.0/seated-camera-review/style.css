@@ -11,11 +11,10 @@
 * { box-sizing: border-box; }
 body { margin: 0; }
 button { font: inherit; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
-button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+button:focus-visible, summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .review { max-width: 1252px; margin-inline: auto; padding: 22px 26px 26px; }
-.review-title h1 { margin: 4px 0 5px; font-size: clamp(26px, 3.5vw, 40px); letter-spacing: -.055em; }
-.review-title p { margin: 0; color: var(--muted); font-size: 14px; }
-.review-title p:first-child { color: var(--gold); font-size: 12px; font-weight: 700; }
+.review-title h1 { margin: 0; font-size: clamp(20px, 3.5vw, 36px); letter-spacing: -.045em; }
+.comparison-options summary { display: none; }
 .variants { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 12px; }
 .variants nav { display: flex; gap: 4px; }
 .variants a, .preview-animal { min-height: 44px; padding-inline: 8px; border: 1px solid var(--frame); border-radius: 7px; color: #f7eee0; background: #253342; font-size: 12px; }
@@ -36,7 +35,8 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .world canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: pan-y; }
 .world[data-lookable] canvas { cursor: grab; }
 .world[data-lookable] canvas:active { cursor: grabbing; }
-.scene-tag { position: absolute; z-index: 1; transform: translate(-50%, -100%); padding: 4px 7px; border: 1px solid #c9a469; border-radius: 6px; color: #ffe0ac; background: #261e1be8; font-size: 12px; white-space: nowrap; pointer-events: none; }
+.scene-tag, .scene-marker { position: absolute; z-index: 1; transform: translate(-50%, -100%); padding: 4px 7px; border: 1px solid #c9a469; border-radius: 6px; color: #ffe0ac; background: #261e1be8; font-size: 12px; white-space: nowrap; pointer-events: none; }
+:is(.scene-tag, .scene-marker)[data-marked]::after { content: '◆'; margin-inline-start: 5px; color: #ffa593; font-size: 11px; }
 .world-error { position: absolute; inset: 0; display: grid; place-items: center; padding: 12px; text-align: center; }
 .quote { min-height: 64px; display: flex; align-items: center; gap: 9px; padding: 7px 9px; background: #212e3d; border-top: 1px solid var(--frame); }
 .quote img { flex: none; object-fit: contain; border-radius: 6px; background: #172332; }
@@ -59,12 +59,23 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .chat-placeholder { display: flex; justify-content: space-between; margin-top: 2px; padding: 6px; border: 1px solid #526175; border-radius: 6px; color: #aab8c8; background: #141e29; }
 .chat-placeholder span { color: #e8c18c; }
 @media (max-width: 1040px) {
-  .review { padding: 12px 0 16px; }
-  .review-title, .variants, .views { width: min(100% - 16px, 390px); margin-inline: auto; }
-  .review-title p { font-size: 12px; }
-  .views { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-top: 11px; }
-  .comparison { display: block; max-width: 390px; margin: 10px auto 0; }
+  .review { padding: 8px 0 16px; }
+  .review-title, .comparison-options, .views { width: min(100% - 16px, 390px); margin-inline: auto; }
+  .comparison-options { margin-top: 5px; }
+  .comparison-options summary { display: list-item; width: fit-content; padding: 0 9px; min-height: 44px; line-height: 42px; border: 1px solid var(--frame); border-radius: 7px; background: #253342; color: #f7eee0; font-size: 12px; cursor: pointer; }
+  .comparison-options .variants { margin-top: 5px; }
+  .views { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-top: 6px; }
+  .comparison { display: block; max-width: 390px; margin: 6px auto 0; }
   .view:not(.active) { display: none; }
-  .view-title { padding-inline: 8px; }
+  .view-title { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); }
   .phone { min-height: 0; border-radius: 0; border-inline: 0; }
+}
+@media (max-width: 1040px) and (orientation: landscape) and (max-height: 520px) {
+  .review { display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: center; gap: 6px 10px; padding-inline: 8px; }
+  .review-title, .comparison-options, .views { width: auto; margin: 0; }
+  .review-title h1 { font-size: 17px; }
+  .comparison-options { position: relative; z-index: 4; }
+  .comparison-options .variants { position: absolute; width: min(304px, 70vw); padding: 8px; border: 1px solid var(--frame); border-radius: 8px; background: var(--dock); }
+  .views { justify-self: end; width: min(100%, 390px); }
+  .comparison { grid-column: 1 / -1; width: 100%; margin-top: 0; }
 }
