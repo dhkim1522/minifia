@@ -29,7 +29,7 @@
 
 ## 다음 할 일
 
-- **다음 첫날 라이어게임**. [8인 고정 좌석 시안](design/v3.0/seated-camera-review/index.html)의 눈높이에서 차례 답변·의심딱지를 검토한다. 가까이 보기에서 12종을 같은 좌석에 놓고 [얼굴 조형 전후](design/v3.0/seated-camera-review/character-comparison.webp)와 [조명·재질 전후](design/v3.0/seated-camera-review/graphics-comparison.webp)를 비교한다.
+- **다음 첫날 라이어게임**. [8인 고정 좌석 시안](design/v3.0/seated-camera-review/index.html)의 눈높이에서 차례 답변·의심딱지를 검토한다. 같은 좌석의 [12종 얼굴 전후](design/v3.0/seated-camera-review/character-comparison.webp)와 [재즈 바 배경·소품 전후](design/v3.0/seated-camera-review/room-comparison.webp)를 비교한다.
 
 1. **[재즈 바와 동물 3D 개편](docs/decisions/0107-compact-noir-jazz-bar.md)**. 9.4×9.4 방, 중앙 스탠드·8석, 4/8인 공통 카메라를 적용했다. 320px 긴 이름·딱지와 390px 양쪽 맵의 플레이를 확인했다. [8인 실제 화면](design/v3.0/compact-bar-review/runtime-390.png). 착석 중 잠깐 이름표가 겹치며 실기기 성능은 확인 대기.
 2. **실기기**. 작은 폰의 키보드와 채팅·이름표, 소리 크기, 처음 온 사람이 채팅 없이 단서와 의심딱지를 쓸 수 있는지 팀에서 확인한다. 결과로 실험방의 기본 적용 범위를 판단한다. 24페이즈의 남은 모바일 전체 회귀와 실기기 항목을 확인한 뒤 main 반영을 판단한다.

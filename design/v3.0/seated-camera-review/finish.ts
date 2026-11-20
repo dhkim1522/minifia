@@ -1,5 +1,5 @@
 import {
-  AdditiveBlending, BackSide, CircleGeometry, Color, CylinderGeometry, DataTexture, DirectionalLight,
+  AdditiveBlending, BackSide, CircleGeometry, Color, DataTexture, DirectionalLight,
   EquirectangularReflectionMapping, FloatType, LatheGeometry, LinearFilter, LinearMipmapLinearFilter,
   Mesh, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, PlaneGeometry, RepeatWrapping,
   RGBAFormat, SpotLight, TorusGeometry, Vector2,
@@ -7,6 +7,7 @@ import {
 import type { Scene, Texture, Vector3 } from "three";
 import { Bundle, tf, makeGlowTexture } from "../../../src/world/maps/bar";
 import type { BarScene } from "../../../src/world/maps/bar";
+import { addRoomDetail } from "./room-detail";
 
 /** 작은 실내 광원을 구면으로 베이크한다. 창과 램프의 반사는 실제 표면 거칠기를 따른다. */
 function makeReflectionMap(): DataTexture {
@@ -140,7 +141,7 @@ function addWallDetails(root: Scene, wood: Texture | null): void {
   }
 }
 
-export function addFinishedRoom(bar: BarScene, seats: readonly Vector3[], tableY: number): void {
+export function addFinishedRoom(bar: BarScene, seats: readonly Vector3[], tableY: number, crafted = false): void {
   const root = bar.root;
   root.environment = reflection;
   root.environmentIntensity = 0.47;
@@ -199,5 +200,6 @@ export function addFinishedRoom(bar: BarScene, seats: readonly Vector3[], tableY
       emissive: "#99713c", emissiveIntensity: 0.24 }), "table-brass-inlay"),
     rugTrim.build(new MeshBasicMaterial({ vertexColors: true, side: BackSide }), "rug-embroidered-edge"));
   addContactShadows(root, seats, tableY);
-  addWallDetails(root, wood);
+  if (crafted) addRoomDetail(root, wood);
+  else addWallDetails(root, wood);
 }

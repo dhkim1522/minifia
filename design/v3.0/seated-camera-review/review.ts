@@ -23,7 +23,8 @@ const template = find<HTMLTemplateElement>(document, '#panel');
 const nav = find(document, '.views');
 const comparison = find(document, '.comparison');
 const query = new URLSearchParams(location.search);
-const art = query.get('art') === 'original' ? 'original' : 'polished';
+const requestedArt = query.get('art');
+const art = requestedArt === 'original' || requestedArt === 'polished' ? requestedArt : 'detailed';
 const model = query.get('model') === 'original' ? 'original' : 'detail';
 const requestedAnimal = query.get('animal');
 const previewAnimal = isAnimalId(requestedAnimal) ? requestedAnimal : undefined;
@@ -144,7 +145,7 @@ for (const mode of ['eye', 'shoulder', 'wide'] as const) {
   world.setAttribute('aria-label', view.name);
   world.toggleAttribute('data-lookable', mode !== 'wide');
   void mountScene(world, mode, people, choose, {
-    finish: art === 'polished', detailed: model === 'detail', preview: Boolean(previewAnimal),
+    art, detailed: model === 'detail', preview: Boolean(previewAnimal),
   }).then(controller => {
     controllers[mode] = controller;
     controller.lookAt(focus);

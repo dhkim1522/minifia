@@ -9,12 +9,14 @@ import { createCharacter } from "../../../src/world/character";
 import { buildBarScene, Bundle, tf, under } from "../../../src/world/maps/bar";
 import { LADDER } from "../../../src/world/renderer";
 import { addFinishedRoom } from "./finish";
+import { addDetailedTable } from "./table-detail";
 import { makeElephantDetail } from "./elephant-detail";
 import { makeFoxDetail } from "./fox-detail";
 import { makeBatDetail, makeLionDetail, makePigDetail, makeRabbitDetail, makeRamDetail } from "./mammal-detail";
 import { makeCrocodileDetail, makeFrogDetail, makeHedgehogDetail, makeParrotDetail, makePenguinDetail } from "./mixed-detail";
 
 export type ViewMode = "eye" | "shoulder" | "wide";
+type RoomArt = "original" | "polished" | "detailed";
 
 type ReviewPerson = { name: string; animal: AnimalId; line: string };
 
@@ -71,7 +73,7 @@ const focusDuration = 0.32;
 const maxYaw = 66 * Math.PI / 180;
 const paper = "#a7916c";
 
-function makeFurniture(root: Scene, finish: boolean): void {
+function makeFurniture(root: Scene, finish: boolean, crafted: boolean): void {
   const wood = new Bundle();
   const brass = new Bundle();
   const felt = new Bundle();
@@ -85,14 +87,16 @@ function makeFurniture(root: Scene, finish: boolean): void {
     felt.cyl(1.52, 1.52, 0.012, 72, "#19302e", tf(0, tableY - 0.002, 0));
     brass.add(new TorusGeometry(1.55, 0.009, 6, 72), "#b9874e", tf(0, tableY - 0.013, 0, -Math.PI / 2));
   }
-  brass.cyl(0.12, 0.145, 0.028, 24, "#b78250", tf(0, tableY + 0.023, 0));
-  brass.cyl(0.018, 0.022, 0.14, 16, "#c2985b", tf(0, tableY + 0.10, 0));
-  brass.add(new SphereGeometry(0.135, 24, 12, 0, 2 * Math.PI, 0, Math.PI / 2).scale(1, 0.69, 1),
-    "#cc9a5b", tf(0, tableY + 0.17, 0));
-  lamp.cyl(0.121, 0.126, 0.014, 24, "#ffdcaa", tf(0, tableY + 0.166, 0), finish ? 0.91 : 1.08);
-  if (finish) {
-    brass.add(new TorusGeometry(0.133, 0.006, 8, 32), "#d4a665", tf(0, tableY + 0.17, 0, -Math.PI / 2));
-    brass.cyl(0.020, 0.025, 0.036, 12, "#b98d55", tf(0, tableY + 0.267, 0));
+  if (!crafted) {
+    brass.cyl(0.12, 0.145, 0.028, 24, "#b78250", tf(0, tableY + 0.023, 0));
+    brass.cyl(0.018, 0.022, 0.14, 16, "#c2985b", tf(0, tableY + 0.10, 0));
+    brass.add(new SphereGeometry(0.135, 24, 12, 0, 2 * Math.PI, 0, Math.PI / 2).scale(1, 0.69, 1),
+      "#cc9a5b", tf(0, tableY + 0.17, 0));
+    lamp.cyl(0.121, 0.126, 0.014, 24, "#ffdcaa", tf(0, tableY + 0.166, 0), finish ? 0.91 : 1.08);
+    if (finish) {
+      brass.add(new TorusGeometry(0.133, 0.006, 8, 32), "#d4a665", tf(0, tableY + 0.17, 0, -Math.PI / 2));
+      brass.cyl(0.020, 0.025, 0.036, 12, "#b98d55", tf(0, tableY + 0.267, 0));
+    }
   }
 
   for (const [i, pos] of places.entries()) {
@@ -110,6 +114,7 @@ function makeFurniture(root: Scene, finish: boolean): void {
       wood.cyl(0.026, 0.03, 0.47, 12, "#634b3e", under(chair, tf(x, 0.61, -0.31, -0.19)));
       brass.sph(0.022, "#9d7853", under(chair, tf(x, 0.86, -0.36)));
     }
+    if (crafted) continue;
     const settingRadius = i === 0 ? 0.51 : 0.655;
     const placeSetting = tf(pos.x * settingRadius, tableY + 0.009, pos.z * settingRadius, 0, facing, 0);
     porcelain.add(new PlaneGeometry(0.18, 0.117), i === speaker ? "#eac88b" : paper,
@@ -133,9 +138,11 @@ function makeFurniture(root: Scene, finish: boolean): void {
     wood.build(new MeshStandardMaterial({ vertexColors: true, roughness: 0.73 }), "seated-table-wood"),
     felt.build(new MeshStandardMaterial({ vertexColors: true, roughness: 0.96 }), "seated-table-upholstery"),
     brass.build(new MeshStandardMaterial({ vertexColors: true, roughness: 0.37, metalness: 0.31 }), "seated-table-brass"),
+  ];
+  if (!crafted) meshes.push(
     porcelain.build(new MeshStandardMaterial({ vertexColors: true, roughness: 0.74 }), "seated-table-props"),
     lamp.build(new MeshBasicMaterial({ vertexColors: true }), "seated-table-lamp"),
-  ];
+  );
   for (const mesh of meshes) mesh.receiveShadow = true;
   meshes[0]!.castShadow = meshes[1]!.castShadow = true;
   root.add(...meshes);
@@ -178,7 +185,7 @@ function aimAt(position: Vector3, i: number, height = 1.11): { yaw: number; pitc
 
 export async function mountScene(
   host: HTMLElement, mode: ViewMode, people: readonly ReviewPerson[], onPick: (index: number) => void,
-  { finish, detailed, preview }: { finish: boolean; detailed: boolean; preview: boolean },
+  { art, detailed, preview }: { art: RoomArt; detailed: boolean; preview: boolean },
 ): Promise<{
   lookAt(index: number): void; mark(index: number | null): void;
 }> {
@@ -196,8 +203,11 @@ export async function mountScene(
   const fill = new DirectionalLight("#e4ddff", 0.34);
   fill.position.set(0.0, 2.2, 4.0);
   root.add(fill);
-  makeFurniture(root, finish);
-  if (finish) addFinishedRoom(bar, places, tableY);
+  const finish = art !== "original";
+  const crafted = art === "detailed";
+  makeFurniture(root, finish, crafted);
+  if (finish) addFinishedRoom(bar, places, tableY, crafted);
+  if (crafted) addDetailedTable(root, places, tableY, speaker);
 
   const viewer = cameraSpot("eye");
   const actors = people.map((person, i) => {
