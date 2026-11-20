@@ -275,7 +275,7 @@ describe("옷장 자물쇠 CSS 자리 (18-05, v2.css)", () => {
   });
 });
 
-// 무대의 의심 고깔을 버튼에도 같은 실루엣으로 표시한다.
+// 접힌 모서리와 느낌표가 있는 의심 표시.
 describe("V2Icon postit (24-03, P24-3)", () => {
   it("24 격자 svg, 선 2px·둥근 끝이고 path 가 셋이다", () => {
     const { container } = render(<V2Icon name="postit" />);
@@ -284,7 +284,11 @@ describe("V2Icon postit (24-03, P24-3)", () => {
     expect(svg?.getAttribute("stroke-width")).toBe("2");
     expect(svg?.getAttribute("stroke-linecap")).toBe("round");
     expect(svg?.getAttribute("aria-hidden")).toBe("true");
-    expect(svg?.querySelectorAll("path").length).toBe(3);
+    expect(Array.from(svg?.querySelectorAll("path") ?? [], (part) => part.getAttribute("d"))).toEqual([
+      "M5 4h14v11l-5 5H5z",
+      "M19 15h-5v5",
+      "M11.5 7.5v3.2m0 2.8v.25",
+    ]);
   });
   it("note 와 다른 모양이다", () => {
     const shape = (name: V2IconName): string => [...render(<V2Icon name={name} />).container.querySelectorAll("path,circle")].map((e) => e.outerHTML).join("");

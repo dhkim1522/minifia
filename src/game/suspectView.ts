@@ -8,14 +8,16 @@ import type { Segment } from "../../shared/game/world";
 import type { RoomView } from "../../shared/protocol";
 
 export const SUSPECT_TEXT = {
-  ready: "의심 고깔 씌우기",
-  moved: "의심 고깔 옮기기 또는 벗기기",
+  ready: "의심!",
+  clear: "의심 해제",
+  moved: "내 의심 표시 옮기기 또는 해제",
   modeHint: "의심 가는 캐릭터를 눌러요",
-  editHint: "같은 사람을 눌러 벗기거나 다른 사람에게 옮겨요",
+  editHint: "같은 사람을 눌러 해제하거나 다른 사람으로 옮겨요",
   tooFar: "조금 더 가까이 가 보세요",
   target: (nickname: string, marked = false): string => marked
-    ? `${nickname} 님의 의심 고깔 벗기기`
-    : `${nickname} 님에게 의심 고깔 씌우기`,
+    ? `${nickname} 님에 대한 의심 해제 (내 표시)`
+    : `${nickname} 님에게 의심 표시`,
+  count: (count: number): string => `의심 표시 ${count}개`,
 } as const;
 
 /** 하루치 기록(기록 카드 한 구역). */

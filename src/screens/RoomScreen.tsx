@@ -471,7 +471,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
         </Sheet>
       ) : null}
       {menuAvailable && gameMenu === "leave" ? (
-        <ConfirmSheet title="방에서 나갈까요?" confirmLabel="나가기" centered className="mf-room-menu" confirmDisabled={!connection.canSend} onClose={() => setGameMenu(null)} onConfirm={() => {
+        <ConfirmSheet title="방에서 나갈까요?" confirmLabel="나가기" centered keepBackdrop className="mf-room-menu" confirmDisabled={!connection.canSend} onClose={() => setGameMenu(null)} onConfirm={() => {
           if (connection.send({ t: "leave" }) !== false) onExit("left");
         }} />
       ) : null}
@@ -484,6 +484,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
           onTab={(tab) => setRoleCard((s) => ({ ...s, tab }))}
           unread={unread}
           newCount={newCount}
+          keepBackdrop
           onClose={closeRoleCard}
         />
       ) : null}

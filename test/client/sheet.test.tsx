@@ -108,6 +108,23 @@ describe("Sheet — <dialog> 하단 시트 틀 (C-01·C-03 공통, 리서치 Pat
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("입력 중 첫 배경 터치는 초점만 풀고 다음 터치가 시트를 닫는다", () => {
+    vi.useFakeTimers();
+    const onClose = vi.fn();
+    const { container } = render(<Sheet label="닉네임" onClose={onClose}><input aria-label="이름" /></Sheet>);
+    const input = screen.getByRole("textbox");
+    const scrim = container.querySelector(".mf-sheet-scrim")!;
+    input.focus();
+    expect(fireEvent.pointerDown(scrim, { cancelable: true, pointerType: "touch" })).toBe(false);
+    fireEvent.click(scrim);
+    expect(document.activeElement).not.toBe(input);
+    advance(260);
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(scrim);
+    advance(260);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("StrictMode 로 감싸도 예외 없이 열려 있다(showModal 을 두 번 부르지 않는다)", () => {
     const { container } = render(
       <StrictMode>
@@ -345,7 +362,7 @@ describe("진홍 금지 (파괴 동작·공유 시트)", () => {
 // ---- G-01-9 시트 진입 모션 (UAT Test 9, D-19 개정) ----
 // 폰(iOS Safari)에서 [내 역할] 시트가 "위에 잠깐 떴다가 아래로 떨어지는" 증상.
 // 가설: showModal 직후 첫 프레임이 최종 위치로 그려진 뒤 animation 이 시작된다.
-// 고침: 진입 전 초기 위치를 CSS 로 아래에 고정하고, 두 프레임 뒤에 열림 클래스를 붙여 전환으로 올라오게 한다.
+// 진입 전에는 제자리 근처에서 투명하게 두고 두 프레임 뒤에 열림 클래스를 붙인다.
 
 // 위의 `sheet.css?raw` 는 vitest 가 CSS 를 처리하지 않아 빈 문자열이 된다(css.include 기본값). 규칙 값은 파일을 직접 읽어 본다.
 const sheetCssSource = readFileSync("src/styles/sheet.css", "utf8");
@@ -398,12 +415,14 @@ describe("G-01-9 시트 진입 모션 — CSS 값 규칙", () => {
     expect(sheetCssSource.length > 0).toBe(true);
   });
 
-  it("G-01-9: 시트의 진입 전 초기 위치는 CSS 로 아래에 고정된다", () => {
-    expect(cssDecl(".mf-sheet", "transform")).toBe("translateY(100%)");
+  it("G-01-9: 시트는 최종 위치에서 12px만 아래에 투명하게 준비된다", () => {
+    expect(cssDecl(".mf-sheet", "transform")).toBe("translateY(12px)");
+    expect(cssDecl(".mf-sheet", "opacity")).toBe("0");
   });
 
   it("G-01-9: 열림 클래스가 붙으면 시트는 제자리(0), 막은 불투명(1)이고 막의 기본은 투명(0)이다", () => {
     expect(cssDecl(".mf-dialog--open .mf-sheet", "transform")).toBe("translateY(0)");
+    expect(cssDecl(".mf-dialog--open .mf-sheet", "opacity")).toBe("1");
     expect(cssDecl(".mf-dialog--open .mf-sheet-scrim", "opacity")).toBe("1");
     expect(cssDecl(".mf-sheet-scrim", "opacity")).toBe("0");
   });
@@ -412,7 +431,14 @@ describe("G-01-9 시트 진입 모션 — CSS 값 규칙", () => {
     expect(hasAnimationDecl(".mf-sheet")).toBe(false);
     expect(hasAnimationDecl(".mf-sheet-scrim")).toBe(false);
     expect((cssDecl(".mf-sheet", "transition") ?? "").includes("transform")).toBe(true);
-    expect(cssDecl(".mf-sheet--closing", "transform")).toBe("translateY(100%)");
+    expect(cssDecl(".mf-sheet--closing", "transform")).toBe("translateY(var(--mf-sheet-exit, 12px))");
+  });
+
+  it("연속해서 열리는 시트는 진입 전에 배경 막을 켜 두고 닫히면서 막도 걷는다", () => {
+    const { container } = render(<Sheet label="역할 카드" keepBackdrop onClose={() => {}}><p>내용</p></Sheet>);
+    expect(dialogOf(container).classList).toContain("mf-dialog--keep-backdrop");
+    expect(cssDecl(".mf-dialog--keep-backdrop:not(.mf-dialog--closing) .mf-sheet-scrim", "opacity")).toBe("1");
+    expect(cssDecl(".mf-dialog--closing .mf-sheet-scrim", "opacity")).toBe("0");
   });
 });
 

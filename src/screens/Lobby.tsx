@@ -254,7 +254,7 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
           kbOpen={kbOpen}
           inputRef={inputRef}
           actions={(!myAnimal && playtest) ? null : (
-            <button ref={dressBtnRef} type="button" className="mf-room-tool" data-float="dress" data-room-tool="dress" aria-label={myAnimal ? "캐릭터 꾸미기" : DRESS_TEXT.open} hidden={dressOpen || kbOpen} disabled={!canSend || exiting} onClick={() => openDress()}>
+            <button ref={dressBtnRef} type="button" className="mf-room-tool" data-float="dress" data-room-tool="dress" aria-label={myAnimal ? "캐릭터 꾸미기" : DRESS_TEXT.open} hidden={kbOpen} inert={dressOpen} disabled={!canSend || exiting} onClick={() => openDress()}>
               <V2Icon name="hanger" size={22} />
             </button>
           )}

@@ -1,5 +1,6 @@
 import "../../styles/v2.css";
 import { CHAT_TEXT } from "../../game/chatText";
+import { SUSPECT_TEXT } from "../../game/suspectView";
 import type { RoleId } from "../../../shared/game/roles";
 import type { BadgeId } from "../../../shared/protocol";
 import type { ReactNode } from "react";
@@ -26,7 +27,7 @@ const DONE_LABEL = "투표함";
 /** 첫 사건(튜토리얼)의 내 이름표는 이름이 이미 "나" 라 접미를 붙이지 않는다(0080-16) */
 const ME_NAME = "나";
 
-/** 의심 칩(P24-16): 남의 이름표는 이 장수 이상일 때만, 내 이름표는 1장 이상이면 늘 보인다(내 가슴은 등 쪽 카메라에서 안 보여 이것이 유일한 알림) */
+/** 의심 칩은 남의 이름표의 경우 4개 이상, 내 이름표는 1개 이상일 때 보인다. */
 export const SUSPECT_CHIP_MIN_OTHER = 4;
 export const suspectChipShown = (count: number | undefined, mine: boolean): boolean => count !== undefined && count >= (mine ? 1 : SUSPECT_CHIP_MIN_OTHER);
 
@@ -50,7 +51,7 @@ export interface NameTagProps {
   call?: boolean;
   /** 유령 표식(is-ghost). 이름표는 불투명 — 몸이 유령 그림이라 직업은 RoleChip 이 알린다(0083-2) */
   ghost?: boolean;
-  /** 이 사람이 받은 의심 종이 수(공개 값). 남은 4장 이상, 나는 1장 이상일 때만 이름표 왼쪽 위에 칩을 그린다(P24-16). 몇 장인지만 알리고 누가 붙였는지는 싣지 않는다 */
+  /** 이 사람이 받은 의심 표시 수(공개 값). 이름표 왼쪽 위에 개수를 표시한다. */
   suspect?: number;
   /** 이름표 모서리에 걸 요소(직업 주장 배지). 이름표 폭·쌓임 높이를 늘리지 않는다 */
   children?: ReactNode;
@@ -71,7 +72,7 @@ export function NameTag({ name, color, me, away, mine, done, doneLabel, blink, c
         </span>
       ) : null}
       {suspect !== undefined && suspectChipShown(suspect, me === true) ? (
-        <span className="mv-suspect-count" role="img" data-suspect-count={String(suspect)} aria-label={`의심 고깔 ${suspect}개`}>
+        <span className="mv-suspect-count" role="img" data-suspect-count={String(suspect)} aria-label={SUSPECT_TEXT.count(suspect)}>
           <V2Icon name="postit" size={14} />
           <span className="mv-suspect-count__n">{suspect}</span>
         </span>

@@ -1,4 +1,5 @@
 import type { PublicPlayer } from "../../shared/protocol";
+import { SUSPECT_TEXT } from "../game/suspectView";
 import { PlayerPortrait } from "./PlayerPortrait";
 import { V2Icon } from "./v2/V2Icon";
 import type { WorldPick } from "./WorldStage";
@@ -25,7 +26,7 @@ export function TableControls({ players, focus, pick, notes, onChoose }: TableCo
               "data-pick": seat,
               ...(pick.attr ? { [pick.attr]: seat } : {}),
             } : {})}
-            aria-label={count > 0 ? `${name}, 의심 고깔 ${count}개` : name}
+            aria-label={count > 0 ? `${name}, ${SUSPECT_TEXT.count(count)}` : name}
             aria-pressed={pick ? pick.mine === seat : focus === seat} disabled={disabled} onClick={() => onChoose(seat)}>
             <PlayerPortrait seat={seat} animal={player.animal} />
             <span className="mf-table-controls__name">{player.nickname}</span>

@@ -470,7 +470,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
             inputRef={inputRef}
             advance={readyPill}
             actions={finished ? (
-              <button ref={dressBtnRef} type="button" className="mf-room-tool" data-float="dress" data-room-tool="dress" aria-label={DRESS_TEXT.open} hidden={dressOpen || kbOpen} disabled={!canSend} onClick={() => openDress()}>
+              <button ref={dressBtnRef} type="button" className="mf-room-tool" data-float="dress" data-room-tool="dress" aria-label={DRESS_TEXT.open} hidden={kbOpen} inert={dressOpen} disabled={!canSend} onClick={() => openDress()}>
                 <V2Icon name="hanger" size={22} />
               </button>
             ) : null}

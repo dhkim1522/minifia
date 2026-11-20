@@ -2,15 +2,14 @@
    design/design-system/components/bundle.css 의 .mf-sheet* (85-89행)에서 옮기고, <dialog> 틀과 모션을 더했다.
    값은 tokens.css 변수만 쓴다(색 직접 지정 없음). 이 파일에는 강조색(붉은 계열)을 쓰지 않는다 — 그것은 처형·탈락 발표에 남긴다.
    240ms 는 토큰에 없는 모션 길이라 지역 상수로 둔다(UI-SPEC 스타일 규칙, R18).
-   진입은 열림 클래스(mf-dialog--open) 전환이고, 진입 전 초기 위치는 CSS 로 아래에 고정한다(G-01-9). */
+   시트는 최종 자리 가까이에서 시작해 위로 조금 움직이며 나타난다. */
 
 .mf-dialog {
   --mf-sheet-ms: 240ms;
   /* top layer 로 올라가므로 #root 의 폭 제한이 닿지 않는다. 화면 전체를 덮고 안에서 시트 폭을 제한한다. */
   position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none;
   margin: 0; padding: 0; border: 0; background: transparent; color: var(--gray-100); font-family: var(--font-ui);
-  /* hidden 은 사용자 스크롤만 막는다. 시트가 아래에 숨어 있는 동안 생긴 스크롤 영역을 포커스 이동이 밀어 올려
-     시트가 떴다 내려앉는다(G-01-9 실기기 패널). clip 은 프로그램 스크롤까지 막는다. hidden 은 clip 을 모르는 브라우저용. */
+  /* 시트 진입 위치 때문에 포커스가 대화상자를 스크롤하지 않도록 한다. */
   overflow: hidden; overflow: clip;
   /* 폰 키패드가 떠 있는 동안 Sheet.tsx 가 --mf-kb 를 키패드 높이로 둔다. 시트가 키패드 위로 올라온다. */
   box-sizing: border-box; padding-bottom: var(--mf-kb, 0px);
@@ -21,6 +20,7 @@
 
 .mf-sheet-scrim { position: absolute; inset: 0; background: var(--scrim); opacity: 0; transition: opacity var(--mf-sheet-ms) var(--ease-out); }
 .mf-dialog--open .mf-sheet-scrim { opacity: 1; }
+.mf-dialog--keep-backdrop:not(.mf-dialog--closing) .mf-sheet-scrim { opacity: 1; }
 .mf-dialog--closing .mf-sheet-scrim { opacity: 0; }
 
 .mf-sheet {
@@ -28,11 +28,12 @@
   width: 100%; max-width: 430px; margin: 0 auto; max-height: 80dvh; overflow-y: auto;
   padding: var(--space-lg); padding-bottom: calc(var(--space-lg) + env(safe-area-inset-bottom));
   background: var(--noir-sheet-light), var(--noir-panel); border-radius: var(--noir-surface-radius) var(--noir-surface-radius) 0 0; box-shadow: var(--noir-rail), var(--shadow-card);
-  transform: translateY(100%);
-  transition: transform var(--mf-sheet-ms) var(--ease-out);
+  opacity: 0;
+  transform: translateY(12px);
+  transition: transform var(--mf-sheet-ms) var(--ease-out), opacity var(--mf-sheet-ms) var(--ease-out);
 }
-.mf-dialog--open .mf-sheet { transform: translateY(0); }
-.mf-sheet--closing { transform: translateY(100%); }
+.mf-dialog--open .mf-sheet { opacity: 1; transform: translateY(0); }
+.mf-sheet--closing { transform: translateY(var(--mf-sheet-exit, 12px)); }
 
 .mf-dialog--centered[open] { justify-content: center; padding-inline: var(--space-sm); }
 .mf-dialog--centered .mf-sheet {
@@ -40,11 +41,9 @@
   box-sizing: border-box;
   padding-bottom: var(--space-lg);
   border-radius: var(--noir-surface-radius);
-  opacity: 0;
   transform: translateY(8px);
-  transition: transform var(--mf-sheet-ms) var(--ease-out), opacity var(--mf-sheet-ms) var(--ease-out);
 }
-.mf-dialog--centered.mf-dialog--open .mf-sheet { opacity: 1; transform: translateY(0); }
+.mf-dialog--centered.mf-dialog--open .mf-sheet { transform: translateY(0); }
 
 /* 손잡이 막대: 끌기는 이 영역에만 건다. 보이는 막대는 40×4, 누르는 영역은 위아래로 넓힌다. */
 .mf-sheet__handle {
@@ -72,5 +71,5 @@
 .mf-share__block { display: flex; flex-direction: column; gap: var(--space-xs); }
 
 @media (prefers-reduced-motion: reduce) {
-  .mf-sheet, .mf-dialog--centered .mf-sheet, .mf-sheet-scrim { transition-duration: 0.01ms; }
+  .mf-sheet, .mf-sheet-scrim { transition-duration: 0.01ms; }
 }

@@ -855,11 +855,13 @@ describe("RoomScreen: 첫날 답안 발표", () => {
     expect(stage.props?.scene?.table).toMatchObject({ mode: "eye", focus: 7, focusAt: 36_000 });
   });
 
-  it("현재 발표자에게 의심딱지를 붙였다가 뗄 수 있고 자기 답에는 단추가 없다", () => {
+  it("현재 발표자를 의심 대상으로 표시하거나 해제하고 자기 답에는 단추가 없다", () => {
     const send = vi.fn(() => true);
     connectionMock.current = conn({ view: play("dayAnnounce", first), send });
     const { container, rerender } = render(ui());
     const suspect = () => container.querySelector<HTMLButtonElement>("[data-answer-suspect]");
+    expect(suspect()?.textContent).toBe("의심!");
+    const icon = suspect()?.querySelector("svg")?.innerHTML;
     fireEvent.click(suspect()!);
     expect(send).toHaveBeenCalledWith({ t: "suspect", target: 1 });
     expect(suspect()?.getAttribute("aria-pressed")).toBe("false");
@@ -867,11 +869,13 @@ describe("RoomScreen: 첫날 답안 발표", () => {
     setView({ ...state, me: { ...state.me, suspectTo: 1 }, day: { ...state.day!, suspects: [{ from: 0, to: 1 }] } });
     rerender(ui());
     expect(suspect()?.getAttribute("aria-pressed")).toBe("true");
+    expect(suspect()?.textContent).toBe("의심 해제");
+    expect(suspect()?.querySelector("svg")?.innerHTML).toBe(icon);
     expect(suspect()?.disabled).toBe(true);
     expect(stage.props?.scene?.notes).toEqual({ 1: [0] });
     act(() => vi.advanceTimersByTime(SUSPECT_MIN_GAP_MS));
     expect(suspect()?.disabled).toBe(false);
-    expect(suspect()?.getAttribute("aria-label")).toBe("하윤 님의 의심 고깔 벗기기");
+    expect(suspect()?.getAttribute("aria-label")).toBe("하윤 님에 대한 의심 해제 (내 표시)");
     fireEvent.click(suspect()!);
     expect(send).toHaveBeenLastCalledWith({ t: "suspect", target: 1, remove: true });
     expect(suspect()?.getAttribute("aria-pressed")).toBe("true");

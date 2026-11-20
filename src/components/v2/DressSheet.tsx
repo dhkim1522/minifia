@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import "../../styles/v2.css";
 import { ANIMAL_IDS, ANIMALS, type AnimalId } from "../../../shared/game/animals";
@@ -53,9 +53,14 @@ export function DressSheet({ value, onPick, onClose, disabled = false, taken, ta
   }, [tab, chosenTab]);
   const cardStrip = tab === "animal" ? animalsRef : stripRef;
   const firstLayout = useRef(true);
-  useEffect(() => {
-    const card = cardStrip.current?.querySelector<HTMLElement>("button[aria-pressed='true']");
-    card?.scrollIntoView?.({ inline: "center", block: "nearest", behavior: "auto" });
+  useLayoutEffect(() => {
+    const strip = cardStrip.current;
+    const card = strip?.querySelector<HTMLElement>("button[aria-pressed='true']");
+    if (strip && card) {
+      const stripRect = strip.getBoundingClientRect();
+      const cardRect = card.getBoundingClientRect();
+      strip.scrollLeft += cardRect.left + cardRect.width / 2 - stripRect.left - stripRect.width / 2;
+    }
     if (firstLayout.current) card?.focus({ preventScroll: true });
     firstLayout.current = false;
   }, [cardStrip]);

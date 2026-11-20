@@ -890,7 +890,7 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
             <AnswerPresentation turn={presentation} player={speaker} mySeat={view.me.seat} marked={speakerMarked}
               canSuspect={canSuspectSpeaker} {...(timeless ? {} : { onSuspect: suspectSpeaker })} />
           ) : undefined}
-          tableControls={tableOn && !kbLifted && layerKind === null ? (
+          tableControls={tableOn && !kbLifted ? (
             <TableControls
               players={view.players.filter((p) => p.seat !== view.me.seat && isAlive(p))}
               {...(tableFocus !== undefined ? { focus: tableFocus } : {})}

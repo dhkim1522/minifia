@@ -564,6 +564,7 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       const turns = pages.map(() => []);
       let markedSeat;
       let markedBy;
+      let suspectCopyMatches = false;
 
       for (let order = 1; order <= total; order++) {
         const views = await Promise.all(pages.map(p => p.tracker.waitFor(v => v.day?.keyword?.presentation?.order === order, 7000, `답 발표 ${order}`)));
@@ -580,8 +581,12 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
         if (order !== 1) continue;
         const observer = pages.find(p => p.tracker.last().me.seat !== current.seat);
         if (!observer) throw new Error("발표자가 아닌 테스트 화면 없음");
-        await observer.page.locator("[data-answer-suspect]").click({ timeout: 1200 });
-        await Promise.all(pages.map(p => p.tracker.waitFor(v => v.day?.suspects?.some(note => note.to === current.seat), 2500, "현재 발표자 의심딱지 부착")));
+        const suspectButton = observer.page.locator("[data-answer-suspect]");
+        const readyCopy = await suspectButton.textContent({ timeout: 1200 });
+        await suspectButton.click({ timeout: 1200 });
+        await Promise.all(pages.map(p => p.tracker.waitFor(v => v.day?.suspects?.some(note => note.to === current.seat), 2500, "현재 발표자 의심 표시")));
+        const markedCopy = await observer.page.locator('[data-answer-suspect][aria-pressed="true"]').textContent({ timeout: 1200 }).catch(() => null);
+        suspectCopyMatches = readyCopy?.trim() === "의심!" && markedCopy?.trim() === "의심 해제";
         markedSeat = current.seat;
         markedBy = observer;
       }
@@ -593,7 +598,7 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
         return { who: p.who, turns: turns[i], ...await readDiscussionTools(p.page) };
       }));
       rec1(rec, `${id}/answers`, kw8AnswerTurns(presentations, expectedOrder));
-      rec(`${id}/answers`, "KW8b", "발표 중 붙인 의심딱지가 첫 토론에 남는다", markedSeat !== undefined &&
+      rec(`${id}/answers`, "KW8b", "발표 중 [의심!]을 누르면 [의심 해제]가 보이고 표시가 첫 토론에 남는다", suspectCopyMatches && markedSeat !== undefined &&
         pages.every(p => p.tracker.last().day?.suspects?.some(note => note.to === markedSeat)));
 
       const other = pages.find(p => p !== markedBy);

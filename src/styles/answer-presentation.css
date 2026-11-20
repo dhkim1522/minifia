@@ -53,6 +53,10 @@
   min-block-size: var(--tap-min);
 }
 
+.mf-answer-presentation__suspect[aria-pressed="true"] {
+  border-color: var(--noir-paper);
+}
+
 .mf-answer-presentation__suspect[aria-pressed="true"]:disabled {
   opacity: 1;
 }

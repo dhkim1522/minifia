@@ -1289,12 +1289,13 @@ describe("결과 단계 꾸미기 (11-12, D-16)", () => {
     expect(dress(r.container)).toBeNull();
   });
 
-  it("[꾸미기]를 누르면 DressSheet 가 열리고 떠 있는 버튼은 숨는다 — 카드를 고르면 { t:'dress', look } 가 간다", () => {
+  it("[꾸미기]를 누르면 시트가 열리고 도구 자리와 카드 전송을 보존한다", () => {
     const r = renderRoom(makeView({ me: 1 }));
     fireEvent.click(dress(r.container)!);
     const cards = Array.from(r.container.querySelectorAll<HTMLElement>("button[data-outfit]"));
     expect(cards.length).toBeGreaterThan(1);
-    expect(dress(r.container)?.hasAttribute("hidden")).toBe(true);
+    expect(dress(r.container)?.hasAttribute("inert")).toBe(true);
+    expect(dress(r.container)?.hasAttribute("hidden")).toBe(false);
     const other = cards.find((c) => c.getAttribute("aria-pressed") !== "true")!;
     fireEvent.click(other);
     act(() => void vi.advanceTimersByTime(300));

@@ -3,7 +3,7 @@ import type { KeyboardEvent, ReactElement, RefObject } from "react";
 import type { RoomView } from "../../shared/protocol";
 import type { RoleId } from "../../shared/game/roles";
 import { ROLE_TEXT, alliesText, allyNicknames } from "../game/roleText";
-import { suspectLogByDay } from "../game/suspectView";
+import { SUSPECT_TEXT, suspectLogByDay } from "../game/suspectView";
 import { roleArtSrc } from "../net/assets";
 import { ownAnimalOf, playerColor } from "../game/playerIdentity";
 import type { JournalRole } from "../net/assets";
@@ -27,6 +27,7 @@ export interface RoleCardSheetProps {
   unread: number;
   /** 활동 기록의 맨 위 몇 줄에 NEW 를 다는가 */
   newCount: number;
+  keepBackdrop?: boolean | undefined;
   onClose: () => void;
 }
 
@@ -39,7 +40,7 @@ function journalRoleOf(role: RoleId | null): JournalRole | null {
 
 // 역할 카드 시트(결정 0026, UI-SPEC D, 시안 R2~R5). [내 역할]·[수사 기록] 두 시트를 하나로 합친 것이다.
 // 내용은 서버가 본인에게만 보낸 me.role·me.records 에서만 만든다(T-01-45). 직업 그림은 내 역할 하나만 그린다(T-03.1-20).
-export function RoleCardSheet({ view, showBack, tab, onTab, unread, newCount, onClose }: RoleCardSheetProps): ReactElement {
+export function RoleCardSheet({ view, showBack, tab, onTab, unread, newCount, keepBackdrop, onClose }: RoleCardSheetProps): ReactElement {
   const role = view.me.role ?? null;
   const journalRole = showBack ? null : journalRoleOf(role);
   const hasRecords = !showBack && role !== null && (view.day?.suspectLog?.length ?? 0) > 0;
@@ -137,6 +138,7 @@ export function RoleCardSheet({ view, showBack, tab, onTab, unread, newCount, on
       label={title}
       onClose={onClose}
       showClose
+      keepBackdrop={keepBackdrop}
       className="mf-sheet--rolecard"
       initialFocusRef={tabbed && selectedTab !== "role" ? tabRefs[selectedTab] : undefined}
     >
@@ -172,11 +174,11 @@ function RecordsPanel({ view }: { view: RoomView }): ReactElement {
                   className="mf-suspect__row"
                   data-suspect-row=""
                   data-suspect-to={to}
-                  aria-label={`${nick(to)} 님, 의심 고깔 ${count}개`}
+                  aria-label={`${nick(to)} 님, ${SUSPECT_TEXT.count(count)}`}
                 >
                   <span className="mf-suspect__dot" style={{ background: playerColor(to, players.get(to)?.animal) }} aria-hidden="true" />
                   <span className="mf-suspect__nick mf-suspect__nick--to">{nick(to)}</span>
-                  <span className="mf-suspect__total">{count}장</span>
+                  <span className="mf-suspect__total">{count}개</span>
                 </li>
               ))}
             </ul>

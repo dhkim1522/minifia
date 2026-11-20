@@ -396,6 +396,8 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 /* 꾸미기 시트: 채팅 패널과 아랫변을 맞추고 모든 탭에 테두리 1 + 안쪽 여백 24 + 위 줄 44 + 간격 12 + 카드 112를 확보한다.
    가로 화면이나 키보드로 공간이 더 작아지면 시트 안에서만 세로로 스크롤한다. */
 .mv-dress-sheet { position: absolute; left: 0; right: 0; bottom: var(--mf-kb-lift, 0px); z-index: calc(var(--z-overlay) + 1); height: max(var(--mf-panel-h, 250px), 193px); max-height: calc(100% - var(--mf-kb-lift, 0px)); box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; padding: 12px; overflow: hidden auto; overscroll-behavior-y: contain; background: var(--noir-sheet-light), var(--noir-panel); border: 1px solid var(--night-600); border-bottom: 0; border-radius: var(--noir-surface-radius) var(--noir-surface-radius) 0 0; font-family: var(--font-ui); color: var(--gray-100); border-color: var(--noir-line); box-shadow: var(--noir-rail), var(--shadow-card); }
+.mv-dress-sheet { animation: mf-dress-enter 180ms var(--ease-out) both; }
+@keyframes mf-dress-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 .mv-dress-sheet__top { flex: none; display: flex; align-items: center; justify-content: space-between; height: var(--tap-min); padding-left: 4px; }
 /* 닫기는 공통 알약 .mv-closepill(14-06) */
 .mv-dress-sheet__close { color: var(--gray-100); }
@@ -421,7 +423,10 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-dress-sheet__tab.is-selected::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 0; height: 2px; background: var(--noir-paper); }
 .mv-dress-sheet__tab:focus-visible { outline: 2px solid var(--gray-100); outline-offset: -2px; }
 .mv-dress-card:focus-visible, .mv-dress-sheet__close:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
-@media (prefers-reduced-motion: reduce) { .mv-dress-sheet__strip { scroll-behavior: auto; } }
+@media (prefers-reduced-motion: reduce) {
+  .mv-dress-sheet { animation: none; }
+  .mv-dress-sheet__strip { scroll-behavior: auto; }
+}
 .mf-float[data-float-single] { min-height: 0; }
 
 /* 로비와 결과 화면의 소리 단추는 띠 아래 독의 첫 칸에 놓인다. 메뉴에서도 같은 크기를 쓴다. */

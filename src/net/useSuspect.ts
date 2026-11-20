@@ -18,7 +18,7 @@ import type { SendGuard } from "./useSendGuard";
 export const SUSPECT_POLL_MS = 250;
 
 /** 붙인 사람에게만 읽히는 안내(P24-8) */
-export const suspectSaid = (nickname: string): string => `${nickname} 님에게 의심 고깔을 씌웠어요`;
+export const suspectSaid = (nickname: string): string => `${nickname} 님에게 의심을 표시했어요`;
 
 export interface UseSuspectOptions {
   view: RoomView;
@@ -144,7 +144,7 @@ export function useSuspect({ view, store, offset, send, canSend = true, guard }:
     guard.clear("suspect");
     const seat = suspectTo ?? (confirmedRemoval ? previousTo : undefined);
     const name = latest.current.view.players.find((p) => p.seat === seat)?.nickname;
-    setSaid(name === undefined ? "" : confirmedRemoval ? `${name} 님의 의심 고깔을 벗겼어요` : suspectSaid(name));
+    setSaid(name === undefined ? "" : confirmedRemoval ? `${name} 님에 대한 내 의심 표시를 해제했어요` : suspectSaid(name));
   }, [suspectTo, visible, guard]);
 
   const disabled = !canSend || coolingDown || (!walkToTarget && targets.size === 0);

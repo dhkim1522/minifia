@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent, ReactNode, RefObject } from "react";
 import { Button } from "./Button";
 import { Icon } from "./Icon";
@@ -31,6 +31,8 @@ export interface SheetProps {
   modal?: boolean;
   /** 자동으로 열리는 결과처럼 화면 중앙에 띄울 때. */
   centered?: boolean;
+  /** 이미 떠 있는 시트에서 이 시트로 바로 이동할 때 뒤 화면을 계속 가린다. */
+  keepBackdrop?: boolean | undefined;
   /** 시트 본체(.mf-sheet)에 덧붙일 클래스. 시트별 높이 같은 모양 차이에 쓴다 */
   className?: string;
   /** 함수면 requestClose 와 닫히는 중 여부를 받는다 */
@@ -46,12 +48,12 @@ interface Drag {
 
 const isTextInput = (el: HTMLElement) => el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
 
-export function Sheet({ label, onClose, initialFocusRef, showClose, modal = true, centered = false, className, children }: SheetProps) {
+export function Sheet({ label, onClose, initialFocusRef, showClose, modal = true, centered = false, keepBackdrop = false, className, children }: SheetProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const [closing, setClosing] = useState(false);
-  // 열림 클래스(mf-dialog--open) 여부. 처음엔 false 라 첫 프레임은 CSS 의 시작 상태(화면 아래)로 그려진다.
+  // 첫 프레임의 투명한 시트가 자리 잡은 뒤 열림 클래스로 전환한다.
   const [entered, setEntered] = useState(false);
   const closingRef = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -73,7 +75,7 @@ export function Sheet({ label, onClose, initialFocusRef, showClose, modal = true
     }, CLOSE_MS);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const dlg = dialogRef.current;
     if (!dlg) return;
     // StrictMode 는 effect 를 두 번 돌린다: 이미 열려 있으면 showModal 을 다시 부르지 않는다(부르면 예외).
@@ -87,7 +89,7 @@ export function Sheet({ label, onClose, initialFocusRef, showClose, modal = true
     traceRef.current = trace;
     // React autoFocus 는 대화상자가 열리기 전에 일어나므로 열린 직후 직접 준다.
     const first = initialFocusRef?.current ?? closeBtnRef.current ?? dlg.querySelector<HTMLElement>("button, [href], input, [tabindex]");
-    // 시트가 화면 밖(translateY 100%)에 있는 순간의 포커스가 대화상자를 스크롤하지 않게 한다(G-01-9 후보 원인).
+    // 시트가 제 위치에 자리 잡는 동안 포커스가 스크롤을 움직이지 않게 한다.
     first?.focus({ preventScroll: true });
     trace?.mark("focused");
     // 첫 프레임을 시작 상태로 그린 뒤 열림 — iOS Safari 에서 첫 프레임이 최종 위치로 그려지는 문제(G-01-9).
@@ -126,11 +128,16 @@ export function Sheet({ label, onClose, initialFocusRef, showClose, modal = true
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 입력칸에 포커스가 있으면(폰 키패드가 떠 있는 동안) 배경 누르기는 키패드만 내린다. 시트까지 닫으면 입력하던 것을 잃는다.
-  const onScrimClick = () => {
+  const focusedInput = (): HTMLElement | undefined => {
     const active = document.activeElement;
-    if (active instanceof HTMLElement && dialogRef.current?.contains(active) && isTextInput(active)) {
-      active.blur();
+    return active instanceof HTMLElement && dialogRef.current?.contains(active) && isTextInput(active) ? active : undefined;
+  };
+
+  // 입력 중 배경을 누르면 키패드만 내린다. 모바일에서는 클릭 전에 브라우저가 초점을 먼저 바꾸기도 한다.
+  const onScrimClick = () => {
+    const input = focusedInput();
+    if (input) {
+      input.blur();
       return;
     }
     requestClose();
@@ -195,18 +202,19 @@ export function Sheet({ label, onClose, initialFocusRef, showClose, modal = true
     e.currentTarget.releasePointerCapture?.(e.pointerId);
     const speed = d.dy / Math.max(1, Date.now() - d.startAt);
     const el = sheetRef.current;
-    // 인라인 값을 비우면 원위치로 돌아가거나(전환 복구), 닫는 중 클래스의 translateY(100%) 로 이어진다.
+    const dismiss = d.dy > DRAG_CLOSE_PX || speed > DRAG_CLOSE_SPEED;
     if (el) {
       el.style.transition = "";
       el.style.transform = "";
+      if (dismiss) el.style.setProperty("--mf-sheet-exit", `${d.dy + 12}px`);
     }
-    if (d.dy > DRAG_CLOSE_PX || speed > DRAG_CLOSE_SPEED) requestClose();
+    if (dismiss) requestClose();
   };
 
   return (
     <dialog
       ref={dialogRef}
-      className={["mf-dialog", centered && "mf-dialog--centered", closing ? "mf-dialog--closing" : entered && "mf-dialog--open"].filter(Boolean).join(" ")}
+      className={["mf-dialog", centered && "mf-dialog--centered", keepBackdrop && "mf-dialog--keep-backdrop", closing ? "mf-dialog--closing" : entered && "mf-dialog--open"].filter(Boolean).join(" ")}
       aria-label={label}
       onCancel={(e) => {
         // Esc 의 기본 동작은 즉시 닫아 종료 애니메이션이 사라진다. 막고 직접 닫는다.
@@ -214,7 +222,7 @@ export function Sheet({ label, onClose, initialFocusRef, showClose, modal = true
         requestClose();
       }}
     >
-      <div className="mf-sheet-scrim" onClick={onScrimClick} />
+      <div className="mf-sheet-scrim" onPointerDown={(event) => { if (focusedInput()) event.preventDefault(); }} onClick={onScrimClick} />
       <div
         ref={sheetRef}
         className={[closing ? "mf-sheet mf-sheet--closing" : "mf-sheet", className].filter(Boolean).join(" ")}

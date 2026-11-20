@@ -7,7 +7,7 @@ import "../../styles/v2.css";
 // v1.0 아이콘(src/components/Icon.tsx)과 이름이 겹쳐도(check·crown) 서로 다른 부품이다: v2 화면은 이 파일을 쓴다.
 // 로비 헤더의 [나가기]·[공유] 는 v1.0 Icon 을 그대로 쓴다(UI-SPEC 결정 현황) — 여기에 back·share 를 더하지 않는다.
 // 18페이즈: eyeOff(목격자 없음, eye 에 사선)·lock(옷장 잠금).
-// 의심 도구는 무대의 고깔과 같은 실루엣으로 표시한다.
+// 의심 도구는 모서리가 접힌 느낌표 딱지로 표시한다.
 export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance" | "hanger" | "timeline" | "trophy" | "hourglass" | "mapBar" | "mapPlaza" | "shuffle" | "sound" | "soundOff" | "bell" | "bot" | "chevronRight" | "mask" | "shield" | "lens" | "eyeOff" | "lock" | "postit" | "ballot" | "ellipsis" | "sunrise";
 
 // ["c", cx, cy, r, filled?] 원 · ["p", d, filled?] 경로
@@ -112,9 +112,9 @@ const ICONS: Readonly<Record<V2IconName, readonly Part[]>> = {
     ["p", "M8.5 11V8a3.5 3.5 0 0 1 7 0v3"],
   ],
   postit: [
-    ["p", "M5.5 16.5 11 4.2a1.1 1.1 0 0 1 2 0l5.5 12.3"],
-    ["p", "M5.5 16.5c-1.9.5-3 1.1-3 1.9 0 1.4 4.3 2.6 9.5 2.6s9.5-1.2 9.5-2.6c0-.8-1.1-1.4-3-1.9"],
-    ["p", "M5.5 16.5c1.9 1 4 1.4 6.5 1.4s4.6-.4 6.5-1.4"],
+    ["p", "M5 4h14v11l-5 5H5z"],
+    ["p", "M19 15h-5v5"],
+    ["p", "M11.5 7.5v3.2m0 2.8v.25"],
   ],
   // 18페이즈: eyeOff(목격자 없음) — eye 의 두 부품 + 사선
   eyeOff: [

@@ -40,7 +40,8 @@ export function Home({ onEnterRoom }: HomeProps) {
   const [serverNicknameError, setServerNicknameError] = useState<string | null>(null);
   const [serverCodeError, setServerCodeError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const viewportHeight = useVisualViewportHeight(true);
+  // 닉네임 키보드는 시트 안에서만 반영한다. 막 뒤 첫 화면은 열기 직전 높이를 유지한다.
+  const viewportHeight = useVisualViewportHeight(sheet === null);
   const { toast, show } = useToast();
   // 대기실 첫 그림(배경·인물)과 맵 청크(three)가 비어 보이지 않게 첫 화면에서 미리 받아 둔다.
   useEffect(() => {

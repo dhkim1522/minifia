@@ -180,11 +180,13 @@ describe("Lobby — 꾸미기 버튼과 시트 (10-07, D-4·D-5)", () => {
     }
   });
 
-  it("누르면 시트가 열리고 도구 줄의 옷장 버튼은 숨는다", () => {
+  it("시트를 열면 옷장 버튼 자리를 보존하며 입력을 막는다", () => {
     const { container } = render(lobby(view));
     fireEvent.click(screen.getByRole("button", { name: "옷장" }));
     expect(container.querySelector("[data-dress-sheet]")).not.toBeNull();
-    expect(container.querySelector("[data-room-tool=dress]")?.hasAttribute("hidden")).toBe(true);
+    const button = container.querySelector("[data-room-tool=dress]");
+    expect(button?.hasAttribute("inert")).toBe(true);
+    expect(button?.hasAttribute("hidden")).toBe(false);
     // 내 지금 의상(서버 값 doctor)이 선택돼 있다
     expect(container.querySelector("button[data-outfit='doctor']")?.getAttribute("aria-pressed")).toBe("true");
   });
@@ -241,18 +243,17 @@ describe("Lobby — 꾸미기 버튼과 시트 (10-07, D-4·D-5)", () => {
 
 // ── Task 2: 열 때 스크롤·초점·키보드 규칙, 연결 끊김, 미리 보기 ──
 describe("DressSheet — 열 때와 키보드 (10-07 Task 2)", () => {
-  it("열리면 선택된 카드가 가로 가운데로 오도록 맞추고 그 카드로 초점이 간다", () => {
-    const spy = vi.fn();
-    const orig = Element.prototype.scrollIntoView;
-    Element.prototype.scrollIntoView = spy;
+  it("열리면 카드 띠 안에서 가로로만 스크롤하고 선택 카드로 초점이 간다", () => {
+    const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (this.matches("[data-outfit='elder']")) return new DOMRect(400, 0, 80, 96);
+      return new DOMRect(0, 0, 320, 120);
+    });
     try {
       const { container } = render(<DressSheet value="elder" onPick={() => {}} onClose={() => {}} />);
       expect(document.activeElement).toBe(container.querySelector("button[data-outfit='elder']"));
-      expect(spy).toHaveBeenCalledTimes(1);
-      expect(spy.mock.contexts[0]).toBe(container.querySelector("button[data-outfit='elder']"));
-      expect(spy.mock.calls[0]![0]).toMatchObject({ inline: "center", block: "nearest" });
+      expect(container.querySelector(".mv-dress-sheet__strip")?.scrollLeft).toBe(280);
     } finally {
-      Element.prototype.scrollIntoView = orig;
+      rect.mockRestore();
     }
   });
 

@@ -47,6 +47,7 @@ export function RoomChatDock({ binding, kbOpen, quickReactions = false, discussi
   const focus = useRef<"reaction" | "surface" | null>(null);
   const reactions = locked ? [] : quickReactions ? QUICK_REACTIONS : binding.emotes ?? [];
   const reactionLabel = quickReactions ? "반응" : EMOTE_TEXT.button;
+  const suspectLabel = suspect?.used ? SUSPECT_TEXT.moved : SUSPECT_TEXT.ready;
 
   useLayoutEffect(() => {
     const target = focus.current;
@@ -105,7 +106,7 @@ export function RoomChatDock({ binding, kbOpen, quickReactions = false, discussi
             {reactions.length > 0 && binding.onEmote ? <button type="button" className="mf-room-tool" data-playtest-action="reaction" data-emote-button="" aria-label={reactionLabel} aria-expanded={reactionsOpen} aria-pressed={reactionsOpen} aria-controls={reactionsOpen ? surfaceId : undefined} aria-disabled={binding.sendDisabled || undefined} onMouseDown={(event) => event.preventDefault()} onClick={(event) => { if (!binding.sendDisabled) toggleReactions(event.detail === 0); }}>
               <V2Icon name="face" size={22} />
             </button> : null}
-            {suspect ? <button type="button" className="mf-room-tool" data-playtest-action="suspect" data-suspect-btn="" data-suspect-stuck={suspect.used ? "" : undefined} aria-label={suspect.used ? SUSPECT_TEXT.moved : SUSPECT_TEXT.ready} aria-pressed={suspect.mode} aria-disabled={suspect.disabled || undefined} onMouseDown={(event) => { if (suspect.disabled) event.preventDefault(); }} onClick={() => {
+            {suspect ? <button type="button" className="mf-room-tool" data-playtest-action="suspect" data-suspect-btn="" data-suspect-stuck={suspect.used ? "" : undefined} aria-label={suspectLabel} title={suspectLabel} aria-pressed={suspect.mode} aria-disabled={suspect.disabled || undefined} onMouseDown={(event) => { if (suspect.disabled) event.preventDefault(); }} onClick={() => {
               if (suspect.disabled) {
                 suspect.deny?.();
                 return;

@@ -64,7 +64,7 @@ describe("의심 모드와 귓속말 모드의 배타 (D-24)", () => {
     const { container } = mountMap();
     fireEvent.click(suspectBtn(container));
     expect(suspectModeAttr(container)).toBe("on");
-    expect(stage.props!.pick!.group).toBe("의심 고깔 씌우기");
+    expect(stage.props!.pick!.group).toBe("의심!");
     fireEvent.click(whisperBtn(container));
     expect(suspectModeAttr(container)).toBe("off");
     expect(stage.props!.pick!.group).toBe("귓속말");
@@ -75,7 +75,7 @@ describe("의심 모드와 귓속말 모드의 배타 (D-24)", () => {
     expect(stage.props!.pick!.group).toBe("귓속말");
     fireEvent.click(suspectBtn(container));
     expect(suspectModeAttr(container)).toBe("on");
-    expect(stage.props!.pick!.group).toBe("의심 고깔 씌우기");
+    expect(stage.props!.pick!.group).toBe("의심!");
     expect(whisperBtn(container).getAttribute("aria-pressed")).toBe("false");
   });
 });

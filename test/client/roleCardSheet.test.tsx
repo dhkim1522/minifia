@@ -491,7 +491,7 @@ describe("RoleCardSheet 의심 구역 (P24-19·20, D-27)", () => {
   it("한 사람이 받은 여러 장을 합쳐 접근성 이름으로 읽는다", () => {
     renderRoleSheet(suspectView("citizen", [...LOG, { n: 3, from: 2, to: 0 }]));
     const d3 = secs()[0]!;
-    expect(lines(d3).map((x) => x.getAttribute("aria-label"))).toEqual(["지우 님, 의심 고깔 2개", "하윤 님, 의심 고깔 1개", "민지 님, 의심 고깔 1개"]);
+    expect(lines(d3).map((x) => x.getAttribute("aria-label"))).toEqual(["지우 님, 의심 표시 2개", "하윤 님, 의심 표시 1개", "민지 님, 의심 표시 1개"]);
   });
 
   it("줄에는 받은 좌석 표시와 이름, 장수가 보인다", () => {
@@ -499,7 +499,7 @@ describe("RoleCardSheet 의심 구역 (P24-19·20, D-27)", () => {
     const row = lines(secs()[0]!)[1]!;
     expect(row.querySelectorAll(".mf-suspect__dot").length).toBe(1);
     expect(row.querySelector(".mf-suspect__nick")?.textContent).toBe("하윤");
-    expect(row.querySelector(".mf-suspect__total")?.textContent).toBe("1장");
+    expect(row.querySelector(".mf-suspect__total")?.textContent).toBe("1개");
   });
 
   it("2일차 의심 기록에는 이전 답이나 제시어가 나오지 않는다", () => {
@@ -543,7 +543,7 @@ describe("RoleCardSheet 의심 구역 (P24-19·20, D-27)", () => {
     renderRoleSheet(suspectView("citizen", eight, { n: 2, nicks, mySeat: 5 }));
     expect(lines().length).toBe(8);
     const last = lines()[7]!;
-    expect(last.getAttribute("aria-label")).toBe("여덟글자닉네임이다 님, 의심 고깔 1개");
+    expect(last.getAttribute("aria-label")).toBe("여덟글자닉네임이다 님, 의심 표시 1개");
     expect(last.querySelector(".mf-suspect__nick")?.textContent).toBe("여덟글자닉네임이다");
   });
 
