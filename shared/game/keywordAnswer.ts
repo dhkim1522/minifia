@@ -7,7 +7,9 @@ import { isBot } from "./bots";
 import { sanitizeChatText } from "./chatRules";
 import { violatesKeyword } from "./keywordGuard";
 import type { KeywordForms } from "./keywordGuard";
+import { BAR_CHAIR_CLOCKWISE_ANGLES, keywordPresentationOf } from "./keywordPresentation";
 import { keywordEntryOf } from "./keywords";
+import { barChairAssignment } from "./map";
 import type { Player, RoomState } from "./room";
 import type { DeadlineResult } from "./tick";
 
@@ -103,37 +105,40 @@ export function submitAnswer(
   };
 }
 
-/**
- * keyword 마감 훅(D-03·D-07·D-24). 공개 목록 keywordAnswers 를 확정한다:
- * ① 확정 제출을 낸 순서 → ② 마감에 쓰던 글(초안, 금지어 없음)로 나간 산 사람(좌석 순) → ③ 답 없음(text:null, 좌석 순).
- * 서버 전용 answerSubmits 와 모든 answerDraft 는 키째 지우고, 죽은 사람은 목록에 없다. 단계는 표의 기본 다음(dayAnnounce)으로 간다.
- */
+/** 답안을 확정한 뒤 첫 제출자부터 실제 의자 순으로 돌아간다. */
 export function closeKeyword(state: RoomState): DeadlineResult {
   const forms = formsOf(state);
-  const submitted = state.answerSubmits ?? [];
-  const done = new Set(submitted.map((s) => s.seat));
-  const rest = state.players.filter((p) => isAlive(p) && !done.has(p.seat)).sort((a, b) => a.seat - b.seat);
+  const participants = state.players.filter((p) => p.sat !== true);
+  const alive = participants.filter(isAlive);
+  const fallbackChairs = barChairAssignment(participants.map((p) => p.seat));
+  const angleOf = (seat: number): number =>
+    BAR_CHAIR_CLOCKWISE_ANGLES[state.barChairs?.[seat] ?? fallbackChairs[seat] ?? seat] ?? Number.POSITIVE_INFINITY;
+  const aroundTable = alive.sort((a, b) => angleOf(a.seat) - angleOf(b.seat) || a.seat - b.seat);
+  const aliveSeats = new Set(aroundTable.map((p) => p.seat));
+  const submissions = (state.answerSubmits ?? []).filter(({ seat }) => aliveSeats.has(seat));
+  const first = submissions[0]?.seat;
+  const start = first === undefined ? 0 : aroundTable.findIndex((p) => p.seat === first);
+  const order = [...aroundTable.slice(start), ...aroundTable.slice(0, start)];
+  const submittedBySeat = new Map(submissions.map(({ seat, text }) => [seat, text]));
   const draftOf = (p: Player): string | undefined => {
     if (isBot(p) || p.answerDraft === undefined) return undefined;
     return forms !== undefined && violatesKeyword(p.answerDraft, forms) ? undefined : p.answerDraft;
   };
-  const drafted = rest.flatMap((p) => {
-    const text = draftOf(p);
-    return text === undefined ? [] : [{ seat: p.seat, text }];
-  });
-  const draftedSeats = new Set(drafted.map((r) => r.seat));
-  const rows: Array<{ seat: number; text: string | null }> = [
-    ...submitted.map((s) => ({ seat: s.seat, text: s.text })),
-    ...drafted,
-    ...rest.filter((p) => !draftedSeats.has(p.seat)).map((p) => ({ seat: p.seat, text: null })),
-  ];
-  const { answerSubmits: _submits, ...clean } = state;
+  const { answerSubmits: _submits, keywordPresentationIndex: _prevIndex, ...clean } = state;
   return {
     state: {
       ...clean,
-      keywordAnswers: rows.map((r, i) => ({ order: i + 1, ...r })),
+      keywordAnswers: order.map((p, i) => ({ order: i + 1, seat: p.seat, text: submittedBySeat.get(p.seat) ?? draftOf(p) ?? null })),
+      ...(state.keyword !== undefined && order.length > 0 ? { keywordPresentationIndex: 0 } : {}),
       players: state.players.map(({ answerDraft: _d, ...p }) => p),
     },
     stay: false,
   };
+}
+
+/** 발표할 답이 남았을 때만 같은 단계에서 다음 자리로 넘어간다. */
+export function stepKeywordPresentation(state: RoomState): DeadlineResult | undefined {
+  const presentation = keywordPresentationOf(state);
+  if (presentation === undefined || presentation.order >= presentation.total) return undefined;
+  return { state: { ...state, keywordPresentationIndex: presentation.order }, stay: true };
 }

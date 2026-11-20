@@ -12,7 +12,7 @@ import type { PhaseId, RoomView } from "../../shared/protocol";
 import { isAlive } from "../../shared/game/alive";
 import { connectedCount } from "../../shared/game/room";
 import { DAY_COPY } from "./dayView";
-import { keywordAnswerOf } from "./keywordView";
+import { keywordAnswerOf, keywordPresentationOf } from "./keywordView";
 import { morningText } from "./eliminationText";
 import { TIMELESS_PHASES } from "./scenes";
 
@@ -142,6 +142,8 @@ export function hostKeyOf(view: RoomView, local: HostLocal = {}): HostKey {
  * 한 줄 — 키의 줄 그대로. 빈 줄은 빈 줄이다(큰 글이 말하는 동안). 대체 문장은 키가 fallback 일 때만(HOST_FALLBACK).
  */
 export function hostLineOf(view: RoomView, local: HostLocal = {}): string {
+  // 답안 발표 중에는 카드에서 참가자와 답을 읽는다.
+  if (keywordPresentationOf(view) !== undefined) return "";
   if (view.playtest === true) {
     const line = playtestHostLine(view);
     if (line !== undefined) return line;
@@ -254,6 +256,7 @@ export function callTargetsOf(view: RoomView, local: HostLocal = {}): CallTarget
 
 /** 막대·숫자 행을 그리는가: 시간이 있는 단계이고 마감·길이가 있고 3초 이상 */
 export function hostTimeOf(view: RoomView): boolean {
+  if (keywordPresentationOf(view) !== undefined) return false;
   if (view.playtest === true && (view.phase === "roleReveal" || view.day?.firstBallot?.result && view.phase === "verdict")) return false;
   if (TIMELESS_PHASES.includes(view.phase)) return false;
   if (view.phaseEndsAt === null || view.phaseDurationMs === null) return false;

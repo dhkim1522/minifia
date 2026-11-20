@@ -122,6 +122,26 @@ describe("stickNote — 붙이기 (D-01·D-03)", () => {
     state.players[1] = { ...state.players[1]!, isBot: true } as Player;
     expect(out(stickNote(state, world(), "p0", 1, T0))).toBe("ok|2:0>1");
   });
+
+  it("첫날 발표에서는 마감 전에 현재 발표자만 멀리서도 붙이고 다음 차례에 옮긴다", () => {
+    const state: RoomState = {
+      ...room("dayAnnounce", 1),
+      map: "bar",
+      phaseEndsAt: T0 + 5000,
+      keyword: { genre: "movie", word: "해리포터" },
+      keywordAnswers: [{ order: 1, seat: 2, text: "답" }, { order: 2, seat: 1, text: null }],
+      keywordPresentationIndex: 0,
+    };
+    expect(out(stickNote(state, world(), "p0", 1, T0))).toBe("BAD_MESSAGE");
+    expect(out(stickNote(state, world(), "p2", 2, T0))).toBe("BAD_MESSAGE");
+    expect(out(stickNote(state, world(), "p0", 2, T0 + 5000))).toBe("BAD_MESSAGE");
+    const first = stickNote(state, world(), "p0", 2, T0);
+    expect(out(first)).toBe("ok|1:0>2");
+    if (!first.ok) throw new Error(first.error);
+    const next = { ...first.state, keywordPresentationIndex: 1 };
+    expect(out(stickNote(next, world(), "p0", 2, T0))).toBe("BAD_MESSAGE");
+    expect(out(stickNote(next, world(), "p0", 1, T0))).toBe("ok|1:0>1");
+  });
 });
 
 describe("stickNote — 거절은 사유를 드러내지 않는다 (D-02·D-22·D-26)", () => {

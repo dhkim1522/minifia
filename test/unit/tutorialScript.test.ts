@@ -126,7 +126,7 @@ describe("알약 문구(P24-25)", () => {
       "시민 팀은 제시어를 알아요",
       "마피아는 제시어를 몰라요",
       "제시어 대신 단서를 써요",
-      "단서를 읽고 비교해요",
+      "의심 가는 답에 딱지를 붙여요",
       "궁금한 점을 물어봐요",
       "절반 넘게 누르면 끝나요",
       "찬성이 더 많으면 지목해요",
@@ -184,16 +184,16 @@ describe("가짜 view(D-17, P24-19 판정)", () => {
     expect(tutorialView("keyword", "c", T0, 1).me.answer).toEqual({ text: "발소리가 안 들려요", final: true });
   });
 
-  it("answers: 마피아를 포함한 여섯 명의 답을 한 번 공개한다", () => {
-    const answers = tutorialView("answers", "a", T0).day?.keyword?.answers;
-    expect(answers).toHaveLength(6);
-    const last = answers![5]!;
-    expect(last.seat).toBe(4);
-    expect(last.text).toBe("사람을 잘 따라와요");
-    expect(answers!.every((row) => row.text !== null)).toBe(true);
-    expect(tutorialView("discussion", "a", T0).day?.keyword?.answers).toBeUndefined();
-    expect(answers![2]).toMatchObject({ seat: 5, text: "발소리가 안 들려요" });
-    expect(answers!.map((a) => a.order)).toEqual([1, 2, 3, 4, 5, 6]);
+  it("answers: 실제 의자를 시계 방향으로 돌며 현재 답 하나씩 공개한다", () => {
+    const views = (["a", "b", "c", "d", "e", "f"] as const).map(id => tutorialView("answers", id, T0));
+    const answers = views.map(view => view.day?.keyword?.presentation);
+    expect(views.every(view => view.phase === "dayAnnounce")).toBe(true);
+    expect(answers.map(answer => answer?.seat)).toEqual([0, 1, 4, 2, 5, 3]);
+    expect(answers[2]).toMatchObject({ seat: 4, text: "사람을 잘 따라와요" });
+    expect(answers[4]).toMatchObject({ seat: 5, text: "발소리가 안 들려요" });
+    expect(answers.map(answer => answer?.order)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(answers.every(answer => answer?.total === 6)).toBe(true);
+    expect(tutorialView("discussion", "a", T0).day?.keyword?.presentation).toBeUndefined();
   });
 
   it("roles: roleReveal·시민 카드·구성 직업 4개, 시계가 자동 뒤집힘을 0.4초에 맞춘다", () => {
@@ -254,7 +254,7 @@ describe("가짜 view(D-17, P24-19 판정)", () => {
       const v = tutorialView(s.id, s.beats[0]!.id, T0);
       expect(v.phaseEndsAt, s.id).not.toBeNull();
       expect(v.phaseDurationMs, s.id).not.toBeNull();
-      if (s.id === "roles") continue; // 위 시험이 따로 본다
+      if (s.id === "roles" || s.id === "answers") continue; // 역할 뒤집기와 답안 차례는 따로 검사한다
       expect(v.phaseEndsAt, s.id).toBe(T0 + s.ms);
       expect(v.phaseDurationMs, s.id).toBe(s.ms);
     }

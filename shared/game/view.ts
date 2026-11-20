@@ -10,6 +10,7 @@
 // 남의 지목·찬반 값·토론 끝내기 누름은 어떤 키로도 싣지 않는다 — Player.nominate·verdictVote 는 마감 훅이 키째 지운다(결정 0060·D-02).
 import type {
   DayView,
+  KeywordPresentation,
   KeywordView,
   MorningView,
   MyInfo,
@@ -30,13 +31,14 @@ import { endCountOf, endRequiredOf, phaseDurationOf } from "./discussion";
 import { buildSummary } from "./endgame";
 import { noExecutionOf } from "./execution";
 import { answerOpenOf } from "./keywordAnswer";
+import { keywordPresentationOf } from "./keywordPresentation";
 import { genreLabelOf } from "./keywords";
 import { MAP_PHASES } from "./movement";
 import { confirmedTarget } from "./night";
 import { pointLinesOf, turnViewOf } from "./nomination";
 import { runoffVotersOf, runoffViewOf } from "./runoff";
 import { showdownViewOf } from "./showdown";
-import { FIRST_ANSWERS_DISPLAY_MS, PHASE_DEFS } from "./phases";
+import { PHASE_DEFS } from "./phases";
 import { firstBallotCount, firstPlaytestDay, humanSeats, voteOpensAt } from "./playtest";
 import { RULES } from "./ruleset";
 import { isReady } from "./rematch";
@@ -70,25 +72,16 @@ const DAY_PHASES: ReadonlySet<PhaseId> = new Set([
  * 낮 정보. 허용 목록 리터럴로만 만든다 — 조건을 채울 때만 키를 만들고, 서버 전용 필드는 싣지 않는다.
  * 읽는 쪽이 기본값을 쥔다: 일차 없으면 1(RESEARCH Pattern 6).
  */
-function buildDay(state: RoomState, now: number): DayView {
+function buildDay(state: RoomState, presentation: KeywordPresentation | undefined): DayView {
   const day: DayView = {
     n: state.day ?? 1,
     roles: rolesInPlay(state.players.length),
   };
   const revealAnswer = answerOpenOf(state);
-  const discussionDuration = state.phase === "discussion" && day.n === 1 ? phaseDurationOf(state) : null;
-  const answersUntil = discussionDuration !== null && state.phaseEndsAt !== null
-    ? state.phaseEndsAt - discussionDuration + FIRST_ANSWERS_DISPLAY_MS
-    : null;
-
-  // 첫날 토론이 시작되면 답안과 발표 종료 시각을 함께 보낸다. 발표가 지난 뒤에는 재접속한 참가자에게도 답안을 보내지 않는다.
-  const answers = answersUntil !== null && now < answersUntil ? state.keywordAnswers : undefined;
-  if (state.keyword !== undefined && (state.phase === "keyword" || revealAnswer || answers !== undefined)) {
+  // 입력·발표·정답 공개를 분리한다. 발표에서는 현재 답 한 줄만 공개한다.
+  if (state.keyword !== undefined && (state.phase === "keyword" || revealAnswer || presentation !== undefined)) {
     const kw: KeywordView = { genre: genreLabelOf(state.keyword.genre) ?? "" };
-    if (answers !== undefined && answersUntil !== null) {
-      kw.answers = answers.map(({ order, seat, text }) => ({ order, seat, text }));
-      kw.answersUntil = answersUntil;
-    }
+    if (presentation !== undefined) kw.presentation = presentation;
     if (revealAnswer) kw.answer = state.keyword.word;
     day.keyword = kw;
   }
@@ -224,6 +217,7 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   if (resting !== undefined) return buildRestingView(state, resting, now);
   const me = state.players.find((p) => p.id === playerId);
   if (!me) throw new Error("buildView: player is not in this room");
+  const presentation = keywordPresentationOf(state, now);
   // 판 규칙은 상수 RULES 하나다 — 꺼진 장치의 키는 서버 상태에 값이 있어도 싣지 않는다(값이 빈 것이 아니라 키가 없다).
 
   const players: PublicPlayer[] = [...state.players]
@@ -336,8 +330,8 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     myInfo.note = state.nightNote;
   }
 
-  // 내가 오늘 붙인 의심 대상(옮기기 표시, 결정 0089-10 D-06) — discussion 의 산 본인에게만. 공개 day.suspects 의 from === me.seat 줄에서 파생되는 중복 값이다.
-  if (state.phase === "discussion" && isAlive(me)) {
+  // 내가 오늘 붙인 의심 대상. 공개 차례와 토론의 생존자 본인에게 보낸다.
+  if ((state.phase === "discussion" || presentation !== undefined) && isAlive(me)) {
     const mine = (state.notes ?? []).find((x) => x.n === (state.day ?? 1) && x.from === me.seat);
     if (mine !== undefined) myInfo.suspectTo = mine.to;
   }
@@ -417,7 +411,7 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     mapChoice: ROOM_MAP_ID,
   };
   if (state.phase !== "lobby") view.map = ROOM_MAP_ID;
-  if (DAY_PHASES.has(state.phase)) view.day = buildDay(state, now);
+  if (DAY_PHASES.has(state.phase)) view.day = buildDay(state, presentation);
   if (state.phase === "lobby" && state.bench !== undefined) {
     const reservedAnimals = state.bench.flatMap((p) => p.animal === undefined ? [] : [p.animal]).sort();
     if (reservedAnimals.length > 0) view.reservedAnimals = reservedAnimals;

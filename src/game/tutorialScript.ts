@@ -7,6 +7,7 @@
 // 시간 표시를 지운 사본(머리·띠용)은 화면 쪽이 만든다. 튜토리얼 루트에 맨 이름 data-tutorial 속성은 쓰지 않는다(표식 이름은 UI-SPEC 표).
 // 옛 서버 쪽 표식과 같은 이름(통과·완료 표식·튜토리얼 단계)은 만들지 않는다 — 혼자 하기는 서버 상태가 없다(D-15).
 import { EARLY_GRACE_MS } from "../../shared/game/early";
+import { BAR_CHAIR_CLOCKWISE_ANGLES } from "../../shared/game/keywordPresentation";
 import { BAR_SEATS_FX, barChairAssignment } from "../../shared/game/map";
 import { ROOM_MAP_ID } from "../../shared/game/maps";
 import { majorityOf } from "../../shared/game/nomination";
@@ -15,7 +16,7 @@ import { PLAYTEST_DISCUSSION_MIN_MS } from "../../shared/game/playtest";
 import { rolesInPlay } from "../../shared/game/roles";
 import { emptyWorld, restSegment, snapFrame } from "../../shared/game/world";
 import type { WorldState } from "../../shared/game/world";
-import type { ClientMessage, EmoteId, KeywordAnswerRow, OutfitId, PhaseId, PublicPlayer, RoomView, WorldFrame } from "../../shared/protocol";
+import type { ClientMessage, EmoteId, KeywordPresentation, OutfitId, PhaseId, PublicPlayer, RoomView, WorldFrame } from "../../shared/protocol";
 import { AUTO_FLIP_MS } from "../net/cardFace";
 
 // ---- 타입 ----
@@ -23,7 +24,7 @@ import { AUTO_FLIP_MS } from "../net/cardFace";
 export type TutorialSceneId = "roles" | "keyword" | "answers" | "discussion" | "verdict" | "pick" | "will" | "answerReveal" | "night" | "postit" | "end";
 
 /** 장면 안의 비트. 시각표로 가는 비트(at 숫자)와 눌러서 들어가는 비트(at null) 모두 이 이름으로 가짜 view 를 고른다 */
-export type TutorialBeatId = "start" | "a" | "b" | "c";
+export type TutorialBeatId = "start" | "a" | "b" | "c" | "d" | "e" | "f";
 
 /** 링 대상의 안정 id(E2E 표식 data-tutorial-target 값) */
 export type TutorialTargetId = "role-ready" | "send" | "endDiscussion" | "first-ballot" | "yes" | "tag-4" | "face-0" | "night-done" | "suspect-btn";
@@ -95,7 +96,7 @@ export const TUTORIAL_PILLS = {
   "keyword.citizen": "시민 팀은 제시어를 알아요",
   "keyword.mafia": "마피아는 제시어를 몰라요",
   "keyword.noAnswer": "제시어 대신 단서를 써요",
-  "answers.suspect": "단서를 읽고 비교해요",
+  "answers.suspect": "의심 가는 답에 딱지를 붙여요",
   "discussion.talk": "궁금한 점을 물어봐요",
   "discussion.end": "절반 넘게 누르면 끝나요",
   "verdict.majority": "찬성이 더 많으면 지목해요",
@@ -137,16 +138,16 @@ export const TUTORIAL_CAST = {
   ],
 } as const;
 
-/** 장면 2c 내 입력칸에 채워지는 글(읽기 전용)과 장면 3 의 모두의 답 */
+/** 장면 2c의 내 답과 장면 3에 시계 방향으로 공개할 예시. */
 export const TUTORIAL_MY_ANSWER = "발소리가 안 들려요";
-export const TUTORIAL_ANSWERS: readonly KeywordAnswerRow[] = [
-  { order: 1, seat: 0, text: "꼬리가 길어요" },
-  { order: 2, seat: 2, text: "털이 부드러워요" },
-  { order: 3, seat: 5, text: TUTORIAL_MY_ANSWER },
-  { order: 4, seat: 3, text: "밥 줄 때만 와요" },
-  { order: 5, seat: 1, text: "눈이 동그래요" },
-  { order: 6, seat: 4, text: "사람을 잘 따라와요" },
-];
+const TUTORIAL_CHAIRS = barChairAssignment(TUTORIAL_CAST.seats.map(({ seat }) => seat));
+const ANSWER_TEXT = ["꼬리가 길어요", "눈이 동그래요", "털이 부드러워요", "밥 줄 때만 와요", "사람을 잘 따라와요", TUTORIAL_MY_ANSWER] as const;
+const ANSWER_BEATS = ["a", "b", "c", "d", "e", "f"] as const;
+const ANSWER_TURN_MS = 1750;
+const TUTORIAL_ANSWERS: readonly KeywordPresentation[] = TUTORIAL_CAST.seats
+  .map(({ seat }) => seat)
+  .sort((a, b) => BAR_CHAIR_CLOCKWISE_ANGLES[TUTORIAL_CHAIRS[a]!]! - BAR_CHAIR_CLOCKWISE_ANGLES[TUTORIAL_CHAIRS[b]!]!)
+  .map((seat, index) => ({ order: index + 1, total: ANSWER_BEATS.length, seat, text: ANSWER_TEXT[seat] }));
 
 /** 장면 4에서 답의 세부를 묻는다. 도윤은 자신에게 의심이 옮겨오자 손사래를 친다. */
 export const TUTORIAL_CHAT: readonly { atMs: number; seat: number; text: string; emote?: EmoteId }[] = [
@@ -196,8 +197,8 @@ export const TUTORIAL_SCENES: readonly TutorialScene[] = [
   {
     id: "answers",
     kind: "watch",
-    ms: 7000,
-    beats: [beat("a", 0, null, { sfx: "ui.card" }), beat("b", 2600, "answers.suspect")],
+    ms: ANSWER_BEATS.length * ANSWER_TURN_MS,
+    beats: ANSWER_BEATS.map((id, i) => beat(id, i * ANSWER_TURN_MS, i === 0 ? null : "answers.suspect", i === 0 ? { sfx: "ui.card" } : {})),
   },
   {
     id: "discussion",
@@ -444,10 +445,14 @@ export function tutorialView(
       day.keyword = keyword;
       break;
     }
-    case "answers":
+    case "answers": {
+      const answerIndex = Math.max(0, scene.beats.findIndex((entry) => entry.id === at));
       out.me = { ...mine, role: "citizen" };
-      day.keyword = { ...keyword, answers: TUTORIAL_ANSWERS.map((r) => ({ ...r })) };
+      day.keyword = { ...keyword, presentation: { ...TUTORIAL_ANSWERS[answerIndex]! } };
+      out.phaseEndsAt = startedAt + (answerIndex + 1) * ANSWER_TURN_MS;
+      out.phaseDurationMs = ANSWER_TURN_MS;
       break;
+    }
     case "discussion": {
       const count = Math.min(acted, playtest ? TUTORIAL_CAST.seats.length : END_STEPS);
       out.me = { ...mine, role: "citizen", ...(count >= 1 ? { endDiscussion: true as const } : {}) };
@@ -512,6 +517,7 @@ function phaseOf(id: TutorialSceneId, at: TutorialBeatId): PhaseId {
     case "keyword":
       return "keyword";
     case "answers":
+      return "dayAnnounce";
     case "discussion":
     case "end":
       return "discussion";
@@ -531,8 +537,6 @@ function phaseOf(id: TutorialSceneId, at: TutorialBeatId): PhaseId {
 }
 
 // ---- 월드 스냅 ----
-
-const TUTORIAL_CHAIRS = barChairAssignment(TUTORIAL_CAST.seats.map(({ seat }) => seat));
 
 /** 모든 장면에서 같은 재즈 바 6인 의자에 앉아 있다. */
 export function tutorialSnap(at: number): Extract<WorldFrame, { k: "snap" }> {

@@ -3,8 +3,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { closeKeyword, submitAnswer } from "../../shared/game/keywordAnswer";
 import { GENRES } from "../../shared/game/keywords";
 import { ANSWER_MAX_GRAPHEMES } from "../../shared/game/answerRules";
+import { DAY_ANNOUNCE_MS, FIRST_ANSWER_TURN_MS } from "../../shared/game/phases";
 import type { RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
+import { buildView } from "../../shared/game/view";
 import { openKeyword } from "../helpers/keyword";
 import { startedAt } from "../helpers/voteState";
 
@@ -146,26 +148,26 @@ describe("확정 (final:true)", () => {
 });
 
 describe("closeKeyword (D-24)", () => {
-  it("확정 낸 순서 → 쓰던 글(좌석 순, 금지어 없음) → 답 없음(좌석 순, 봇 포함)", () => {
+  it("첫 확정만 시작자를 정하고, 이후 확정·초안·미제출은 의자 순으로 섞인다", () => {
     let s = keywordState();
+    s = must(submitAnswer(s, idOf(s, 0), "빗자루", false)).state;
     s = must(submitAnswer(s, idOf(s, 3), "안경", true)).state;
     s = must(submitAnswer(s, idOf(s, 1), "마법", true)).state;
-    s = must(submitAnswer(s, idOf(s, 0), "빗자루", false)).state;
     s = must(submitAnswer(s, idOf(s, 2), "해리포터 짱", false)).state;
     const r = closeKeyword(s);
     expect(r.stay).toBe(false);
     expect(r.state.keywordAnswers).toEqual([
       { order: 1, seat: 3, text: "안경" },
-      { order: 2, seat: 1, text: "마법" },
-      { order: 3, seat: 0, text: "빗자루" },
-      { order: 4, seat: 2, text: null },
-      { order: 5, seat: 4, text: null },
+      { order: 2, seat: 2, text: null },
+      { order: 3, seat: 4, text: null },
+      { order: 4, seat: 0, text: "빗자루" },
+      { order: 5, seat: 1, text: "마법" },
     ]);
     expect("answerSubmits" in r.state).toBe(false);
     expect(r.state.players.some((p) => "answerDraft" in p)).toBe(false);
   });
 
-  it("아무도 안 냈으면 전원 null 좌석 순, 죽은 사람은 목록에 없다", () => {
+  it("아무도 확정하지 않았으면 첫 물리 의자부터 시작하고 탈락한 사람은 건너뛴다", () => {
     const s0 = keywordState();
     const s = { ...s0, players: s0.players.map((p) => (p.seat === 2 ? { ...p, alive: false } : p)) };
     const r = closeKeyword(s);
@@ -182,22 +184,55 @@ describe("closeKeyword (D-24)", () => {
     const s = { ...s0, players: s0.players.map((p) => (p.seat === 4 ? { ...p, answerDraft: "봇의 글" } : p)) };
     expect(closeKeyword(s).state.keywordAnswers!.find((r) => r.seat === 4)!.text).toBeNull();
   });
+
+  it.each([
+    [0, 2, 1, 3],
+    [0, 1, 3, 2, 4],
+    [0, 1, 4, 2, 5, 3],
+    [0, 1, 5, 2, 6, 4, 3],
+    [0, 1, 4, 6, 2, 7, 5, 3],
+  ].map((seats) => ({ count: seats.length, seats })))("$count 인의 시작 좌석을 회전해도 실제 의자의 시계 방향을 따른다", ({ count, seats }) => {
+    const s = startedAt(count, 3, "keyword");
+    const starter = 2;
+    const answered = must(submitAnswer(s, idOf(s, starter), "재밌는 이야기", true)).state;
+    const start = seats.indexOf(starter);
+    expect(closeKeyword(answered).state.keywordAnswers?.map((row) => row.seat)).toEqual([...seats.slice(start), ...seats.slice(0, start)]);
+  });
 });
 
 describe("tick: keyword 마감 훅", () => {
-  it("keyword 마감이 지나면 closeKeyword 를 거쳐 dayAnnounce 에서 keywordAnswers 가 모두 채워진다", () => {
+  it("다음 마감마다 5초 간격으로 한 명을 공개하고 마지막 뒤 정상 토론으로 간다", () => {
     let s = keywordState();
     s = must(submitAnswer(s, idOf(s, 1), "마법", true)).state;
     s = must(submitAnswer(s, idOf(s, 2), "초안글", false)).state;
-    const after = tick(s, s.phaseEndsAt!, () => 0);
-    expect(after.phase).toBe("dayAnnounce");
-    expect(after.keywordAnswers).toEqual([
-      { order: 1, seat: 1, text: "마법" },
-      { order: 2, seat: 2, text: "초안글" },
-      { order: 3, seat: 0, text: null },
-      { order: 4, seat: 3, text: null },
-      { order: 5, seat: 4, text: null },
-    ]);
-    expect(after.answerSubmits).toBeUndefined();
+    const start = s.phaseEndsAt!;
+    const rows = [
+      { seat: 1, text: "마법" }, { seat: 3, text: null }, { seat: 2, text: "초안글" },
+      { seat: 4, text: null }, { seat: 0, text: null },
+    ];
+    for (const [i, row] of rows.entries()) {
+      const now = start + i * FIRST_ANSWER_TURN_MS;
+      s = tick(s, now, () => 0);
+      expect(s.phase).toBe("dayAnnounce");
+      expect(s.phaseEndsAt).toBe(now + FIRST_ANSWER_TURN_MS);
+      expect(s.answerSubmits).toBeUndefined();
+      expect(buildView(s, idOf(s, 0), now).day?.keyword?.presentation).toEqual({ order: i + 1, total: 5, ...row });
+    }
+    const discussion = tick(s, s.phaseEndsAt!, () => 0);
+    expect(discussion.phase).toBe("discussion");
+    expect(discussion.keywordPresentationIndex).toBeUndefined();
+    expect(buildView(discussion, idOf(s, 0), s.phaseEndsAt!).day?.keyword).toBeUndefined();
+  });
+
+  it("늦은 알람은 현재 차례만 열고, 옛 저장의 단순 낮 시작은 종전 마감을 쓴다", () => {
+    const s = keywordState();
+    const start = s.phaseEndsAt!;
+    const now = start + 2 * FIRST_ANSWER_TURN_MS + 17;
+    const caughtUp = tick(s, now, () => 0);
+    expect(buildView(caughtUp, idOf(s, 0), now).day?.keyword?.presentation).toEqual({ order: 3, total: 5, seat: 3, text: null });
+    const { keywordPresentationIndex: _i, ...old } = caughtUp;
+    const oldAnnouncement = { ...old, phaseEndsAt: now + DAY_ANNOUNCE_MS };
+    expect(buildView(oldAnnouncement, idOf(s, 0), now).day?.keyword).toBeUndefined();
+    expect(tick(oldAnnouncement, now + DAY_ANNOUNCE_MS, () => 0).phase).toBe("discussion");
   });
 });

@@ -14,7 +14,7 @@ import {
   kw5InputLimit,
   kw6Reject,
   kw7CompactGeometry,
-  kw8AnswerList,
+  kw8AnswerTurns,
   kw9Reconnect,
   kw10Reveal,
   kw11FirstDayEnd,
@@ -133,31 +133,28 @@ test("KW7: 컴팩트 카드 한 장에 답을 쓸 수 있고 머리와 겹치지
 });
 
 // ---- KW8·KW9 ----
-const rows = [
-  { order: 1, seat: 1, none: false },
-  { order: 2, seat: 0, none: false },
-  { order: 3, seat: 2, none: true },
-  { order: 4, seat: 3, none: true },
-];
+const expectedOrder = [1, 3, 0, 2];
+const turns = expectedOrder.map((seat, index) => ({
+  order: index + 1, total: 4, seat, text: index === 1 ? null : "단서", cardMatches: true, onlyCurrent: true, focused: true,
+}));
 const pg = (who, over = {}) => ({
-  who, centered: true, title: "모두의 답", clueCount: 0, dialogOpen: false, inputVisible: true, logVisible: true, rows, ...over,
+  who, clueCount: 0, dialogOpen: false, inputVisible: true, logVisible: true, turns, ...over,
 });
-test("KW8: 중앙 집계, 같은 답안, 확인 뒤 고정 채팅을 검사한다", () => {
-  assert.equal(kw8AnswerList([pg("시민"), pg("마피아")]).ok, true);
-  for (const over of [{ centered: false }, { title: "" }, { clueCount: 1 }, { dialogOpen: true }, { inputVisible: false }, { logVisible: false }]) {
-    assert.equal(kw8AnswerList([pg("시민"), pg("마피아", over)]).ok, false);
+test("KW8: 물리 좌석 순서, 한 줄 발표, 카메라와 토론 전환을 검사한다", () => {
+  assert.equal(kw8AnswerTurns([pg("시민"), pg("마피아")], expectedOrder).ok, true);
+  for (const over of [{ clueCount: 1 }, { dialogOpen: true }, { inputVisible: false }, { logVisible: false }, { turns: turns.slice(1) }]) {
+    assert.equal(kw8AnswerTurns([pg("시민"), pg("마피아", over)], expectedOrder).ok, false);
   }
-  const none2 = [rows[0], rows[2], rows[1], rows[3]].map((r, i) => ({ ...r, order: i + 1 }));
-  assert.equal(kw8AnswerList([pg("시민", { rows: none2 }), pg("마피아", { rows: none2 })]).ok, false);
-  assert.equal(kw8AnswerList([pg("시민"), pg("마피아", { rows: rows.map((r) => ({ ...r, text: "다름" })) })]).ok, false);
-  assert.ok(noMeasure(kw8AnswerList([])));
+  for (const edit of [{ seat: 7 }, { cardMatches: false }, { onlyCurrent: false }, { focused: false }, { text: "다름" }]) {
+    assert.equal(kw8AnswerTurns([pg("시민"), pg("마피아", { turns: turns.map((turn, i) => i === 1 ? { ...turn, ...edit } : turn) })], expectedOrder).ok, false);
+  }
+  assert.ok(noMeasure(kw8AnswerTurns([], expectedOrder)));
 });
 test("KW9: 새로고침과 역할 기록에 첫날 집계를 반복하지 않는다", () => {
-  const ok = { autoOpened: false, recordRows: 0, recordTab: 0 };
+  const ok = { autoOpened: false, recordRows: 0 };
   assert.equal(kw9Reconnect(ok).ok, true);
   assert.equal(kw9Reconnect({ ...ok, autoOpened: true }).ok, false);
   assert.equal(kw9Reconnect({ ...ok, recordRows: 1 }).ok, false);
-  assert.equal(kw9Reconnect({ ...ok, recordTab: 1 }).ok, false);
   assert.ok(noMeasure(kw9Reconnect(null)));
 });
 

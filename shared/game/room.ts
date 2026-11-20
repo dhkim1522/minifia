@@ -213,10 +213,12 @@ export interface RoomState {
    * view 키 day.keyword(장르 라벨)·me.keyword(시민 편 본인의 단어)와 이름이 같아 SERVER_ONLY_KEYS 이름 검사에 넣지 않고 값으로 지킨다(RESEARCH P2).
    */
   keyword?: { genre: string; word: string };
-  /** 서버 전용(23-06, D-07). 키워드 단계에서 확정 제출한 답 — 낸 순서가 배열 순서다. closeKeyword 가 키째 지운다(공개 값은 keywordAnswers). 어떤 view 에도 이 키로 실리지 않는다. */
+  /** 서버 전용. 확정 제출한 답은 서버 접수 순서로 저장한다. closeKeyword에서 지운다. */
   answerSubmits?: Array<{ seat: number; text: string }>;
-  /** 키워드 마감 뒤 공개 값(D-14·D-24): 확정 낸 순서 → 쓰던 글(좌석 순) → 답 없음(좌석 순). 첫날 토론 시작의 공통 답안 발표에 쓴다. */
+  /** 서버 전용. 원탁 순서의 전체 답안. 발표 중에는 현재 한 줄만 뷰에 보낸다. */
   keywordAnswers?: Array<{ order: number; seat: number; text: string | null }>;
+  /** 서버 전용. 첫날 답안 발표의 현재 위치. 토론에서 지운다. */
+  keywordPresentationIndex?: number;
   /** 서버 전용(23-06, D-09). 그 판에서 마피아가 금지어로 거절당한 적이 있음 — D1 "떠보기 성공"의 근거. 어떤 view·프레임에도 싣지 않는다. */
   keywordProbed?: true;
   /**
@@ -473,7 +475,10 @@ export function beginGame(
       : shuffled;
   // 키워드는 역할 배정 뒤 난수 두 번이다(D-29). 고르는 함수가 없으면(스위치 끔) 이전 판의 keyword 도 지운다.
   // 의심 포스트잇(notes)도 같은 구조 분해로 뺀다 — 새 판에 어제 판의 종이가 따라오지 않게(벨트, D-08).
-  const { keyword: _prevKeyword, notes: _prevNotes, barChairs: _prevChairs, ...rest } = state;
+  const {
+    keyword: _prevKeyword, answerSubmits: _prevSubmits, keywordAnswers: _prevAnswers,
+    keywordPresentationIndex: _prevPresentation, notes: _prevNotes, barChairs: _prevChairs, ...rest
+  } = state;
   const keyword = pickKeyword !== undefined ? pickKeyword(randInt) : undefined;
   // 옷장 조작이 없는 실험방은 좌석별 외형과 기본 코트로 인물을 구분한다.
   // 동물로 구분되는 방에서는 직접 고른 옷만 입는다.

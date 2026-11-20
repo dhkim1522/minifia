@@ -18,7 +18,7 @@ afterEach(() => restore());
 const WORD = "해리포터";
 const SECRETS = [WORD, "Harry Potter", "해포"] as const;
 /** 서버 전용 이름: 어떤 프레임의 어떤 경로에도 키로 없다. RoomState.keyword 는 view 키 day.keyword·me.keyword 와 이름이 같아 넣을 수 없고 값 검사(SECRETS)로 지킨다(RESEARCH P2). */
-const SERVER_ONLY_NAMES = ["keywordProbed", "answerSubmits", "answerDraft"] as const;
+const SERVER_ONLY_NAMES = ["keywordProbed", "answerSubmits", "answerDraft", "keywordAnswers", "keywordPresentationIndex"] as const;
 
 const socksOf = (room: Seated): TestSocket[] => [room.host, ...room.guests.map((g) => g.sock)];
 const answerOf = (sock: TestSocket, text: string, final: boolean): void => send(sock, { t: "answer", text, final });

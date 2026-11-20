@@ -11,7 +11,7 @@
 // 마감 훅 행: verdict(찬반 집계 → 통과면 nomination, 부결이면 night), nomination(지목 집계 → 최다 한 명이면 defense, 동률·0표면 night). execution·morning(승패면 next ended, 아니면 기본 단계 — 판정은 마감 훅에서만, D-10). ended 는 마감이 없는 종단 단계다.
 // 새 마감 = 이전 마감 + phaseDurationOf(진입 훅 뒤 상태) — 단계 표(PHASE_DEFS) 길이 그대로다.
 // 훅이 stay 를 돌려주면 다음 단계로 가지 않고 같은 단계에서 마감만 "이전 마감 + 그 상태의 단계 길이(phaseDurationOf)" 로 옮긴다.
-// dayAnnounce: 판 규칙의 showdown 이 켜졌을 때만 — 낮 시작 발표 마감에 산 사람이 정확히 셋이면 next "showdown"(마지막 3인 결전, 결정 0066-5 — 낮 시작 청소 enterDiscussion 은 startShowdown 이 한다). showdown: stepShowdown 이 모이기 → 한마디 셋 → 동시 지목 → 공개를 stay 사슬로 걷고 집계(2표면 execution, 아니면 night).
+// dayAnnounce: 첫날 답안 공개는 차례마다 같은 단계에 머문다. 공개가 끝나면 기존 낮 시작 분기를 따른다.
 // nomination: 순차 지목(결정 0063-1, 22-09 D-12) — 진입 enterNomination, 마감마다 stepNomination 이 같은 단계에 머물며(stay) 다음 마감은 이전 마감 + 그 단계 길이(모이기·차례·사이·끝 알림)다.
 // runoff: 동점 결선(결정 0066-4, 판 규칙의 runoff 가 켜졌을 때만) — 지목 집계가 최다 정확히 둘 동점이면 next "runoff". stepRunoff 가 앞머리 → 투표 → 결과를 stay 사슬로 걷고 마지막에 집계(많이 받은 후보면 defense, 동점이면 night).
 // 난수는 세 번째 인자로만 받는다 — 방 DO 는 cryptoRandInt, 테스트는 seededRandInt.
@@ -24,7 +24,7 @@ import { emptyGameCloseAt, nextContinuityAt } from "./continuity";
 import { discussionMajorityAt, enterDiscussion, phaseDurationOf } from "./discussion";
 import { enterEnded, routeAfterExecution, routeAfterMorning } from "./endgame";
 import { enterExecution } from "./execution";
-import { closeKeyword, routeAfterRoleReveal } from "./keywordAnswer";
+import { closeKeyword, routeAfterRoleReveal, stepKeywordPresentation } from "./keywordAnswer";
 import { enterNomination, stepNomination } from "./nomination";
 import { stepRunoff } from "./runoff";
 import { routeAfterDayAnnounce, stepShowdown } from "./showdown";
@@ -64,7 +64,7 @@ export interface PhaseHooks {
 }
 
 /**
- * 진입·마감 훅 표(상수 RULES 한 벌, 22-07). 규칙에 따라 갈리는 줄은 하나다: 낮 시작 발표 마감(마지막 3인 결전이 켜졌을 때만).
+ * 진입·마감 훅 표(상수 RULES 한 벌, 22-07). 낮 시작 발표는 첫날 답안 공개와 마지막 3인 결전 분기도 맡는다.
  * 낮 순서(결정 0089-18): 토론 마감은 표의 기본(verdict) · 찬반 마감 resolveVerdict(통과면 nomination, 부결이면 night) · 지목 진입 enterNomination(순차 지목 차례 만들기) ·
  * 지목 마감 stepNomination(stay 사슬, 끝 알림 뒤 집계 resolveNomination — 최다 한 명이면 defense, 동률·0표면 night) · 변론(유언) 마감은 표의 기본(execution).
  * 규칙이 하나뿐이라 모듈을 읽을 때 한 번 만든다.
@@ -83,10 +83,9 @@ const HOOKS: PhaseHooks = {
   deadline: {
     // 첫날 키워드(D-01·D-29): 방 상태에 keyword 가 없으면 역할 확인 다음이 곧장 낮 시작 발표다. keyword 마감 훅은 closeKeyword(23-06).
     roleReveal: routeAfterRoleReveal,
-    // 키워드 마감(D-03·D-24): 확정 낸 순서 → 쓰던 글 → 답 없음 을 keywordAnswers 로 확정하고 서버 전용 answerSubmits·answerDraft 를 지운다.
+    // 입력 마감 뒤에는 첫 확정 제출자의 의자부터 답을 한 줄씩 공개한다.
     keyword: closeKeyword,
-    // 마지막 3인 결전은 판 규칙의 showdown 일 때만(결정 0072) — 꺼지면 키를 만들지 않아 표의 기본 next 로 간다.
-    ...(RULES.showdown ? { dayAnnounce: routeAfterDayAnnounce } : {}),
+    dayAnnounce: (s) => stepKeywordPresentation(s) ?? (RULES.showdown ? routeAfterDayAnnounce(s) : { state: s, stay: false }),
     showdown: stepShowdown,
     nomination: stepNomination,
     runoff: stepRunoff,

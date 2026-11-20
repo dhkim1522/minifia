@@ -221,10 +221,23 @@ async function main() {
   check("e", "키워드 단계: 키워드 자체를 확정 제출하면 거절(BAD_MESSAGE)", forbidden.includes("error:BAD_MESSAGE"), forbidden);
   await skipTo("dayAnnounce");
   check("e", "낮 시작 발표의 day.n 이 1", clients.every((c) => lastView(c).day?.n === 1), clients.map((c) => lastView(c).day?.n).join(","));
+  const turnOf = (client) => lastView(client).day?.keyword?.presentation;
+  const first = turnOf(host);
+  check("e", "첫 제출자부터 한 답만 공개됨", first?.order === 1 && first.seat === guests[0].seat && first.text === "나만아는말"
+    && clients.every(c => same(turnOf(c), first) && lastView(c).day?.keyword?.answers === undefined && lastView(c).day?.keyword?.answer === undefined), JSON.stringify(first));
+  await act(host, { t: "suspect", target: guests[0].seat });
+  check("e", "현재 발표자에게 의심딱지가 붙음", clients.every(c => lastView(c).day?.suspects?.some(note => note.to === guests[0].seat)), "");
+  const speakers = [first?.seat];
+  for (let order = 2; order <= clients.length; order++) {
+    await sleep(RATE_PAUSE_MS);
+    send(host, { t: "testSkip" });
+    await waitUntil(() => clients.every(c => turnOf(c)?.order === order), SKIP_WAIT_MS, `답 발표 ${order}`);
+    speakers.push(turnOf(host)?.seat);
+  }
+  check("e", "4인 원탁을 첫 발표자의 의자부터 시계방향으로 진행", same(speakers, [guests[0].seat, guests[2].seat, host.seat, guests[1].seat]), speakers.join(","));
   await skipTo("discussion");
-  const lists = clients.map((c) => lastView(c).day?.keyword?.answers);
-  check("e", "토론: 모든 소켓의 첫날 답 목록이 같고 시민 편 손님이 낸 답이 있음(낸 순서 1번)",
-    lists.every((l) => same(l, lists[0])) && Array.isArray(lists[0]) && lists[0][0]?.order === 1 && lists[0][0]?.seat === guests[0].seat && lists[0][0]?.text === "나만아는말", JSON.stringify(lists[0]));
+  check("e", "첫 토론에 답안은 닫히고 붙인 의심딱지는 남음", clients.every(c => lastView(c).day?.keyword === undefined
+    && lastView(c).day?.suspects?.some(note => note.to === guests[0].seat)), "");
   await skipTo("verdict");
   check("e", "discussion 다음은 verdict (찬반 단계, 낮 순서 토론 → 찬반)", clients.every((c) => lastView(c).phase === "verdict"), clients.map((c) => lastView(c).phase).join(","));
   // 사람만 있는 방이라 아무도 던지지 않았다: 0표는 지목 없이 처형 없는 날이고, 첫날은 정답 공개로 간다.
@@ -235,7 +248,7 @@ async function main() {
   check("e", "정답 공개 전까지 마피아(방장) 소켓 프레임 원문에 키워드가 한 번도 없었음", beforeReveal === 0, `${beforeReveal}개`);
   check("e", "정답 공개: 모든 소켓(마피아 포함)의 day.keyword.answer 가 시민 편이 본 키워드와 같음", clients.every((c) => lastView(c).day?.keyword?.answer === kw), clients.map((c) => lastView(c).day?.keyword?.answer).join(","));
   await skipTo("night");
-  check("e", "정답 공개 다음은 night 이고 첫날 정답이 판 내내 남음(day.keyword.answer)", clients.every((c) => lastView(c).day?.keyword?.answer === kw), "");
+  check("e", "밤에는 제시어와 첫날 답안을 보내지 않음", clients.every(c => lastView(c).day?.keyword === undefined), "");
   await act(host, { t: "pick", target: victim.seat });
   check("e", "밤에 마피아(방장)의 pick 이 me.pick 으로 돌아옴", lastView(host).me.pick === victim.seat, String(lastView(host).me.pick));
   await skipTo("morning");

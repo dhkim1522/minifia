@@ -1,9 +1,10 @@
-// 의심 포스트잇 규칙(결정 0089-10, 24 D-01~D-05·D-22·D-25·D-26). 낮 토론의 산 사람은 다른 산 사람에게 하루 한 장 붙인다.
+// 산 사람은 첫날 답안 발표의 현재 발표자와 허용된 낮 토론의 상대에게 하루 한 장 붙인다.
 // 바에서는 고정 좌석의 상대를 모두 고를 수 있다. 광장은 이전의 가까운 대상 거리 판정을 쓴다.
 // 서버·클라이언트 공용 순수 모듈 — three·DOM·시각 함수를 import 하지 않는다. 시각은 인자로만 받고 입력 상태를 바꾸지 않는다.
 // 판정·투표·단계 마감과 무관한 서버 기록이다: stickNote 는 RoomState.notes 외의 키를 바꾸지 않는다.
 import type { PhaseId } from "../protocol";
 import { isAlive } from "./alive";
+import { keywordPresentationOf } from "./keywordPresentation";
 import type { RoomState } from "./room";
 import { positionAtFx } from "./world";
 import type { Segment, WorldState } from "./world";
@@ -57,7 +58,8 @@ const REJECT: StickResult = { ok: false, error: "BAD_MESSAGE" };
  * 결과는 { ...state, notes } 하나만 바꾼다. 연결이 끊긴 대상·봇에게도 붙는다(D-05).
  */
 export function stickNote(state: RoomState, world: Pick<WorldState, "segs">, actorId: string, toSeat: number, now: number): StickResult {
-  if (!noteAllowedNow(state.phase, state.day, state.playtest)) return REJECT;
+  const presentation = keywordPresentationOf(state, now);
+  if (presentation !== undefined ? toSeat !== presentation.seat : !noteAllowedNow(state.phase, state.day, state.playtest)) return REJECT;
   const actor = state.players.find((p) => p.id === actorId);
   if (!actor || !isAlive(actor)) return REJECT;
   if (!Number.isInteger(toSeat)) return REJECT;

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { RoomView } from "../../../shared/protocol";
 import { hostTimeOf } from "../../game/hostLine";
+import { keywordPresentationOf } from "../../game/keywordView";
 import { timerTone, useCountdown } from "../../net/countdown";
 import type { TimerTone } from "../../net/countdown";
 import { useEarlyCalm } from "../../net/earlyCalm";
@@ -20,8 +21,10 @@ interface GamePhaseHeaderProps {
 export function GamePhaseHeader({ title, view, offset, extra, timeless, turnGauge, tod, epoch }: GamePhaseHeaderProps) {
   const { phaseEndsAt, phaseDurationMs } = view;
   const early = useEarlyCalm(view, epoch);
+  const presentation = keywordPresentationOf(view);
   const roleReadyTimed = view.playtest === true && view.phase === "roleReveal" && phaseDurationMs !== null && phaseDurationMs >= 3000;
-  const hasTime = !timeless && view.phase !== "dayAnnounce" && phaseEndsAt !== null && phaseDurationMs !== null && (roleReadyTimed || hostTimeOf(view));
+  const hasTime = !timeless && phaseEndsAt !== null && phaseDurationMs !== null
+    && (presentation !== undefined || (view.phase !== "dayAnnounce" && (roleReadyTimed || hostTimeOf(view))));
   return (
     <div className="mf-game-phase-header" data-phase-header="" data-discussion-header={view.phase === "discussion" ? "" : undefined} data-early={early ? "" : undefined}>
       <span className="mv-phase__line" data-tod={tod?.id}>
@@ -35,7 +38,7 @@ export function GamePhaseHeader({ title, view, offset, extra, timeless, turnGaug
       </span>
       {turnGauge ?? (hasTime ? (
         <PhaseTimeGauge
-          key={`${view.round ?? 1}:${view.day?.n ?? 0}:${view.phase}`}
+          key={`${view.round ?? 1}:${view.day?.n ?? 0}:${view.phase}:${presentation?.order ?? 0}`}
           endsAt={phaseEndsAt}
           duration={phaseDurationMs}
           offset={offset}

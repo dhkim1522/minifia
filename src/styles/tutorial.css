@@ -123,21 +123,3 @@
   .tut-ring { animation: none; box-shadow: 0 0 11px 3px color-mix(in srgb, var(--light-lamp) 55%, transparent); }
   .tut-pill__text { animation: none; }
 }
-
-.tut-answers {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: var(--space-md);
-  z-index: var(--z-overlay);
-  pointer-events: none;
-}
-.tut-answers .mf-first-answers {
-  box-sizing: border-box;
-  width: min(100%, 380px);
-  padding: var(--space-md);
-  border-radius: 16px;
-  background: var(--noir-panel);
-  box-shadow: var(--shadow-card);
-}

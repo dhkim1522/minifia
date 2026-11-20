@@ -5,11 +5,12 @@
 // 순수 모듈이다 — 입력 상태는 바꾸지 않는다.
 import { isAlive } from "./alive";
 import { noExecutionOf } from "./execution";
+import { keywordPresentationOf } from "./keywordPresentation";
 import { majorityOf, nominationStepMs } from "./nomination";
 import { firstPlaytestDay, humanSeats, PLAYTEST_BALLOT_MS, PLAYTEST_DISCUSSION_MS, PLAYTEST_KEYWORD_MS, PLAYTEST_MORNING_EXTRA_MS, PLAYTEST_RESULT_MS, PLAYTEST_ROLE_MS, voteOpensAt } from "./playtest";
 import { runoffStepMs } from "./runoff";
 import { showdownStepMs } from "./showdown";
-import { ANSWER_REVEAL_MS, MORNING_MAX_MS, MORNING_MS, MORNING_NOTE_MS, MORNING_VICTIM_MS, MORNING_WILL_MS, NO_EXECUTION_MS, PHASE_DEFS } from "./phases";
+import { ANSWER_REVEAL_MS, FIRST_ANSWER_TURN_MS, MORNING_MAX_MS, MORNING_MS, MORNING_NOTE_MS, MORNING_VICTIM_MS, MORNING_WILL_MS, NO_EXECUTION_MS, PHASE_DEFS } from "./phases";
 import type { RoomState } from "./room";
 
 /** 낮 투표류 규칙 함수(토론 끝내기·지목·찬반)의 거부 코드. 단계가 아니면 WRONG_PHASE, 그 밖의 잘못된 입력은 BAD_MESSAGE. */
@@ -43,6 +44,7 @@ export function phaseDurationOf(state: RoomState): number | null {
     if (state.phase === "verdict") return state.firstBallotOutcome === undefined ? PLAYTEST_BALLOT_MS : PLAYTEST_RESULT_MS;
     if (state.phase === "morning") return morningMsOf(state) + PLAYTEST_MORNING_EXTRA_MS;
   }
+  if (keywordPresentationOf(state) !== undefined) return FIRST_ANSWER_TURN_MS;
   if (state.phase === "morning") return morningMsOf(state);
   // 첫날 정답 공개(D-22): 처형이 있었으면 3초, 처형 없는 첫날이면 "처형 없음" 큰 글 1.4초가 앞에 붙어 4.4초다. 처형 없음 여부는 이미 공개된 값(day.noExecution)이라 길이로 새는 정보가 없다.
   if (state.phase === "answerReveal") return ANSWER_REVEAL_MS + (noExecutionOf(state) === undefined ? 0 : NO_EXECUTION_MS);
@@ -113,7 +115,10 @@ export function endRequiredOf(state: RoomState): number {
  * 날짜별 기록(voteLog)과 그 밖의 키는 그대로 둔다.
  */
 export function enterDiscussion(state: RoomState): RoomState {
-  const { verdict: _verdict, execution: _execution, pickTurn: _pickTurn, runoff: _runoff, showdown: _showdown, firstBallotOutcome: _firstBallotOutcome, ...rest } = state;
+  const {
+    verdict: _verdict, execution: _execution, pickTurn: _pickTurn, runoff: _runoff,
+    showdown: _showdown, firstBallotOutcome: _firstBallotOutcome, keywordPresentationIndex: _presentation, ...rest
+  } = state;
   return {
     ...rest,
     players: state.players.map((p) => {

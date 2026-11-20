@@ -125,7 +125,7 @@ const ALLOWED_WIRE_PATHS: ReadonlySet<string> = new Set([".view.me.verdictVote",
  * 넓히려면 받을 권리를 이 주석에 적고 아래 "키워드 공개 경로 고정" 시험의 기대 목록을 같이 고친다. SERVER_ONLY_KEYS 의 키워드 이름(keywordProbed·answerSubmits·answerDraft)은 이 목록에 들 수 없다.
  *  - .view.me.keyword: keyword 단계, 산 시민 편(경찰·의사·시민) 본인에게만 — 마피아·탈락자·다른 단계에는 키 자체가 없다(D-06).
  *  - .view.me.answer(.text/.final): keyword 단계, 산 본인이 쓰던 글·확정 여부 — 본인에게만, 값이 있을 때만(재접속 복원, P23-13).
- *  - .view.day.keyword(.genre/.answer/.answers[].order/.seat/.text): 모든 소켓에 같은 모양. answers와 answersUntil은 첫날 토론 시작, answer는 첫날 answerReveal에서만 보낸다.
+ *  - .view.day.keyword(.genre/.answer/.presentation): 모든 소켓에 같은 모양. 첫날 발표는 현재 한 줄만, 정답은 answerReveal에서만 보낸다.
  */
 const KEYWORD_WIRE_PATHS: readonly string[] = [
   ".view.me.keyword",
@@ -135,11 +135,11 @@ const KEYWORD_WIRE_PATHS: readonly string[] = [
   ".view.day.keyword",
   ".view.day.keyword.genre",
   ".view.day.keyword.answer",
-  ".view.day.keyword.answers",
-  ".view.day.keyword.answersUntil",
-  ".view.day.keyword.answers[].order",
-  ".view.day.keyword.answers[].seat",
-  ".view.day.keyword.answers[].text",
+  ".view.day.keyword.presentation",
+  ".view.day.keyword.presentation.order",
+  ".view.day.keyword.presentation.total",
+  ".view.day.keyword.presentation.seat",
+  ".view.day.keyword.presentation.text",
 ];
 /**
  * 동점 결선(결정 0066-4)의 공개 경로 — SERVER_ONLY_KEYS 의 runoffVote 와 이름이 겹치지 않아 위 허용 목록은 넓히지 않았다. 새로 생기는 경로는 이 둘뿐이고 받을 권리가 단계별로 갈린다:
@@ -2034,7 +2034,7 @@ describe("키워드 공개 경로 고정 (23-06, D-06·D-14, T-23-20)", () => {
     const sample = {
       view: {
         me: { keyword: "단어", answer: { text: "글", final: true } },
-        day: { keyword: { genre: "영화", answer: "단어", answersUntil: 20_000, answers: [{ order: 1, seat: 0, text: "글" }] } },
+        day: { keyword: { genre: "영화", answer: "단어", presentation: { order: 1, total: 4, seat: 0, text: "글" } } },
       },
     };
     // 컨테이너 경로(.view·.view.me·.view.day)는 다른 키도 담으므로 키워드 줄기(keyword·answer)만 본다.

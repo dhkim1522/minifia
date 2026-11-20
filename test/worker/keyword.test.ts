@@ -2,6 +2,7 @@
 // 키워드는 시민 편 소켓만 me.keyword 로 받고, 마피아 소켓의 view.me 에는 키 자체가 없다. 장르 라벨은 모두에게 같다.
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { genreLabelOf } from "../../shared/game/keywords";
+import { FIRST_ANSWER_TURN_MS } from "../../shared/game/phases";
 import { openKeyword } from "../helpers/keyword";
 import { actorsOf, advanceTo, chatSend, chatsOf, editRoom, lastViewOf, mark, nextFrame, pause, seat, send, settle, storedRoom, summary, verdictAll } from "./helpers";
 import type { Seated, StoredRoom, TestSocket } from "./helpers";
@@ -190,30 +191,49 @@ describe("키워드 답 접수 (D-07·D-10)", () => {
     expect(summary(await settle(mafia.sock, m3))).toBe("[state:keyword]");
   }, 40_000);
 
-  it("마감(forceDue+알람)에 첫날 discussion의 day.keyword.answers 가 모든 소켓에 같다: 낸 순서 → 쓰던 글 → 답 없음, 봇 좌석은 text null 맨 끝 묶음", async () => {
+  it("첫 제출자의 의자부터 한 답씩 보내고, 현재 발표자에게 붙인 딱지를 토론까지 유지한다", async () => {
     const { room, socks } = await inKeyword({ bots: 1 });
     const actors = actorsOf(room);
     const [a, b, c, d] = actors as [typeof actors[0], typeof actors[0], typeof actors[0], typeof actors[0]];
     answerOf(c.sock, "마법", true);
-    await settle(c.sock, mark(c.sock));
+    await nextFrame(c.sock, (m) => m.t === "state" && m.view.me.answer?.final === true);
     answerOf(b.sock, "쓰던글", false);
-    await settle(b.sock, mark(b.sock));
+    await nextFrame(b.sock, (m) => m.t === "state" && m.view.me.answer?.final === false);
     await advanceTo(room.code, socks, "dayAnnounce");
-    for (const sock of socks) expect(lastViewOf(sock).day?.keyword).toBeUndefined();
-    await advanceTo(room.code, socks, "discussion");
-    for (const sock of socks) await settle(sock, mark(sock));
+    const rows = [
+      { seat: c.seat, text: "마법" }, { seat: 4, text: null }, { seat: a.seat, text: null },
+      { seat: b.seat, text: "쓰던글" }, { seat: d.seat, text: null },
+    ];
+    const assertCurrent = (index: number): void => {
+      for (const sock of socks) {
+        const view = lastViewOf(sock);
+        expect(view.phaseDurationMs).toBe(FIRST_ANSWER_TURN_MS);
+        expect(view.day?.keyword).toEqual({ genre: expect.any(String), presentation: { order: index + 1, total: 5, ...rows[index] } });
+        expect(view.me.keyword).toBeUndefined();
+        expect(view.me.answer).toBeUndefined();
+      }
+    };
+    assertCurrent(0);
 
-    const views = socks.map((s) => lastViewOf(s));
-    const answers = views.map((v) => JSON.stringify(v.day?.keyword?.answers));
-    expect(new Set(answers).size).toBe(1);
-    const rows = views[0]!.day!.keyword!.answers!;
-    const botSeat = 4;
-    const none = [a.seat, d.seat, botSeat].sort((x, y) => x - y);
-    expect(rows).toEqual([
-      { order: 1, seat: c.seat, text: "마법" },
-      { order: 2, seat: b.seat, text: "쓰던글" },
-      ...none.map((seatNo, i) => ({ order: 3 + i, seat: seatNo, text: null })),
-    ]);
+    send(d.sock, { t: "suspect", target: b.seat });
+    await nextFrame(d.sock, (m) => m.t === "error" && m.code === "BAD_MESSAGE");
+    send(a.sock, { t: "suspect", target: c.seat });
+    for (const sock of socks) {
+      const marked = await nextFrame(sock, (m) => m.t === "state" && m.view.day?.suspects?.some((s) => s.from === a.seat && s.to === c.seat) === true);
+      if (marked.t !== "state") throw new Error("expected state");
+      expect(marked.view.me.suspectTo).toBe(sock === a.sock ? c.seat : undefined);
+    }
+    for (let i = 1; i < rows.length; i += 1) {
+      send(room.host, { t: "testSkip" });
+      for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.day?.keyword?.presentation?.order === i + 1);
+      assertCurrent(i);
+    }
+    send(room.host, { t: "testSkip" });
+    for (const sock of socks) {
+      await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "discussion");
+      expect(lastViewOf(sock).day?.keyword).toBeUndefined();
+      expect(lastViewOf(sock).day?.suspects).toEqual([{ from: a.seat, to: c.seat }]);
+    }
     const stored = (await storedRoom(room.code)) as AnswerRoom;
     expect(stored.answerSubmits).toBeUndefined();
   }, 40_000);

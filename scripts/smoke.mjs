@@ -644,8 +644,10 @@ async function stageFull(url, args) {
     if (c.unexpectedClose !== null) fail(`${c.nickname} 소켓이 예상 밖으로 닫힘 (code ${c.unexpectedClose})`);
   }
 
-  // (10) 낮 토론 진입 — 낮 시작 발표 다음이 곧바로 자유 채팅 토론이다(CHAT-06). 직업 목록(day.roles)은 모두 같다.
-  await waitUntil(() => clients.every((c) => firstState(c, "discussion")), STATE_LIMIT_MS + 5000, "모든 클라이언트가 dayAnnounce 다음에 discussion 을 받지 못함");
+  // (10) 원탁 답안 발표를 마친 뒤 토론에 들어간다. 직업 목록(day.roles)은 모두 같다.
+  const opening = firstState(host, "dayAnnounce").msg.view;
+  const announcementMs = (opening.day?.keyword?.presentation?.total ?? 1) * (opening.phaseDurationMs ?? 0);
+  await waitUntil(() => clients.every((c) => firstState(c, "discussion")), STATE_LIMIT_MS + announcementMs, "모든 클라이언트가 dayAnnounce 다음에 discussion 을 받지 못함");
   const roleList = firstState(clients[1], "discussion").msg.view.day.roles;
   if (roleList.includes("doctor") !== (N >= 5)) fail(`day.roles 의 의사 포함 여부가 인원(${N})과 맞지 않음: ${roleList.join(",")}`);
   if (roleList.length < 3) fail(`day.roles 가 너무 짧음: ${roleList.join(",")}`);

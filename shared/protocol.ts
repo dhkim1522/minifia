@@ -124,16 +124,20 @@ export interface GameResult {
  * 키워드 단계의 공개 값 — 모든 사람의 view 에 같은 모양으로 실린다(D-06). 장르 라벨뿐이다.
  * 단어는 여기에 없다: 산 시민 편 본인에게만 me.keyword 로 가고 마피아에게는 키 자체가 없다. 답·정답 키는 뒤 계획(23-05·23-06)이 더한다.
  */
-/** 공개된 첫날 답 한 줄: 확정 낸 순서 → 쓰던 글 → 답 없음(text null). 좌석 번호만 싣는다(D-24). */
+/** 첫날 답 한 줄. 미제출은 text null이다. */
 export interface KeywordAnswerRow {
   order: number;
   seat: number;
   text: string | null;
 }
+export interface KeywordPresentation extends KeywordAnswerRow {
+  total: number;
+}
 export interface KeywordView {
   genre: string; // 장르 라벨(예: "영화")
-  answers?: KeywordAnswerRow[]; // 첫날 토론 시작 직후에만 공개하는 답안
-  answersUntil?: number; // 답안 발표가 끝나는 서버 시각(ms)
+  presentation?: KeywordPresentation; // 첫날 낮 시작의 현재 발표 한 줄
+  answers?: KeywordAnswerRow[]; // 이전 서버·튜토리얼 뷰의 답안 목록
+  answersUntil?: number; // 이전 서버의 답안 발표 마감
   answer?: string; // 첫날 answerReveal 단계에서만 받는 정답
 }
 
@@ -269,7 +273,7 @@ export type ClientMessage =
   // 8페이즈 낮 처형(결정 0060). 옛 투표 메시지(처형 여부·후보 선택)는 08-21 에 지웠다 — 옛 번들이 보내면 스키마가 거부해 BAD_MESSAGE 다. 행위자는 모두 소켓 첨부 playerId 뿐이다.
   | { t: "endDiscussion"; on: boolean } // 토론 끝내기 — 누름(true)/취소(false), 산 사람만. 공개 값은 누른 수뿐이다(DAY-03)
   | { t: "point"; target: number } // 지목 — 대상 seat 하나, 취소 없음, 마감까지 바꿀 수 있다(DAY-04)
-  | { t: "suspect"; target: number } // 의심 포스트잇(결정 0089-10, 24 D-04) — 둘째 날부터 낮 토론에서 가까운 산 사람 한 명에게 하루 한 장(같은 날 다시 보내면 옮기기). 서버→클라이언트 마피아 쪽지 프레임 {t:"note"} 와 이름이 다르다. 받은 사람이 떼는 메시지는 없다
+  | { t: "suspect"; target: number } // 발표 중 현재 발표자 또는 허용된 낮 토론 대상에게 하루 한 장(같은 날 다시 보내면 옮기기).
   | { t: "whisper"; to: number; text: string } // 귓속말(결정 0066-2) — 낮 토론, 하루 1번, 산 다른 사람 한 명에게 30자소 이하. 본문은 보낸·받은 사람 소켓에만 간다
   | { t: "badge"; role: BadgeId } // 직업 주장(결정 0066-1) — 서버가 정하는 것은 값의 형식뿐 참·거짓은 판정하지 않는다. 낮 시작 발표·토론·지목 단계에서만
   | { t: "dress"; look: OutfitId } // 로비 의상(결정 D-6) — 의상 id 하나뿐, 대기실에서만. 서버는 고른 값을 저장·방송할 뿐 역할과 비교하지 않는다
@@ -338,7 +342,7 @@ export interface MyInfo {
   testBots?: number; // 방장 본인의 대기실 view 에서만, 서버 봇 수(0 포함, 결정 0024·0075 — 일반 방 방장 포함). 손님·게임 중에는 키 자체가 없다
   testBotVote?: { exec: BotVoteExec; pick: BotVotePick }; // 그 방장의 대기실 view 에서만, 무작위가 아닌 값이 있을 때만(P-13). 손님·일반 방·게임 중에는 키 자체가 없다
   chat?: ChatChannel; // 서버가 정한 내 채널(channelOf), 본인에게만. 말할 수 없으면 키가 없다
-  suspectTo?: number; // 오늘 내가 붙인 대상 seat(옮기기 표시용, 결정 0089-10 D-06) — discussion 단계의 산 본인에게만, 없으면 키가 없다
+  suspectTo?: number; // 오늘 내가 붙인 대상 seat. 답안 발표와 토론 중 산 본인에게만 보낸다.
   whisperUsed?: true; // 오늘 귓속말을 이미 보냈다(결정 0066-2) — discussion 단계의 산 본인에게만, 다른 소켓·다른 단계·다음 일차에는 키가 없다
   endDiscussion?: true; // discussion 단계에서 본인이 토론 끝내기를 누른 상태(본인에게만, 8페이즈 결정 0060)
   nightTally?: Array<{ seat: number; n: number }>; // 밤, 산 마피아 본인에게만: 대상 seat 별 산 마피아 선택 수(seat 오름차순, 본인 포함, 누가 골랐는지는 없다, 결정 0061-7)

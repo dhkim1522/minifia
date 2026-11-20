@@ -805,32 +805,27 @@ describe("RoomScreen: 쉬는 사람 화면 (11-12)", () => {
   });
 });
 
-describe("RoomScreen: 첫날 답안 집계", () => {
-  const mount = () => render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
-  const again = (rerender: (ui: React.ReactElement) => void) => rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
-  const answersUntil = 11_000;
+describe("RoomScreen: 첫날 답안 발표", () => {
+  const ui = () => <RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />;
   const players: RoomView["players"] = ["민수", "하윤", "민지", "도현", "라임", "별빛", "여울", "긴이름참가자"].map((nickname, seat) => (
     { seat, nickname, connected: true, isHost: seat === 0 }
   ));
-  const rows = players.map(({ seat }, i) => ({ order: i + 1, seat, text: seat === 0 ? "<b>안경</b>" : seat === 7 ? null : `답안${seat}` }));
-  const play = (phase: RoomView["phase"], opts: { n?: number; round?: number; playtest?: true } = {}): RoomView => ({
-    ...view,
-    phase,
-    phaseEndsAt: phase === "ended" ? null : 91_000,
-    phaseDurationMs: phase === "ended" ? null : 90_000,
-    players,
+  const first = { order: 1, total: 8, seat: 1, text: "<b>안경</b>" };
+  const own = { order: 2, total: 8, seat: 0, text: "내가 쓴 답" };
+  const missing = { order: 8, total: 8, seat: 7, text: null };
+  const play = (phase: RoomView["phase"], presentation?: typeof first | typeof missing, extra?: Partial<RoomView>): RoomView => ({
+    ...view, phase, map: "bar", players,
+    phaseEndsAt: phase === "ended" ? null : 6_000,
+    phaseDurationMs: phase === "ended" ? null : 5_000,
     me: { seat: 0, isHost: true, role: "citizen" },
-    day: { n: 1, roles: ["mafia", "police", "citizen"], keyword: { genre: "영화", answers: rows, answersUntil, answer: "해리포터" } },
-    ...opts,
-    ...(opts.n === undefined ? {} : { day: { n: opts.n, roles: [], keyword: { genre: "영화", answers: rows, answersUntil } } }),
+    day: { n: 1, roles: ["mafia", "police", "citizen"], keyword: { genre: "영화", ...(presentation === undefined ? {} : { presentation }), answer: "해리포터" } },
+    ...extra,
   });
-  const setView = (v: RoomView, epoch?: number) => {
-    connectionMock.current = { ...(connectionMock.current as RoomConnection), view: v, ...(epoch !== undefined ? { epoch } : {}) };
+  const setView = (v: RoomView) => {
+    connectionMock.current = { ...(connectionMock.current as RoomConnection), view: v };
   };
-  const overlay = () => document.querySelector('dialog[aria-label="모두의 답"]');
 
   beforeEach(() => {
-    sessionStorage.clear();
     vi.useFakeTimers();
     vi.setSystemTime(1_000);
   });
@@ -839,64 +834,78 @@ describe("RoomScreen: 첫날 답안 집계", () => {
     stage.props = null;
   });
 
-  it.each([undefined, true] as const)("일반·실험방의 첫 토론에 여덟 명 답안이 중앙에 함께 보인다(playtest=%s)", (playtest) => {
-    connectionMock.current = conn({ view: play("dayAnnounce", { playtest }) });
-    const { rerender } = mount();
-    expect(overlay()).toBeNull();
-    setView(play("discussion", { playtest }));
-    again(rerender);
-    const dialog = overlay();
-    expect(dialog?.classList.contains("mf-dialog--centered")).toBe(true);
-    const rendered = Array.from(dialog!.querySelectorAll("[data-answer-row]"));
-    expect(rendered).toHaveLength(8);
-    expect(rendered[0]?.textContent).toContain("민수<b>안경</b>");
-    expect(rendered[0]?.querySelector("b")).toBeNull();
-    expect(rendered[7]?.textContent).toContain("긴이름참가자미제출");
+  it.each([false, true])("현재 참가자의 한 답만 공개하고 같은 눈높이 장면으로 다음 참가자를 본다(playtest=%s)", playtest => {
+    const extra = playtest ? { playtest: true as const } : {};
+    connectionMock.current = conn({ view: play("dayAnnounce", first, extra) });
+    const { container, rerender } = render(ui());
+    const world = container.querySelector("[data-world-stage-fake]");
+    const card = () => container.querySelector("[data-answer-presentation]");
+    expect(card()?.getAttribute("data-answer-order")).toBe("1");
+    expect(card()?.querySelector("[data-answer-speaker]")?.textContent).toBe("하윤");
+    expect(card()?.querySelector("[data-answer-content]")?.textContent).toBe("<b>안경</b>");
+    expect(card()?.querySelector("b")).toBeNull();
+    expect(container.querySelector("[data-chat-input], [data-answer-list]")).toBeNull();
+    expect(stage.props?.scene?.table).toMatchObject({ mode: "eye", focus: 1, focusAt: 1000 });
+    setView(play("dayAnnounce", missing, { ...extra, phaseEndsAt: 41_000 }));
+    rerender(ui());
+    expect(container.querySelector("[data-world-stage-fake]")).toBe(world);
+    expect(card()?.querySelector("[data-answer-content]")?.textContent).toBe("미제출");
+    expect(card()?.textContent).not.toContain("안경");
+    expect(stage.props?.scene?.table).toMatchObject({ mode: "eye", focus: 7, focusAt: 36_000 });
   });
 
-  it("확인 뒤 역할 메뉴에 답안 기록이 없고 현재 판의 창은 다시 열리지 않는다", () => {
-    connectionMock.current = conn({ view: play("discussion") });
-    const { container, unmount } = mount();
-    fireEvent.click(container.querySelector("[data-first-answers-close]")!);
-    expect(overlay()).toBeNull();
-    expect(container.querySelector('[data-playtest-action="clues"]')).toBeNull();
-    fireEvent.click(container.querySelector("[data-game-menu]")!);
-    fireEvent.click(container.querySelector("[data-game-menu-role]")!);
-    expect(container.querySelector('[data-rolecard-tab="records"], [data-answer-list]')).toBeNull();
-    unmount();
-    mount();
-    expect(overlay()).toBeNull();
+  it("현재 답에 한 번 눌러 딱지를 붙이고 서버 확인 뒤 표시하며 자기 답에는 단추가 없다", () => {
+    const send = vi.fn(() => true);
+    connectionMock.current = conn({ view: play("dayAnnounce", first), send });
+    const { container, rerender } = render(ui());
+    const suspect = () => container.querySelector<HTMLButtonElement>("[data-answer-suspect]");
+    fireEvent.click(suspect()!);
+    expect(send).toHaveBeenCalledWith({ t: "suspect", target: 1 });
+    expect(suspect()?.getAttribute("aria-pressed")).toBe("false");
+    const state = play("dayAnnounce", first);
+    setView({ ...state, me: { ...state.me, suspectTo: 1 }, day: { ...state.day!, suspects: [{ from: 0, to: 1 }] } });
+    rerender(ui());
+    expect(suspect()?.getAttribute("aria-pressed")).toBe("true");
+    expect(suspect()?.disabled).toBe(true);
+    expect(stage.props?.scene?.notes).toEqual({ 1: [0] });
+    setView(play("dayAnnounce", own));
+    rerender(ui());
+    expect(suspect()).toBeNull();
+    expect(screen.getByText("민수 (나)")).not.toBeNull();
+    expect(stage.props?.scene?.table?.focus).toBeUndefined();
+    const day = play("discussion");
+    setView({ ...day, me: { ...day.me, suspectTo: 1 }, day: { ...day.day!, suspects: [{ from: 0, to: 1 }] } });
+    rerender(ui());
+    expect(container.querySelector("[data-answer-presentation]")).toBeNull();
+    expect(stage.props?.scene?.notes).toEqual({ 1: [0] });
   });
 
-  it("창을 못 본 사람이 토론 중 재접속하면 서버 공개 마감까지만 열린다", () => {
-    vi.setSystemTime(10_000);
-    connectionMock.current = conn({ view: play("discussion"), epoch: 2 });
-    mount();
-    expect(overlay()).not.toBeNull();
-    act(() => vi.advanceTimersByTime(999));
-    expect(overlay()).not.toBeNull();
-    act(() => vi.advanceTimersByTime(1));
-    expect(overlay()).toBeNull();
+  it("재접속은 이미 공개 중인 차례를 바로 그리며 마감이 지나면 이전 대상에게 전송하지 않는다", () => {
+    vi.setSystemTime(5_000);
+    const send = vi.fn(() => true);
+    connectionMock.current = conn({ view: play("dayAnnounce", first), epoch: 2, send });
+    const { container } = render(ui());
+    expect(screen.getByRole("timer", { name: "남은 시간 1초" })).not.toBeNull();
+    act(() => vi.advanceTimersByTime(1_000));
+    fireEvent.click(container.querySelector("[data-answer-suspect]")!);
+    expect(send).not.toHaveBeenCalled();
   });
 
   it("밤에 들어서면 정답 알림의 타이머가 남아 있어도 글자가 화면에서 사라진다", () => {
     connectionMock.current = conn({ view: play("answerReveal") });
-    const { container, rerender } = mount();
+    const { container, rerender } = render(ui());
     expect(container.querySelector("[data-announce-label]")?.textContent).toBe("제시어");
     setView(play("night"));
-    again(rerender);
+    rerender(ui());
     expect(container.querySelector("[data-announce-label]")).toBeNull();
     expect(container.textContent).not.toContain("해리포터");
   });
 
-  it.each([
-    ["discussion", { n: 2 }],
-    ["verdict", {}],
-    ["ended", { n: 2 }],
-  ] as const)("첫날 토론 밖(%s)에는 이전 답이 있어도 공개하지 않는다", (phase, options) => {
-    connectionMock.current = conn({ view: play(phase, options) });
-    const { container } = mount();
-    expect(overlay()).toBeNull();
+  it.each(["keyword", "discussion", "verdict", "ended"] as const)("발표 밖(%s)에는 발표 답안이 남지 않는다", phase => {
+    connectionMock.current = conn({ view: play(phase, first) });
+    const { container } = render(ui());
+    expect(container.querySelector("[data-answer-presentation], [data-answer-list]")).toBeNull();
+    expect(container.textContent).not.toContain("안경");
     expect(container.textContent).not.toContain("해리포터");
   });
 });

@@ -4,7 +4,6 @@ import type { MouseEvent, RefObject } from "react";
 import { emitSignal } from "../audio/signals";
 import { useSound } from "../audio/useSound";
 import { Button } from "../components/Button";
-import { FirstAnswerList } from "../components/FirstAnswers";
 import { FocusRing } from "../components/tutorial/FocusRing";
 import { TutorialFrame } from "../components/tutorial/TutorialFrame";
 import { HostBand, HostDock } from "../components/v2/HostBand";
@@ -125,7 +124,6 @@ export function TutorialScreen({ onExit, playtest = false }: { onExit: () => voi
     [sceneId, beatId, startedAt, acted, playtest, firstBallot],
   );
   const timelessView = useMemo(() => ({ ...view, phaseEndsAt: null, phaseDurationMs: null }), [view]);
-  const answers = view.day?.keyword?.answers;
   const sound = useSound({ view: timelessView });
 
   useEffect(() => preloadRoleAssets(), []);
@@ -240,14 +238,6 @@ export function TutorialScreen({ onExit, playtest = false }: { onExit: () => voi
       {sceneId === "roles" && (beatId === "b" || beatId === "c") ? (
         <div className="tut-role-icons" aria-hidden="true">
           {ROLE_ICONS.map((icon, i) => <span key={icon} style={{ animationDelay: `${i * ROLE_ICON_STEP_MS}ms` }}><V2Icon name={icon} size={22} /></span>)}
-        </div>
-      ) : null}
-      {showAnswers && answers ? (
-        <div className="tut-answers">
-          <section className="mf-first-answers" aria-label="모두의 답">
-            <h2 className="mf-first-answers__title">모두의 답</h2>
-            <FirstAnswerList rows={answers} players={view.players} />
-          </section>
         </div>
       ) : null}
       {finalScreen ? (

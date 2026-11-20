@@ -9,6 +9,7 @@ import { RULES } from "../../shared/game/ruleset";
 import { WILL_MAX_GRAPHEMES } from "../../shared/game/will";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { emitSignal } from "../audio/signals";
+import { AnswerPresentation } from "../components/AnswerPresentation";
 import { KillFx } from "../components/KillFx";
 import { PhaseEvent } from "../components/PhaseEvent";
 import { PoliceResultCard } from "../components/PoliceResultCard";
@@ -35,6 +36,7 @@ import { WorldStage } from "../components/WorldStage";
 import type { WorldPick, WorldStageProps } from "../components/WorldStage";
 import { ownAnimalOf } from "../game/playerIdentity";
 import { jobOutfit } from "../world/jobOutfit";
+import { keywordPresentationOf } from "../game/keywordView";
 import { todOf, todWordOf } from "../game/timeOfDay";
 import { nightDarkOf } from "../game/nightDark";
 import { BADGE_TEXT, chipsOf, claimLook, floatLabel } from "../game/badgeView";
@@ -172,7 +174,8 @@ interface GameMapProps {
 function MapHeader({ view, offset, extra, tod, epoch, timeless }: { view: RoomView; offset: number; extra: ReactNode; tod: boolean; epoch: number; timeless: boolean }) {
   const blocked = blockModeOf(view) !== null;
   const turn = useTurnLook(view, offset);
-  const title = view.phase === "verdict" && view.day?.firstBallot !== undefined ? "투표" : headerFor(view).title;
+  const presenting = keywordPresentationOf(view) !== undefined;
+  const title = presenting ? "답안 공개" : view.phase === "verdict" && view.day?.firstBallot !== undefined ? "투표" : headerFor(view).title;
   const showTurnGauge = !timeless && turn !== null && (turn.stage === "turn" || turn.stage === "done");
   return (
     <GamePhaseHeader
@@ -182,7 +185,7 @@ function MapHeader({ view, offset, extra, tod, epoch, timeless }: { view: RoomVi
       epoch={epoch}
       timeless={timeless || blocked}
       turnGauge={showTurnGauge ? <PhaseGauge seconds={turn.seconds} ratio={turn.ratio} tone={turn.tone} /> : null}
-      {...(tod ? { tod: { id: todOf(view.phase), word: view.phase === "discussion" ? null : todWordOf(view.phase, title) } } : {})}
+      {...(tod ? { tod: { id: todOf(view.phase), word: presenting || view.phase === "discussion" ? null : todWordOf(view.phase, title) } } : {})}
       extra={extra}
     />
   );
@@ -217,6 +220,9 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const meAlive = me === undefined || isAlive(me);
   const inOpening = opening !== undefined;
   const inEnding = ending !== undefined;
+  const presentation = keywordPresentationOf(view);
+  const speaker = presentation === undefined ? undefined : view.players.find((player) => player.seat === presentation.seat);
+  const speakerMarked = speaker !== undefined && view.me.suspectTo === speaker.seat;
   const [resultStage, setResultStage] = useState<WorldStageProps>();
   const activeResultStage = inEnding && resultStage?.view.round === view.round ? resultStage : undefined;
   const tableCameraOn = view.map === "bar" && !camera && !panelless;
@@ -225,7 +231,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const tableFocus = view.players.some((p) => p.seat === rawTableFocus && isAlive(p)) ? rawTableFocus : undefined;
   const tableFocusAt = tableFocus !== undefined && tableChoice?.key === tableKey ? tableChoice.focusAt : undefined;
   const toastText = playtest && toast.props.visible ? toast.props.text : undefined;
-  const playtestPanel = tableOn || toastText !== undefined || view.me.chat === "ghost" || view.phase === "discussion" || view.phase === "night" && view.spectate === undefined || view.phase === "verdict" || view.phase === "defense" && view.day?.candidate === view.me.seat;
+  const playtestPanel = presentation !== undefined || tableOn || toastText !== undefined || view.me.chat === "ghost" || view.phase === "discussion" || view.phase === "night" && view.spectate === undefined || view.phase === "verdict" || view.phase === "defense" && view.day?.candidate === view.me.seat;
   const noPanel = panelless === true || (playtest && !playtestPanel);
   const { rootRef, headerRef, panelRef, inputRef, kbOpen: kbLifted, kbInSheet, turnCompact: compactTurn, stageInsets: measuredInsets } = useMapInsets(blockModeOf(view) !== null, noPanel, !inOpening && !inEnding);
   // 튜토리얼(24 D-31): 아래 여백에 bottomExtra 를 더한다. 키보드 높이를 프레임마다 읽는 getter 는 그대로 살린다. 실제 판은 0 이라 측정값 그대로다.
@@ -309,9 +315,19 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const sendGuard = useSendGuard();
   // 의심 거절·근처 0명 알림은 한 문구(P24-7): 위 알림 2.5초 + 소리 deny. 모드는 되돌리지 않는다
   const denySuspect = useCallback((): void => {
-    show(SUSPECT_TEXT.tooFar, "postit", SUSPECT_NOTICE_MS, "data-suspect-notice");
+    show(presentation === undefined ? SUSPECT_TEXT.tooFar : REJECT_TEXT, "postit", SUSPECT_NOTICE_MS, "data-suspect-notice");
     emitSignal({ kind: "deny" });
-  }, [show]);
+  }, [presentation, show]);
+  useEffect(() => {
+    if (speakerMarked) sendGuard.clear("suspect");
+  }, [speakerMarked, sendGuard]);
+  const canSuspectSpeaker = canSend && me !== undefined && meAlive && speaker !== undefined && isAlive(speaker) && !speakerMarked;
+  const suspectSpeaker = (): void => {
+    if (!canSuspectSpeaker || speaker === undefined || speaker.seat === view.me.seat) return;
+    if (view.phaseEndsAt !== null && Date.now() + offset >= view.phaseEndsAt) return;
+    if (send({ t: "suspect", target: speaker.seat }) === false) show(SEND_FAIL_TEXT);
+    else sendGuard.mark("suspect");
+  };
   const willBusy = useRef(false); // 유언·쪽지 저장 확인을 기다리는 중(useWill 이 쓴다)
   const pointSent = useRef<{ target: number; at: number } | null>(null);
   useEffect(() => {
@@ -649,13 +665,14 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     return out;
   }, [suspectStack, view.me.seat, tableOn]);
   const stageTagProps = useMemo<WorldTagProps | undefined>(() => {
-    if (!whisper.mode && suspectChips.size === 0) return claimTagProps;
+    if (!whisper.mode && suspectChips.size === 0 && presentation === undefined) return claimTagProps;
     return (seat) => ({
       ...(claimTagProps?.(seat) ?? {}),
+      ...(presentation?.seat === seat ? { ring: "turn", turn: true } : {}),
       ...(whisper.mode && whisper.targets.has(seat) ? { blink: true } : {}),
       ...(suspectChips.has(seat) ? { suspect: suspectChips.get(seat) } : {}),
     });
-  }, [whisper.mode, whisper.targets, suspectChips, claimTagProps]);
+  }, [whisper.mode, whisper.targets, suspectChips, presentation, claimTagProps]);
   // E2E 표식 data-suspects="좌석:장수,…"(0장 생략, 공개 값). ?e2e=1 문맥에서만(recordCue 와 같은 판정) — 3D 종이는 DOM 이 아니라서 이것으로 거울을 본다
   const suspectsMirror = useMemo(
     () => (recordCue === undefined || suspectStack.size === 0 ? undefined : [...suspectStack].sort((a, b) => a[0] - b[0]).map(([seat, from]) => `${seat}:${from.length}`).join(",")),
@@ -702,6 +719,10 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const whisperPeer = whisper.target === null ? undefined : view.players.find((player) => player.seat === whisper.target);
   const tableVoice = tableOn && liveTableVoice?.phase === phase && liveTableVoice.epoch === epoch
     && view.players.some((p) => p.seat === liveTableVoice.seat && isAlive(p)) ? liveTableVoice : undefined;
+  const cameraFocus = presentation === undefined ? tableFocus : presentation.seat === view.me.seat ? undefined : presentation.seat;
+  const cameraFocusAt = presentation !== undefined && view.phaseEndsAt !== null && view.phaseDurationMs !== null
+    ? view.phaseEndsAt - view.phaseDurationMs
+    : tableFocusAt;
 
   const chooseTableSeat = (seat: number): void => {
     if (!tableOn || layerKind !== null) return;
@@ -719,8 +740,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     if (camera) look.camera = camera;
     if (tableCameraOn) look.table = {
       mode: "eye",
-      ...(tableFocus !== undefined ? { focus: tableFocus } : {}),
-      ...(tableFocusAt !== undefined ? { focusAt: tableFocusAt } : {}),
+      ...(cameraFocus !== undefined ? { focus: cameraFocus } : {}),
+      ...(cameraFocusAt !== undefined ? { focusAt: cameraFocusAt } : {}),
       ...(tableVoice ? { voice: { seat: tableVoice.seat, at: tableVoice.at } } : {}),
     };
     if (tableOn && view.phase === "nomination") {
@@ -736,7 +757,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     const ownRoleOutfit = role === "mafia" || (ownAnimalOf(view) !== undefined && (role === "police" || role === "doctor"));
     if (!inOpening && ownSeat && meAlive && view.spectate === undefined && ownRoleOutfit) ownSeat.costume = jobOutfit(role);
     return look;
-  }, [view, stageH, fading, mine, verdictZoom, camera, meAlive, inOpening, tableCameraOn, tableOn, tableFocus, tableFocusAt, tableVoice]);
+  }, [view, stageH, fading, mine, verdictZoom, camera, meAlive, inOpening, tableCameraOn, tableOn, cameraFocus, cameraFocusAt, tableVoice]);
 
   return (
     <main ref={rootRef} className={inOpening ? "mf-root mf-pregame mf-pregame--seated" : "mf-root mf-game"} data-game-stage={inOpening || inEnding ? undefined : ""} data-phase={view.phase} data-night-dark={nightDark ? "true" : undefined} data-ghost-view={ghost ? "true" : undefined} data-ghost-enter={ghost && entering ? "true" : undefined} data-kb-open={kbLifted ? "true" : undefined} data-suspect-mode={inOpening || inEnding ? undefined : suspect.mode ? "on" : "off"} data-suspects={suspectsMirror}>
@@ -851,6 +872,10 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           kbOpen={kbOpen}
           lifted={kbLifted}
           veiled={veiled}
+          answerPresentation={presentation !== undefined ? (
+            <AnswerPresentation turn={presentation} player={speaker} mySeat={view.me.seat} marked={speakerMarked}
+              canSuspect={canSuspectSpeaker} {...(timeless ? {} : { onSuspect: suspectSpeaker })} />
+          ) : undefined}
           tableControls={tableOn && !kbLifted && layerKind === null ? (
             <TableControls
               players={view.players.filter((p) => p.seat !== view.me.seat && isAlive(p))}

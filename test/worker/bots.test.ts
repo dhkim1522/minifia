@@ -12,6 +12,7 @@ import type { PhaseId, RoomView, ServerMessage } from "../../shared/protocol";
 import {
   advanceTo,
   alarmOf,
+  clearBotSteps,
   closePhase,
   closed,
   collect,
@@ -110,6 +111,10 @@ async function skipUntil(r: Seated, phase: PhaseId): Promise<void> {
  * 방장이 처형되거나 판이 끝나 밤에 닿지 못할 수 있다 — 그래서 지목을 모두 동률로 정해 둔 채 넘겨 밤으로 곧장 간다.
  */
 async function skipDayToNight(r: Seated): Promise<void> {
+  await skipUntil(r, "verdict");
+  await writeRoomEdit(env.ROOM.getByName(r.code), (room) =>
+    mapPlayers(clearBotSteps(room), (p) => ({ ...p, verdictVote: true })),
+  );
   await skipUntil(r, "nomination");
   await editRoom(r.code, (room) => {
     // 모두가 다음 좌석을 가리킨다 → 모든 사람이 한 표씩 받는 동률 → 지목 마감 뒤 곧장 밤.
@@ -169,17 +174,27 @@ describe("1명과 무작위 봇 7명의 첫날", () => {
       await forceBotsDue(room.code);
       const state = await stored(room.code);
       expect(state.keywordProbed).toBeUndefined();
-      expect((state.answerSubmits as unknown[]).length).toBe(7);
+      const queued = state.answerSubmits as Array<{ seat: number; text: string }>;
+      expect(queued.length).toBe(7);
       expect(summary(await settle(room.host, from))).toBe("[]");
       expect(lastView(room.host).me.keyword).toBeUndefined();
-      expect(lastView(room.host).day?.keyword?.answers).toBeUndefined();
+      expect(lastView(room.host).day?.keyword?.presentation).toBeUndefined();
 
       await sendAndSettle(room.host, { t: "answer", final: true, text: "가" });
+      await skipUntil(room, "dayAnnounce");
+      const first = lastView(room.host).day?.keyword?.presentation;
+      expect(first).toEqual({ order: 1, total: 8, ...queued[0] });
+      const rows = [first!];
+      for (let i = 1; i < 8; i += 1) {
+        send(room.host, { t: "testSkip" });
+        await nextFrame(room.host, (m) => m.t === "state" && m.view.day?.keyword?.presentation?.order === i + 1);
+        rows.push(lastView(room.host).day!.keyword!.presentation!);
+      }
       await skipUntil(room, "discussion");
-      const rows = lastView(room.host).day?.keyword?.answers ?? [];
       expect(rows).toHaveLength(8);
       expect(new Set(rows.map(({ text }) => text)).size).toBe(8);
-      expect(rows.at(-1)).toMatchObject({ seat: 0, text: "가" });
+      expect(rows.find((row) => row.seat === 0)).toMatchObject({ seat: 0, text: "가" });
+      expect(lastView(room.host).day?.keyword).toBeUndefined();
     } finally {
       restore();
     }
@@ -257,6 +272,7 @@ describe("testBots 거부", () => {
   it("테스트 방 시작 뒤 방장은 WRONG_PHASE 와 state 를 받는다", async () => {
     const r = await seatQuiet(3, { testMode: true });
     await start(r);
+    await nextFrame(r.host, (m) => m.t === "world" && m.k === "snap");
     expect(summary(await sendAndSettle(r.host, { t: "testBots", count: 2 }))).toBe("[error:WRONG_PHASE,state:assigning]");
     expect((await botsOf(r.code)).length).toBe(0);
   });

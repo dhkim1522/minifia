@@ -414,6 +414,8 @@ const ALLOWED_EXACT: ReadonlySet<string> = new Set([
   // 23-11(P23-22): 결과 화면 정답 줄 — 모두에게 같은 공개 값 하나만(day.keyword.answer, keywordAnswerOf 선택기). 답 목록·장르는 읽지 않는다
   "day.keyword",
   "day.keyword.answer",
+  "day.keyword.presentation",
+  "day.n",
 ]);
 /** 18.1-12: 하위 값 허용 접두사는 없다 — 닉네임·아침 결과 문장은 더는 읽지 않는다 */
 const ALLOWED_PREFIX: readonly string[] = [];
@@ -610,6 +612,18 @@ describe("사회자 줄은 판 종류를 읽지 않는다 (19-02, E-3, 22-07: �
     const view = (phase: PhaseId): RoomView => makeView({ phase });
     expect(`${hostKeyOf(view("dayAnnounce"))}/${hostKeyOf(view("discussion"))}`).toBe("dayAnnounce.wait/discussion.act");
     expect(`${hostLineOf(view("dayAnnounce"))}/${hostLineOf(view("discussion"))}`).toBe("모두 모여 주세요/의심 가는 사람을 이야기해 주세요");
+  });
+
+  it("첫날 답안 발표 동안에는 발표 카드와 헤더 게이지만 사용한다", () => {
+    const waiting = makeView({ phase: "dayAnnounce", durationMs: 5000 });
+    const presentation: RoomView = {
+      ...waiting,
+      day: { n: 1, roles: [], keyword: { genre: "동물", presentation: { order: 1, total: 4, seat: 2, text: "답안" } } },
+    };
+    expect(hostLineOf(presentation)).toBe("");
+    expect(hostTimeOf(presentation)).toBe(false);
+    expect(hostBandModeOf(presentation, hostLineOf(presentation))).toBe("off");
+    expect(hostLineOf(waiting)).toBe("모두 모여 주세요");
   });
 
   it("hostLine.ts 는 판 종류를 읽지 않는다 — view.mode 도 RULES 도 없다 (P19-17, 22-04: 원인 흐름 분기를 지웠다)", () => {

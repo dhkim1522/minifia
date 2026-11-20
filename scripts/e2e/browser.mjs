@@ -319,16 +319,7 @@ export async function readGuide(page) {
 const TT_LABEL = "테스트 도구";
 const dialogOf = (page, label) => page.locator(`dialog[aria-label="${label}"]`);
 
-/** 토론으로 넘어갈 때 한 번 뜨는 답안 집계를 닫고 다음 테스트 조작을 한다. */
-export async function closeFirstAnswers(page) {
-  const button = page.locator("[data-first-answers-close]");
-  if ((await button.count()) > 0) await button.click({ timeout: 2500 }).catch(async (error) => {
-    if ((await button.count()) > 0) throw error;
-  });
-}
-
 export async function openTestSheet(page) {
-  await closeFirstAnswers(page);
   const dlg = dialogOf(page, TT_LABEL);
   if ((await dlg.count()) === 0) await page.locator(".mf-tt").click();
   await page.locator(`dialog[aria-label="${TT_LABEL}"].mf-dialog--open`).waitFor({ state: "attached", timeout: 5000 });
@@ -1304,12 +1295,10 @@ export async function skipTo(page, tracker, phase) {
     const before = tracker.last()?.phase;
     const beforeEnds = tracker.last()?.phaseEndsAt;
     if (before === phase) break;
-    await closeFirstAnswers(page);
     await clickInDialog(page, TT_LABEL, "다음 단계로 넘기기");
     await tracker.waitFor((v) => v.phase !== before || v.phaseEndsAt !== beforeEnds, 3000, `${before} 다음 단계 (목표 ${phase})`);
   }
   if (tracker.last()?.phase !== phase) throw new SetupError(`목표 단계 ${phase} 에 도달하지 못함 (지금 ${tracker.last()?.phase})`);
-  await closeFirstAnswers(page);
   await closeSheet(page);
 }
 

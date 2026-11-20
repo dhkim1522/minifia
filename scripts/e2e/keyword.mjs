@@ -3,7 +3,7 @@
 // day.mjs·avatar.mjs 와 같은 모양: helpers 를 받고 서로 import 하지 않는다.
 // helpers: { recorder, attempt, openGame, closeGame, allAt, untilGame, gameGH, GAME_HOST_NICK }.
 // 표식(data-keyword-*·data-answer-*·data-announce-label·data-early)에는 역할·키워드 값이 없다 — 키워드는 텍스트 노드로만 읽는다(T-23-43).
-import { chooseVerdict, closeFirstAnswers, installFakeViewport, openRoleCard, settle, skipDayToExecution, skipTo, sleep, watchSockets } from "./browser.mjs";
+import { chooseVerdict, installFakeViewport, openRoleCard, settle, skipDayToExecution, skipTo, sleep, watchSockets } from "./browser.mjs";
 import { OVERLAP_EPS, TAP_MIN } from "./lib.mjs";
 
 const isNum = (x) => typeof x === "number" && Number.isFinite(x);
@@ -167,39 +167,31 @@ export function kw7CompactGeometry(m) {
   return result("KW7", label, bad);
 }
 
-const rowsKey = (rows) => JSON.stringify(rows);
-/** 목록 줄 하나가 서로 이어지는 번호(1..n)·단서 없음이 맨 끝·답이 하나 이상인지 본다. 어긋난 곳 글 목록을 돌려준다. */
-function listProblems(rows, who) {
-  const bad = [];
-  if (!Array.isArray(rows) || rows.length === 0) return [`${who} 목록이 비어 있음`];
-  rows.forEach((r, i) => {
-    if (r.order !== i + 1) bad.push(`${who} ${i + 1}번째 줄 번호 ${r.order}`);
-  });
-  const firstNone = rows.findIndex((r) => r.none);
-  if (firstNone >= 0 && rows.slice(firstNone).some((r) => !r.none)) bad.push(`${who} '단서 없음' 이 맨 끝이 아님`);
-  return bad;
-}
-
-/** KW8 첫 토론에는 전원에게 같은 답안 집계가 중앙에 열린다. */
-export function kw8AnswerList(pages) {
-  const label = "첫날 토론 중앙에 같은 답안이 보이고 확인 뒤엔 채팅을 쓸 수 있다";
-  if (!pages?.length) return noMeasure("KW8", label, "페이지");
+/** 첫 제출자 이후의 물리 의자 순서, 차례 하나의 표시, 토론 복귀를 확인한다. */
+export function kw8AnswerTurns(pages, expectedOrder) {
+  const label = "모두가 같은 시계방향으로 답을 한 줄씩 보고 첫 토론으로 이어진다";
+  if (!pages?.length || !expectedOrder?.length) return noMeasure("KW8", label, "페이지·의자 순서");
   const bad = [];
   for (const p of pages) {
-    if (!p.centered || p.title !== "모두의 답") bad.push(`${p.who} 중앙 발표 없음`);
-    if (p.clueCount !== 0 || p.dialogOpen !== false || !p.inputVisible || !p.logVisible) bad.push(`${p.who} 확인 뒤 토론 조작이 막힘`);
-    bad.push(...listProblems(p.rows, p.who));
+    if (p.turns.length !== expectedOrder.length) bad.push(`${p.who} 차례 수 ${p.turns.length}`);
+    p.turns.forEach((turn, i) => {
+      if (turn.order !== i + 1 || turn.total !== expectedOrder.length || turn.seat !== expectedOrder[i]) bad.push(`${p.who} ${i + 1}번째 차례의 좌석 ${turn.seat}`);
+      if (!turn.cardMatches) bad.push(`${p.who} ${i + 1}번째 화면에 한 답만 표시되지 않음`);
+      if (!turn.onlyCurrent) bad.push(`${p.who} ${i + 1}번째 수신 상태에 다른 답이나 제시어가 있음`);
+      if (!turn.focused) bad.push(`${p.who} ${i + 1}번째 화면이 발표자를 바라보지 않음`);
+    });
+    if (p.clueCount !== 0 || p.dialogOpen !== false || !p.inputVisible || !p.logVisible) bad.push(`${p.who} 발표 뒤 토론 조작이 막힘`);
   }
-  if (new Set(pages.map((p) => rowsKey(p.rows))).size > 1) bad.push("시민과 마피아가 본 답안이 다름");
+  if (pages.some(p => p.turns.some((turn, i) => turn.text !== pages[0].turns[i]?.text))) bad.push("시민과 마피아가 본 답안이 다름");
   return result("KW8", label, bad);
 }
 
 export function kw9Reconnect(m) {
-  const label = "확인한 답안은 새로고침과 역할 카드에서 다시 열리지 않는다";
+  const label = "발표가 끝난 답안은 재접속과 역할 카드에서 다시 열리지 않는다";
   if (!m) return noMeasure("KW9", label, "재접속 화면");
   const bad = [];
   if (m.autoOpened !== false) bad.push("재접속 뒤 답안 발표가 다시 열림");
-  if (m.recordRows !== 0 || m.recordTab !== 0) bad.push("역할 카드에 첫날 답안이 남음");
+  if (m.recordRows !== 0) bad.push("역할 카드에 첫날 답안이 남음");
   return result("KW9", label, bad);
 }
 
@@ -366,24 +358,6 @@ const readGeometry = (page) =>
     };
   });
 
-/** 브라우저에 뜬 발표의 데이터와 중앙 배치 확인. */
-const readAnswerSheet = (page) =>
-  page.evaluate(() => {
-    const sheet = document.querySelector("dialog.mf-dialog--centered .mf-first-answers");
-    const box = sheet?.getBoundingClientRect();
-    return {
-      title: sheet?.querySelector("h2")?.textContent,
-      centered: !!box && Math.abs(box.left + box.width / 2 - window.innerWidth / 2) <= 2 &&
-        Math.abs(box.top + box.height / 2 - window.innerHeight / 2) <= 10,
-      rows: sheet ? [...sheet.querySelectorAll("[data-answer-row]")].map((row) => ({
-        order: Number(row.getAttribute("data-answer-order")),
-        seat: Number(row.getAttribute("data-answer-seat")),
-        none: row.hasAttribute("data-answer-none"),
-        text: row.querySelector(".mf-first-answers__text")?.textContent,
-      })) : null,
-    };
-  });
-
 const readDiscussionTools = (page) =>
   page.evaluate(() => {
     const input = document.querySelector("[data-chat-input]");
@@ -391,7 +365,7 @@ const readDiscussionTools = (page) =>
     const log = document.querySelector("[data-chat-log]");
     const logBox = log?.getBoundingClientRect();
     return {
-      clueCount: document.querySelectorAll('[data-playtest-action="clues"], [data-discussion-evidence]').length,
+      clueCount: document.querySelectorAll('[data-answer-presentation], [data-answer-list]').length,
       dialogOpen: !!document.querySelector("dialog.mf-dialog--open"),
       inputVisible: !!box && document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2) === input && !input.disabled,
       logVisible: !!logBox && logBox.height > 0 && log.contains(document.elementFromPoint(logBox.left + logBox.width / 2, logBox.top + logBox.height / 2)),
@@ -492,6 +466,27 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
 
   const waitOpen = (page, ms = 8000) => page.waitForSelector('[data-answer-state="open"]', { timeout: ms });
 
+  async function readPresentation(page, turn, speaker, ownSeat) {
+    await page.waitForFunction(({ nickname, text }) =>
+      document.querySelector("[data-answer-speaker]")?.textContent.includes(nickname) &&
+      document.querySelector("[data-answer-content]")?.textContent === text,
+    { nickname: speaker, text: turn.text ?? "미제출" }, { timeout: 2700 });
+    const focused = await attempt(async () => {
+      await page.waitForFunction(({ target, ownSeat }) => {
+        if (window.__mfCamera?.projection !== "eye") return false;
+        if (target === ownSeat) return true;
+        const at = window.__mfWorld?.sample(target);
+        const screen = at && window.__mfWorld?.screenOf(at.x, at.z);
+        return screen && Math.abs(screen.sx - window.innerWidth / 2) < window.innerWidth * 0.12;
+      }, { target: turn.seat, ownSeat }, { timeout: 2000 });
+    });
+    return page.evaluate(focused => ({
+      cardMatches: document.querySelectorAll("[data-answer-presentation]").length === 1 &&
+        document.querySelectorAll("[data-answer-content]").length === 1 && !document.querySelector("[data-answer-list]"),
+      focused,
+    }), focused.ok);
+  }
+
   // ---- keyword: 첫날 한 판 완주 (P23-1~6·8~10·13, 390x844) ----
   async function keywordFlow(ctx) {
     const id = "keyword";
@@ -554,18 +549,48 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
           stays(blank.input, withText.input) && stays(withText.input, confirmed.input) && stays(withText.send, confirmed.check),
         JSON.stringify({ blank: blank.input, withText: withText.input, confirmed: confirmed.input, send: withText.send, check: confirmed.check }));
 
-      // 방장도 거절 뒤 다른 글을 보낸다(두 번째로 낸 사람)
+      // 방장도 거절 뒤 다른 글을 보내고 양쪽에서 발표를 따라간다.
       await at("방장 보내기", () => typeAndSend(hp, "다른말"));
       await hp.waitForSelector('[data-answer-state="sent"]', { timeout: 4000 }).catch(() => {});
 
-      await Promise.all(pages.map((p) => p.tracker.waitFor((v) => v.phase === "discussion", 12_000, "낮 시작 → 토론")));
-      const sheets = await Promise.all(pages.map(async (p) => {
-        await p.page.waitForSelector("dialog.mf-dialog--open [data-answer-list]", { timeout: 4000 });
-        const sh = await readAnswerSheet(p.page);
-        await closeFirstAnswers(p.page);
-        return { who: p.who, ...sh, ...await readDiscussionTools(p.page) };
+      const first = await ht.waitFor(v => v.day?.keyword?.presentation?.order === 1, 10_000, "첫 답 발표");
+      const total = first.players.length;
+      const speaker = first.day.keyword.presentation.seat;
+      const clockwise = await hp.evaluate(seats => seats.map(seat => ({ seat, at: window.__mfWorld?.sample(seat) }))
+        .filter(p => p.at).sort((a, b) => Math.atan2(a.at.z, a.at.x) - Math.atan2(b.at.z, b.at.x)).map(p => p.seat), first.players.map(p => p.seat));
+      const start = clockwise.indexOf(speaker);
+      if (start < 0 || clockwise.length !== total) throw new Error("발표의 원탁 좌석을 읽을 수 없음");
+      const expectedOrder = [...clockwise.slice(start), ...clockwise.slice(0, start)];
+      const turns = pages.map(() => []);
+      let markedSeat;
+
+      for (let order = 1; order <= total; order++) {
+        const views = await Promise.all(pages.map(p => p.tracker.waitFor(v => v.day?.keyword?.presentation?.order === order, 7000, `답 발표 ${order}`)));
+        const current = views[0].day.keyword.presentation;
+        const samples = await Promise.all(pages.map((p, i) => {
+          const turn = views[i].day.keyword.presentation;
+          return readPresentation(p.page, turn, views[i].players.find(row => row.seat === turn.seat)?.nickname, views[i].me.seat);
+        }));
+        for (let i = 0; i < pages.length; i++) {
+          const keyword = views[i].day.keyword;
+          turns[i].push({ ...keyword.presentation, ...samples[i], onlyCurrent: keyword.answers === undefined && keyword.answersUntil === undefined && keyword.answer === undefined });
+        }
+        if (order !== 1) continue;
+        const observer = pages.find(p => p.tracker.last().me.seat !== current.seat);
+        if (!observer) throw new Error("발표자가 아닌 테스트 화면 없음");
+        await observer.page.locator("[data-answer-suspect]").click({ timeout: 1200 });
+        await Promise.all(pages.map(p => p.tracker.waitFor(v => v.day?.suspects?.some(note => note.to === current.seat), 2500, "현재 발표자 의심딱지 부착")));
+        markedSeat = current.seat;
+      }
+
+      await Promise.all(pages.map(p => p.tracker.waitFor(v => v.phase === "discussion", 7500, "발표 → 첫 토론")));
+      const presentations = await Promise.all(pages.map(async (p, i) => {
+        await untilGame(p.page, v => v.phase === "discussion", 5000, "첫 토론 UI");
+        return { who: p.who, turns: turns[i], ...await readDiscussionTools(p.page) };
       }));
-      rec1(rec, `${id}/answers`, kw8AnswerList(sheets));
+      rec1(rec, `${id}/answers`, kw8AnswerTurns(presentations, expectedOrder));
+      rec(`${id}/answers`, "KW8b", "발표 중 붙인 의심딱지가 첫 토론에 남는다", markedSeat !== undefined &&
+        pages.every(p => p.tracker.last().day?.suspects?.some(note => note.to === markedSeat)));
 
       // 시민이 확인 직후 다시 들어와도 같은 판의 답안은 뜨지 않는다.
       await gp.reload({ waitUntil: "domcontentloaded" });
@@ -574,7 +599,6 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       await at("KW9 내 역할과 기록", () => openRoleCard(gp));
       const records = await gp.locator('dialog[aria-label="역할 카드"]').evaluate((sheet) => ({
         recordRows: sheet.querySelectorAll("[data-answer-row]").length,
-        recordTab: sheet.querySelectorAll('[data-rolecard-tab="records"]').length,
       }));
       rec1(rec, `${id}/reconnect`, kw9Reconnect({
         autoOpened: beforeOpen.clueCount !== 0 || beforeOpen.dialogOpen,
@@ -623,7 +647,6 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
         await gp.waitForSelector("[data-keyword-word]", { timeout: 6000 });
         await skipTo(hp, ht, "discussion");
         await untilGame(gp, (v) => v.phase === "discussion", 6000, "첫날 토론");
-        await closeFirstAnswers(gp);
         await skipDayToExecution(hp, ht, [gp]);
         await skipTo(hp, ht, "ended");
         await gp.waitForSelector("[data-result-stage]", { timeout: 8000 });
@@ -681,7 +704,7 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       const pages = [{ who: "참가자(시민 편)", page: g.page, tracker: gt }, { who: "방장(마피아)", page: hp, tracker: ht }];
       const items = [];
 
-      // 키워드: 사람 둘이 모두 내면(봇은 안 낸다) 1.5초 안에 낮 시작
+      // 키워드: 참가자 둘이 모두 내면 1.5초 안에 첫 발표가 열린다.
       await Promise.all(pages.map((p) => waitOpen(p.page)));
       await typeAndSend(g.page, KW_WORD);
       await typeAndSend(hp, "다른말");
@@ -690,10 +713,12 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       await sleep(100);
       const wk = await readWatch(hp);
       items.push({ stage: "keyword", advanceMs: left === null ? undefined : left - tLast, early: wk?.earlyAt != null, tone: wk?.tones?.length ? (wk.tones.every((t) => t === "calm") ? "calm" : wk.tones.find((t) => t !== "calm")) : undefined });
-      rec(`${id}/keyword`, "KW12k", "봇은 답을 내지 않고 사람 둘만 냈는데 낮 시작으로 넘어간다", ht.last().phase === "dayAnnounce" || ht.last().phase === "discussion", `단계 ${ht.last().phase}`);
+      const first = ht.last();
+      const announcementMs = (first.day?.keyword?.presentation?.total ?? 1) * (first.phaseDurationMs ?? 0);
+      rec(`${id}/keyword`, "KW12k", "참가자 둘이 제출하면 첫 발표로 넘어간다", first.day?.keyword?.presentation?.order === 1, `단계 ${first.phase}`);
 
       // 찬반: 봇 표가 다 들어온 뒤 사람 둘이 던지면 1.5초 안에 넘어가고, 유예 안 번복은 마감을 다시 늘린다
-      await ht.waitFor((v) => v.phase === "discussion", 6000, "토론");
+      await ht.waitFor((v) => v.phase === "discussion", announcementMs + 6000, "발표 뒤 토론");
       await sleep(900);
       await skipTo(hp, ht, "verdict");
       await allAt(pages.map((p) => p.page), "verdict");

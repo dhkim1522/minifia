@@ -42,7 +42,6 @@ import {
   openGuestJoinPage,
   openHostPage,
   openPerfPage,
-  closeFirstAnswers,
   openTestSheet,
   readLinkState,
   collapseChatLog,
@@ -1415,10 +1414,7 @@ async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", v
   await chooseRole(hp, ht, role);
   await startGame(hp, ht);
   if (to) await skipTo(hp, ht, to);
-  if (to === "discussion") await Promise.all(pages.map(async ({ page }) => {
-    await untilGame(page, (v) => v.phase === "discussion", 6000, "첫날 토론");
-    await closeFirstAnswers(page);
-  }));
+  if (to === "discussion") await Promise.all(pages.map(({ page }) => untilGame(page, (v) => v.phase === "discussion", 6000, "첫날 토론")));
   return { host, hp, ht, hostSeat: ht.last().me.seat, guests: pages };
 }
 
@@ -1521,6 +1517,13 @@ async function seatedOpeningFlow(ctx) {
   await page.locator("[data-keyword-card]").waitFor({ state: "visible", timeout: 6000 });
   await eye();
   rec(`${id}/keyword`, "SO4", "라이어게임까지 역할 확인과 같은 눈높이 장면이 이어진다", await sameStage() && await atOwnChair());
+
+  await skipTo(page, tracker, "dayAnnounce");
+  const presenting = await tracker.waitFor(v => v.day?.keyword?.presentation?.order === 1, 4000, "첫 답 발표");
+  await page.locator("[data-answer-presentation]").waitFor({ state: "visible", timeout: 4500 });
+  await eye();
+  rec(`${id}/answers`, "SO4B", `${total}인 발표 첫 차례에도 같은 좌석과 눈높이로 한 답만 본다`, await sameStage() && await atOwnChair()
+    && presenting.day.keyword.presentation.total === total && await page.locator("[data-answer-content]").count() === 1);
 
   await skipTo(page, tracker, "discussion");
   await untilGame(page, (v) => v.phase === "discussion", 6000, "첫 토론");
