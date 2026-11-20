@@ -6,7 +6,7 @@
 
 - **v3.0 시험판**(`v3`)에 [B안 달빛 누아르](docs/decisions/0093-v3-noir-visual-redesign.md)를 두 맵의 3D 공간·조명, 캐릭터·유령·초상화·의상·배경 이미지, 홈부터 결과까지의 공통 UI에 적용했다. **22** 낮은 토론 → 찬반 → 지목 → 유언 → 처형(결정 0090). **23** 첫날 키워드와 정답 공개, 조기 진행, D1 판 기록(결정 0091). **24-01~07** 구현 완료.
 - [동물 12종](docs/decisions/0102-animal-characters.md)은 3D 모델·초상·의상을 공유한다. [공용 화면](docs/decisions/0100-home-art-and-discussion-controls.md)의 채팅은 하단에 두고, [단계의 선택과 결과](docs/decisions/0103-phase-events.md)는 중앙에서 진행한다.
-- **공개 v3** `2026-11-20T04:46:50Z+874bd0bf`. 홈·초대·로비·게임에 공용 동물 12종과 재즈 바 에셋 적용. 320px 공개 홈·정적 이미지 175개 일치, 옷장·지목·PC E2E 79건 통과. [공용 에셋 갱신](docs/decisions/0109-shared-character-art.md), [첫날 실험방](https://minifia-v3.dhplay.workers.dev/?playtest=1).
+- **공개 v3** `2026-11-20T06:21:40Z+c96295fe`. [4~8인 봇 채우기와 행동](docs/decisions/0110-bot-test-play.md). 공개 320·390px E2E 12건과 1인+7봇 답·채팅·찬반, 로컬 둘째 날 딱지까지 확인. [공용 에셋](docs/decisions/0109-shared-character-art.md), [테스트 방](https://minifia-v3.dhplay.workers.dev/?test=1).
 - **v2.0 완료 처리(2026-11-07)**: 태그 `v2.0`, 문서는 `.planning/milestones/v2.0-*`. 열린 감사 항목 26개는 STATE.md 미룬 항목. main 은 v1.0 그대로, v3.0 실테스트 통과 뒤 반영.
 - **캐릭터·맵**의 B안 모델은 `src/world/character.ts`, `src/world/ghost3d.ts`, `src/world/maps/`에 있다. 시안은 `design/v3.0/redesign/b-noir.png`. 이미지 재생성은 [에셋 자동 검사](docs/screen-map.md#에셋-자동-검사) 참고.
 - **맵(결정 0050)**: 재즈 바 + 시계탑 광장(`PLAYABLE_MAPS`, 방장이 고름). 블록아웃 https://claude.ai/artifact/1hzgEyAufgnDPVMvPvxdhP (사본 `design/v2.0/blockout/`).
