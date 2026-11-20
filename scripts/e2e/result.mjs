@@ -157,6 +157,9 @@ export function readResultStage(page) {
   return page.evaluate(() => {
     const root = document.querySelector(".mf-result");
     if (!root) return null;
+    const world = root.classList.contains("mf-result--embedded")
+      ? root.parentElement?.querySelector(":scope > [data-world-stage]")
+      : root.querySelector("[data-world-stage]");
     const rr = root.getBoundingClientRect();
     const panel = root.querySelector("[data-result-panel]");
     const pr = panel ? panel.getBoundingClientRect() : null;
@@ -172,7 +175,7 @@ export function readResultStage(page) {
     return {
       stage: root.getAttribute("data-result-stage") ?? "",
       header: text(root.querySelector("h1")),
-      chips: root.querySelectorAll("[data-role-chip]").length,
+      chips: world?.querySelectorAll("[data-role-chip]").length ?? 0,
       hook,
       ghosts,
       marks,

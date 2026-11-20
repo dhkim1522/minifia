@@ -1776,10 +1776,6 @@ describe("맵 선택 프레임 전수 (D-20·D-21, L40·L42·L44)", () => {
     const room = await seat(5, 0);
     const socks = [room.host, ...room.guests.map((g) => g.sock)];
     for (const sock of socks) await flush(sock);
-    // 방장이 고른 값은 모두에게 간다 — 손님이 보낸 값은 아무 데도 닿지 않는다.
-    send(room.guests[0]!.sock, { t: "mapPick", map: "bar" });
-    send(room.host, { t: "mapPick", map: "bar" });
-    for (const sock of socks) await flush(sock);
     for (const sock of socks) {
       expect(lastViewOf(sock).mapChoice).toBe("bar");
       for (const m of stateFrames(sock)) expect("map" in m.view).toBe(false);

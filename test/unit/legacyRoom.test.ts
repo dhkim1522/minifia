@@ -3,7 +3,6 @@
 import { describe, expect, it } from "vitest";
 import { attachConnection, createRoomState, isLegacyV3Room, joinRoom, normalizeStoredRoom, startGame, toLobbyFromLegacy } from "../../shared/game/room";
 import type { RoomState } from "../../shared/game/room";
-import { roomMapId } from "../../shared/game/maps";
 import { seededRandInt } from "../helpers/seededRandom";
 
 const HOST = "player-id-0000-aaaa";
@@ -111,10 +110,10 @@ describe("normalizeStoredRoom — 옛 원인 흐름 방 (22-04, D-03, T-22-06)",
 });
 
 describe("normalizeStoredRoom — 옛 마을 방 (22-05, D-03·D-29, T-22-08)", () => {
-  it("map 이 town 인 판 중 방은 대기실로 되돌아가고 맵 조회(roomMapId)가 bar 를 돌려준다", () => {
+  it("map 이 town 인 판 중 방은 대기실로 되돌아간다", () => {
     const stored = { ...started(4), phase: "discussion", day: 1, map: "town" } as unknown as RoomState;
     const out = normalizeStoredRoom(stored, 5000);
-    expect(`${out.phase}/${Object.hasOwn(out, "map")}/${roomMapId(out)}/${out.code}/${out.hostId}`).toBe("lobby/false/bar/0420/player-id-0000-aaaa");
+    expect(`${out.phase}/${Object.hasOwn(out, "map")}/${out.code}/${out.hostId}`).toBe("lobby/false/0420/player-id-0000-aaaa");
   });
 
   it("map 이 town 인 끝난 방(ended)도 대기실로 되돌아간다", () => {

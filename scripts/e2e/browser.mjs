@@ -1590,13 +1590,13 @@ export async function tapPick(page, seat) {
 }
 
 /**
- * 순차 지목에서 내 차례에 이름표 버튼을 눌러, 그 좌석 이름표가 mine 이 될 때까지 기다린다(09.1-08).
+ * 순차 지목에서 내 차례에 대상을 누르고 그 좌석의 선택 표식을 확인한다. 눈높이 시야 밖 이름표도 검사한다.
  * 누르면 버튼이 사라지므로(서버 확인 전에도 즉시) aria-pressed 를 기다리지 않는다. tapPick 은 밤 마피아용으로 그대로 둔다.
  */
 export async function tapTurnPick(page, seat) {
   const btn = page.locator(`[data-pick="${seat}"]`);
   await btn.click({ timeout: 4000 });
-  await page.waitForSelector(`[data-seat="${seat}"] .mv-head[data-mine]`, { timeout: 3000 });
+  await page.waitForSelector(`[data-seat="${seat}"] .mv-head[data-mine]`, { timeout: 3000, state: "attached" });
 }
 
 /** 찬반 버튼을 눌러 그 쪽이 aria-pressed 가 될 때까지 기다린다. */

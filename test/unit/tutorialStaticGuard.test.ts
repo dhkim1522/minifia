@@ -137,7 +137,7 @@ function violationsOf(src: string): string[] {
 const entries = TUTORIAL_ENTRIES.map((rel) => resolve(ROOT, rel)).filter((abs) => existsSync(abs));
 
 describe("정적 가드 자기 시험 — 일부러 만든 위반 표본을 가드가 잡는다", () => {
-  const E = `${ROOT}src/game/__virtual_entry.ts`;
+  const E = resolve(ROOT, "src/game/__virtual_entry.ts");
   const virtual = (files: Record<string, string>): Reader => (p) => files[p] ?? diskReader(p);
 
   it("가짜 진입 파일이 net/api 를 값으로 import 하면 찾아낸다", () => {
@@ -152,7 +152,7 @@ describe("정적 가드 자기 시험 — 일부러 만든 위반 표본을 가�
   });
 
   it("건너 건너(전이) import 도 찾아낸다", () => {
-    const M = `${ROOT}src/game/__virtual_mid.ts`;
+    const M = resolve(ROOT, "src/game/__virtual_mid.ts");
     const read = virtual({ [E]: 'import { y } from "./__virtual_mid";\nexport const x = y;', [M]: 'export * from "../net/api";\nexport const y = 1;' });
     expect(forbiddenIn(closureOf([E], read))).toEqual(["src/net/api.ts"]);
   });
@@ -202,7 +202,7 @@ describe("정적 가드 자기 시험 — 일부러 만든 위반 표본을 가�
 describe("튜토리얼 모듈 그래프에 네트워크·세션 모듈이 없다 (T-24-19)", () => {
   it("진입 모듈을 세 개 이상 찾는다(경로 오타로 거짓 통과 방지)", () => {
     expect(entries.length).toBeGreaterThanOrEqual(3);
-    expect(entries.some((f) => f.endsWith("src/game/tutorialScript.ts"))).toBe(true);
+    expect(entries).toContain(resolve(ROOT, "src/game/tutorialScript.ts"));
   });
 
   it("값 import 폐포가 대본·링·틀 파일을 포함한다(폐포 계산이 비어 있지 않다)", () => {

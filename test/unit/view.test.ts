@@ -2192,13 +2192,13 @@ describe("판 번호 view.round (11-01, D-5·D-26)", () => {
 });
 
 describe("맵 view.mapChoice·view.map (11-06, D-20·D-21, L42)", () => {
-  it("mapChoice 는 모든 단계의 모든 view 에 실리고 기본은 random 이다 — 역할과 무관하다", () => {
+  it("이전 클라이언트 호환용 mapChoice 는 모든 단계·역할에서 재즈 바로 고정된다", () => {
     const states: RoomState[] = [lobbyOf(6), ...(["roleReveal", "discussion", "night", "morning"] as const).map((phase) => startedAt(6, 3, phase))];
     for (const s of states) {
       const set = new Set(s.players.map((p) => buildView(s, p.id, 0).mapChoice));
-      expect(`${s.phase}:${[...set].join(",")}`).toBe(`${s.phase}:random`);
+      expect(`${s.phase}:${[...set].join(",")}`).toBe(`${s.phase}:bar`);
     }
-    const chosen: RoomState = { ...lobbyOf(5), mapChoice: "bar" };
+    const chosen: RoomState = { ...lobbyOf(5), mapChoice: "plaza" };
     expect(chosen.players.every((p) => buildView(chosen, p.id, 0).mapChoice === "bar")).toBe(true);
   });
 
@@ -2212,7 +2212,7 @@ describe("맵 view.mapChoice·view.map (11-06, D-20·D-21, L42)", () => {
       const s = startedAt(6, 3, phase);
       const withMap: RoomState = { ...s, map: "plaza" };
       const set = new Set(withMap.players.map((p) => buildView(withMap, p.id, 0).map));
-      expect(`${phase}:${[...set].join(",")}`).toBe(`${phase}:plaza`);
+      expect(`${phase}:${[...set].join(",")}`).toBe(`${phase}:bar`);
     }
   });
 });

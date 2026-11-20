@@ -2,8 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import type { ReactNode, RefObject } from "react";
 import { isAlive } from "../../shared/game/alive";
 import { lockedOutfits } from "../../shared/game/look";
-import { PLAYABLE_MAPS } from "../../shared/game/maps";
-import type { ClientMessage, EmoteId, MapChoice, MapId, PhaseId, RoomView } from "../../shared/protocol";
+import type { ClientMessage, EmoteId, MapId, PhaseId, RoomView } from "../../shared/protocol";
 import { emitSignal } from "../audio/signals";
 import { Button } from "../components/Button";
 import { ConfirmSheet } from "../components/ConfirmSheet";
@@ -12,15 +11,13 @@ import { ToolButton } from "../components/ToolButton";
 import { Icon } from "../components/Icon";
 import { RoomChatDock } from "../components/v2/RoomChatDock";
 import { DressSheet } from "../components/v2/DressSheet";
-import { HostRail } from "../components/v2/HostRail";
-import { HostRailButton } from "../components/v2/HostRailButton";
-import { MapChip } from "../components/v2/MapChip";
 import { ReadyPill } from "../components/v2/ReadyPill";
 import { ResultPanel } from "../components/v2/ResultPanel";
 import type { ResultTab } from "../components/v2/ResultPanel";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
 import { V2Icon } from "../components/v2/V2Icon";
 import { WorldStage } from "../components/WorldStage";
+import type { WorldStageProps } from "../components/WorldStage";
 import { DRESS_TEXT } from "../game/dressText";
 import { ownAnimalOf } from "../game/playerIdentity";
 import { castOf, holdSnap, markTimes, RESULT_TIMELINE, resultPanelHeight, satSlots, slotsFor, stateAt, walkSnap, winningTeam } from "../game/resultDirector";
@@ -47,6 +44,8 @@ import "../styles/sheet.css";
 export interface ResultScreenProps {
   /** result 가 있는 ended view. RoomScreen 이 result 없는 프레임은 이 화면으로 보내지 않는다 */
   view: RoomView & { result: NonNullable<RoomView["result"]> };
+  /** 진행 중 사용한 무대 위에 결과를 얹을 때 넘기는 렌더링 상태. */
+  stageHost?: (props: WorldStageProps) => void;
   /** 위치 스토어. 연출 걷기·최종 자리는 이 스토어에 클라이언트가 만든 snap 한 프레임으로 먹인다(서버 상태는 바꾸지 않는다, T-11-16) */
   store: WorldStore;
   chat: ChatStore;
@@ -74,7 +73,7 @@ export interface ResultScreenProps {
 // 연출 값(누가 어디에 서고 언제 뒤집히는지)은 resultDirector 만 계산하고 이 파일은 그 값을 그린다.
 // 아래 패널은 접힌 게임 패널과 같은 높이의 전체 채팅 한 줄이다(동작 버튼 없음). 헤더 [나가기]는 로비와 같은 확인 시트를 연다.
 
-/** 결과 화면 장면: 카메라 무대 중심 고정, 밤 조명, 이긴 팀 조명 구간에만 무대 가운데 점 조명 */
+/** 결과 화면 장면: 재즈 바는 자기 의자 시점과 승리 조명을 쓴다. */
 function sceneOf(cast: ReturnType<typeof castOf>, state: ResultState, sat: readonly number[], mapId?: MapId): SceneLook {
   const seats: Record<number, SeatLook> = {};
   // 쉬었다가 합류한 사람(11-12, D-13): 참가자 밖 별도 자리에 반투명 0.5 로 선다. 직업 의상·어둠·칩이 없다
@@ -85,6 +84,7 @@ function sceneOf(cast: ReturnType<typeof castOf>, state: ResultState, sat: reado
   }
   return {
     camera: { mode: "fixed", target: { x: GATHER_CENTER.x, z: GATHER_CENTER.z }, zoom: 1, ...(mapId === "bar" ? { barSeats: true } : {}) },
+    ...(mapId === "bar" ? { table: { mode: "eye" as const } } : {}),
     lighting: "night",
     tension: 0,
     pin: state.lit ? { mode: "point", x: GATHER_CENTER.x, z: GATHER_CENTER.z } : null,
@@ -136,12 +136,12 @@ const REST_FACES_MAX = 7;
 /** 박수 큐 한 묶음(WorldStage emoteCues). nonce 가 새로 보일 때마다 한 번 재생한다 */
 type ClapCues = readonly { seat: number; id: EmoteId; nonce: number }[];
 
-export function ResultScreen({ view, store, chat, resultLog, send, canSend, offset, epoch, onExit, arrivedFrom, menuButton }: ResultScreenProps) {
+export function ResultScreen({ view, store, chat, resultLog, send, canSend, offset, epoch, onExit, arrivedFrom, menuButton, stageHost }: ResultScreenProps) {
   const { result } = view;
   const toast = useTopToast();
   const { show } = toast;
   const [leaveOpen, setLeaveOpen] = useState(false);
-  const { rootRef, headerRef, panelRef, inputRef, kbOpen, sideMaxH, stageInsets } = useMapInsets();
+  const { rootRef, headerRef, panelRef, inputRef, kbOpen, stageInsets } = useMapInsets();
 
   // 탭 패널(11-07): 현재 탭과 열어 본 탭 집합은 이 화면이 쥔다. 전체가 아닌 탭이면 패널이 확장되고 연출 시계가 멈춘다(D-3, D-25)
   // 18.1: 결과 화면은 RESULT_TABS_SHOWN 이 전체 하나라 tab 은 늘 all 이고 확장·정지 경로에 닿지 않는다(P181-7). 경로는 되돌리기 쉽게 남긴다
@@ -228,7 +228,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
     (walk: boolean) => {
       const t0 = Date.now() + offsetRef.current;
       let ents;
-      if (walk) {
+      if (walk && view.map !== "bar") {
         const starts: Record<number, { x: number; z: number } | undefined> = {};
         for (const seat of Object.keys(slots).map(Number)) starts[seat] = store.positionOf(seat, t0) ?? undefined;
         ents = walkSnap(slots, starts, t0, mapId);
@@ -237,7 +237,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
       }
       store.applyFrame({ t: "world", k: "snap", at: t0, ents }, Math.max(store.currentEpoch(), epoch));
     },
-    [store, slots, epoch, mapId],
+    [store, slots, epoch, mapId, view.map],
   );
   useLayoutEffect(() => {
     feed(reveal && markRef.current < tl.flipStartMs);
@@ -397,16 +397,8 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   const dress = useDress({ view, send, canSend });
   const dressBtnRef = useRef<HTMLButtonElement>(null);
   const restoreDressFocus = useRef(false);
-  // 시트 탭(11-13): 지도 칩 → 맵 탭, [꾸미기] → 의상 탭. 칩·맵 탭은 허용 맵이 둘 이상일 때만 있다(22-07: 판 종류가 없어 늘 켜진다). 결과 단계의 선택은 다음 판 설정이다(서버가 ended 에서 받는다). 19-05: 지도 칩은 방장 줄의 칸이다.
-  const [dressTab, setDressTab] = useState<"map" | "dress">("dress");
-  const mapsOn = PLAYABLE_MAPS.length > 1;
-  const mapChoice: MapChoice = view.mapChoice ?? "random";
-  const pickMap = (map: MapChoice) => {
-    if (canSend) send({ t: "mapPick", map });
-  };
-  const openDress = (tab: "map" | "dress" = "dress") => {
+  const openDress = () => {
     inputRef.current?.blur();
-    setDressTab(tab);
     setDressOpen(true);
   };
   const closeDress = () => {
@@ -425,24 +417,18 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   const readyPill = <ReadyPill host={rematch.isHost} on={rematch.mine} n={rematch.ready} m={rematch.total} dim={rematch.isHost && !rematch.canStart} inactive={!pillActive || !canSend} onPress={rematch.press} />;
 
   const title = RESULT_TEXT.title[state.title];
+  const stageNotice = useCallback((message: string) => show(message), [show]);
+  const stageLeave = useCallback(() => setLeaveOpen(true), []);
+  const stageProps = useMemo<WorldStageProps>(() => ({
+    view: dress.stageView, store, send, canSend, offset,
+    ...(stageInsets ? { stageInsets } : {}), scene, canWalk: false, tagProps, onCostumes,
+    onStageTap, emoteCues: cues, onNotice: stageNotice, onLeave: stageLeave,
+  }), [dress.stageView, store, send, canSend, offset, stageInsets, scene, tagProps, onCostumes, onStageTap, cues, stageNotice, stageLeave]);
+  useLayoutEffect(() => { stageHost?.(stageProps); }, [stageHost, stageProps]);
+  const Root = stageHost ? "section" : "main";
   return (
-    <main ref={rootRef} className="mf-root mf-result" data-result-stage={state.stage} data-reveal={String(reveal)} data-winner={winner} data-kb-open={kbOpen ? "true" : undefined}>
-      <WorldStage
-        view={dress.stageView}
-        store={store}
-        send={send}
-        canSend={canSend}
-        offset={offset}
-        {...(stageInsets ? { stageInsets } : {})}
-        scene={scene}
-        canWalk={false}
-        tagProps={tagProps}
-        onCostumes={onCostumes}
-        onStageTap={onStageTap}
-        emoteCues={cues}
-        onNotice={(text) => show(text)}
-        onLeave={() => setLeaveOpen(true)}
-      />
+    <Root ref={rootRef} className={stageHost ? "mf-root mf-result mf-result--embedded" : "mf-root mf-result"} data-result-stage={state.stage} data-reveal={String(reveal)} data-winner={winner} data-kb-open={kbOpen ? "true" : undefined}>
+      {stageHost ? null : <WorldStage {...stageProps} />}
       <div className="mf-result__scrim" aria-hidden="true" />
       <header ref={headerRef} className="mf-result__header">
         {/* 머리 단추: 아이콘 단추, 이름은 aria-label "나가기" */}
@@ -492,14 +478,6 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
         }
         pill={readyPill}
       />
-      {/* 연출이 끝나면(5600) 방장 전용 왼쪽 세로 줄(19-05 D-13, 22-07: [맵] 하나). [봇]은 대기실 전용이라 없다.
-          방장 판정은 서버 view 의 isHost 뿐이고 참가자에게는 줄 마크업이 없다(T-19-16) — 이 자리에 참가자에게 보일 것은 없다(22-07).
-          전체 기록이 늘어난 동안·꾸미기 시트·키보드가 열린 동안에는 줄을 그리지 않는다(P19-16) */}
-      {!finished || expanded || dressOpen || kbOpen ? null : isHost ? (
-        <HostRail maxHeight={sideMaxH}>
-          {mapsOn ? <MapChip key="map" rail pressed={dressOpen && dressTab === "map"} choice={mapChoice} host={canSend} onPress={() => openDress("map")} /> : null}
-        </HostRail>
-      ) : null}
       {dressOpen ? (
         <DressSheet
           value={dress.look}
@@ -507,10 +485,6 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
           onClose={closeDress}
           disabled={!canSend}
           taken={takenOutfits}
-          host={view.me.isHost && mapsOn}
-          tab={dressTab}
-          mapChoice={mapChoice}
-          onPickMap={pickMap}
           wearer={ownAnimalOf(view)}
         />
       ) : null}
@@ -528,6 +502,6 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
           onClose={() => setLeaveOpen(false)}
         />
       ) : null}
-    </main>
+    </Root>
   );
 }

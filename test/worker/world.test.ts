@@ -449,9 +449,9 @@ async function gameAt(phase: PhaseId): Promise<Game5> {
   return g;
 }
 
-describe("단계별 이동 — 산 사람은 막히고 유령은 걷는다 (MAP-04, T-08-05)", () => {
+describe("단계별 이동 — 게임 중에는 생존 여부와 관계없이 착석한다", () => {
   for (const phase of ["nomination", "defense", "verdict", "execution", "night", "morning"] as const) {
-    it(`${phase}: 산 사람의 move 는 어느 소켓에도 world 프레임·오류가 없고, 유령의 move 는 유령 소켓에만 간다`, async () => {
+    it(`${phase}: 산 사람과 유령의 move 는 어느 소켓에도 world 프레임·오류가 없다`, async () => {
       const g = await gameAt(phase);
       const marks = g.socks.map((sock) => mark(sock));
       const mover = g.actors.find((a) => a.role !== "mafia")!;
@@ -463,37 +463,26 @@ describe("단계별 이동 — 산 사람은 막히고 유령은 걷는다 (MAP-
       expect(got.map((msgs) => msgs.filter((m) => m.t === "world" || m.t === "error").length).join(",")).toBe("0,0,0,0,0");
       if (talks) expect(got.map((msgs) => chatsOf(msgs).length).join(",")).toBe("1,1,1,1,1");
 
-      // 같은 단계에서 두 사람이 유령이 되면 그 유령의 걸음은 다른 유령에게만 간다.
+      // 두 사람이 유령이 되어도 자기 의자를 유지한다.
       const doomed = g.actors.filter((a) => a.role !== "mafia").slice(0, 2);
-      const { ghosts, living } = await ghostsOf(g, doomed.map((a) => a.seat));
+      const { ghosts } = await ghostsOf(g, doomed.map((a) => a.seat));
       const after = g.socks.map((sock) => mark(sock));
       send(ghosts[0]!.sock, { t: "move", x: -300, z: 100 });
       const seen = await settleAll(g.socks, after, g.actors.indexOf(ghosts[0]!));
-      const moves = (a: (typeof g.actors)[number]): string => seen[g.actors.indexOf(a)]!.filter((m) => m.t === "world").map((m) => (m.t === "world" && m.k === "move" ? `move:${m.s}` : "other")).join(",");
-      expect(moves(ghosts[1]!)).toBe(`move:${ghosts[0]!.seat}`);
-      expect(living.map(moves).join("|")).toBe("||");
+      expect(seen.flat().filter((m) => m.t === "world" || m.t === "error")).toEqual([]);
     }, 40_000);
   }
 
-  it("광장 토론: 산 사람의 move 는 유령을 포함한 모든 소켓이 world.move 로 받는다", async () => {
-    const g = await startedGame("discussion", 4, "plaza");
-    const marks = g.socks.map((sock) => mark(sock));
-    const mover = g.actors[1]!;
-    send(mover.sock, { t: "move", x: 300, z: 100 });
-    const got = await settleAll(g.socks, marks, g.actors.indexOf(mover));
-    expect(got.map((msgs) => msgs.filter((m) => m.t === "world").length).join(",")).toBe("1,1,1,1,1");
-  }, 40_000);
-
-  it("광장 낮 시작: 산 사람의 move 는 모든 소켓이 world.move 로 받는다", async () => {
-    const { socks } = await startedGame("dayAnnounce", 3, "plaza");
+  it("낮 시작에서 이동 요청을 보내도 좌석을 바꾸지 않는다", async () => {
+    const { socks } = await startedGame("dayAnnounce", 3);
     const marks = socks.map((sock) => mark(sock));
     send(socks[1]!, { t: "move", x: 300, z: 100 });
     const got = await settleAll(socks, marks, 1);
-    expect(got.map((msgs) => msgs.filter((m) => m.t === "world").length).join(",")).toBe("1,1,1,1");
+    expect(got.flat().filter((m) => m.t === "world" || m.t === "error")).toEqual([]);
   }, 30_000);
 
   it("재즈 바 8인 토론: 모두 고정 좌석으로 가고 산 사람의 이동 요청은 막힌다", async () => {
-    const g = await startedGame("discussion", 7, "bar");
+    const g = await startedGame("discussion", 7);
     await flushWorld(g.code);
     const ends = await segEndsBySeat(g.code, 1);
     expect(ends.split("|").slice(1)).toEqual(BAR_SEATS_FX.map((p, i) => `${i}:${p.join(",")}`));

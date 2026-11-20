@@ -5,21 +5,15 @@ import type { WorldPick } from "./WorldStage";
 
 interface TableControlsProps {
   players: readonly PublicPlayer[];
-  mode: "eye" | "wide";
   focus?: number;
   pick?: WorldPick;
   notes: ReadonlyMap<number, readonly number[]>;
   onChoose(seat: number): void;
-  onToggle(): void;
 }
 
-export function TableControls({ players, mode, focus, pick, notes, onChoose, onToggle }: TableControlsProps) {
+export function TableControls({ players, focus, pick, notes, onChoose }: TableControlsProps) {
   return (
-    <div className="mf-table-controls" role="group" aria-label={pick?.group ?? "테이블 시점과 참가자"} data-table-controls="">
-      <button type="button" className="mf-table-controls__view" data-table-view={mode} onClick={onToggle}
-        aria-label={mode === "eye" ? "테이블 전체 보기" : "내 자리 눈높이"} aria-pressed={mode === "wide"}>
-        {mode === "eye" ? "전체" : "눈높이"}
-      </button>
+    <div className="mf-table-controls" role="group" aria-label={pick?.group ?? "테이블 참가자"} data-table-controls="">
       {players.map((player) => {
         const seat = player.seat;
         const count = notes.get(seat)?.length ?? 0;

@@ -7,7 +7,8 @@
 // 시간 표시를 지운 사본(머리·띠용)은 화면 쪽이 만든다. 튜토리얼 루트에 맨 이름 data-tutorial 속성은 쓰지 않는다(표식 이름은 UI-SPEC 표).
 // 옛 서버 쪽 표식과 같은 이름(통과·완료 표식·튜토리얼 단계)은 만들지 않는다 — 혼자 하기는 서버 상태가 없다(D-15).
 import { EARLY_GRACE_MS } from "../../shared/game/early";
-import { BAR_SEATS_FX, UNIT } from "../../shared/game/map";
+import { BAR_SEATS_FX, barChairAssignment } from "../../shared/game/map";
+import { ROOM_MAP_ID } from "../../shared/game/maps";
 import { majorityOf } from "../../shared/game/nomination";
 import { ANSWER_REVEAL_MS, EXECUTION_MS, WILL_REVEAL_MS } from "../../shared/game/phases";
 import { PLAYTEST_DISCUSSION_MIN_MS } from "../../shared/game/playtest";
@@ -414,8 +415,8 @@ export function tutorialView(
     serverNow: startedAt,
     minPlayers: 4,
     maxPlayers: 8,
-    mapChoice: playtest ? "bar" : "plaza",
-    map: playtest ? "bar" : "plaza",
+    mapChoice: ROOM_MAP_ID,
+    map: ROOM_MAP_ID,
     ...(playtest ? { playtest: true as const } : {}),
     players: playersOf(deadSeats(id, at, playtest)),
     me: { ...mine },
@@ -531,41 +532,16 @@ function phaseOf(id: TutorialSceneId, at: TutorialBeatId): PhaseId {
 
 // ---- 월드 스냅 ----
 
-/**
- * 좌석이 서는 자리(월드 단위, 시계탑 광장). 둘레 반지름 약 2.6 의 고리 — 연단(반지름 1.4 + 캐릭터 0.35) 밖이고 모두 걸을 수 있는 칸이다(시험).
- * 도윤(1)·서연(2)의 자리는 이름표가 폰 화면 안쪽에 들게 정한 옛 측정값을 따른다(24-10 스크린샷에서 다시 확인).
- */
-const RING_SPOTS: Readonly<Record<number, { x: number; z: number }>> = {
-  0: { x: -2.6, z: 0 },
-  1: { x: 1.3, z: -1.5 },
-  2: { x: -1.3, z: -2.3 },
-  3: { x: -1.3, z: 2.3 },
-  4: { x: 2.6, z: 0 },
-  5: { x: 1.3, z: 2.3 },
-};
-/**
- * 장면 9: 내 자리(5) 곁에 하린(4)·민준(0)·지호(3)가 모여 선다 — 모두 켜는 문턱(92%, 2.2 단위) 안이다.
- * 도윤(1)·서연(2) 은 유령이고 멀리 있다(근처 판정 거짓). 시험이 withinNoteReach 로 지킨다.
- */
-const NOTE_SPOTS: Readonly<Record<number, { x: number; z: number }>> = {
-  0: { x: 2.2, z: 4.0 },
-  1: { x: -2.6, z: 0 },
-  2: { x: -1.3, z: -2.3 },
-  3: { x: -0.4, z: 3.4 },
-  4: { x: 2.6, z: 2.8 },
-  5: { x: 1.3, z: 2.3 },
-};
+const TUTORIAL_CHAIRS = barChairAssignment(TUTORIAL_CAST.seats.map(({ seat }) => seat));
 
-/** 서 있는 여섯 좌석의 위치 snap 한 프레임(로컬 WorldStore.applyFrame 에 주는 값). 시각 at 은 호출한 쪽이 준다 */
-export function tutorialSnap(id: TutorialSceneId, at: number, playtest = false): Extract<WorldFrame, { k: "snap" }> {
-  const spots = id === "postit" ? NOTE_SPOTS : RING_SPOTS;
+/** 모든 장면에서 같은 재즈 바 6인 의자에 앉아 있다. */
+export function tutorialSnap(at: number): Extract<WorldFrame, { k: "snap" }> {
   let world: WorldState = emptyWorld();
   const players: { id: string; seat: number }[] = [];
   for (const { seat } of TUTORIAL_CAST.seats) {
-    const spot = spots[seat]!;
     const pid = `tut-${seat}`;
     players.push({ id: pid, seat });
-    const [x, z] = playtest ? BAR_SEATS_FX[seat]! : [Math.round(spot.x * UNIT), Math.round(spot.z * UNIT)];
+    const [x, z] = BAR_SEATS_FX[TUTORIAL_CHAIRS[seat]!]!;
     world = { ...world, segs: { ...world.segs, [pid]: restSegment(x, z, at) } };
   }
   return snapFrame(world, players, at);

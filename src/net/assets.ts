@@ -4,7 +4,7 @@ import { preload } from "react-dom";
 import type { AnimalId } from "../../shared/game/animals";
 import { ROLE_IDS } from "../../shared/game/roles";
 import type { RoleId } from "../../shared/game/roles";
-import type { MapId, OutfitId } from "../../shared/protocol";
+import type { OutfitId } from "../../shared/protocol";
 import { SCENES } from "../game/scenes";
 import type { SceneId } from "../game/scenes";
 
@@ -91,11 +91,6 @@ export function seatColorVar(seat: number): string {
 export function outfitCardSrc(id: OutfitId, animal?: AnimalId): string {
   if (animal !== undefined) return animalImageSrc(animal, `${id === "coat" ? "figure" : id}-sm.png`);
   return `/outfits/outfit-${id}.png?v=${ASSET_VERSION}`;
-}
-
-// 꾸미기 시트 맵 카드(560×320)는 실제 장면을 렌더해 가운데 80×80을 표시한다.
-export function mapCardSrc(id: MapId): string {
-  return `/maps/map-${id}.png?v=${ASSET_VERSION}`;
 }
 
 // 직업 그림은 150px 로 표시한다. @2x 파일은 1x, @4x 파일은 2x. 역할을 보낼 수 있는 화면에서만 쓴다.

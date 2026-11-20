@@ -45,31 +45,34 @@ describe("작은 재즈 바", () => {
     const state = { phase: "discussion", day: 2, map: "bar", players } as RoomState;
     const four = layoutFor(state, world, 0)!; // 기존 저장에는 barChairs가 없다
     expect(four.key).toBe("2:bar-table");
-    expect(four.slots).toEqual({ p0: BAR_SEATS_FX[0], p5: BAR_SEATS_FX[4], p7: BAR_SEATS_FX[5] });
+    expect(four.slots).toEqual({ p0: BAR_SEATS_FX[0], p2: BAR_SEATS_FX[2], p5: BAR_SEATS_FX[4], p7: BAR_SEATS_FX[5] });
     const restored = JSON.parse(JSON.stringify({
       ...state, barChairs, day: 3, players: players.map((p) => ({ ...p, connected: true })),
     })) as RoomState;
     expect(layoutFor(restored, world, 0)?.slots).toEqual(four.slots);
   });
 
-  it("유언자는 자기 의자에서 중앙 무대로 이동하고 처형 때 이미 도착했으면 다시 옮기지 않는다", () => {
+  it("유언자와 탈락자는 유언부터 결과까지 원래 의자를 유지한다", () => {
     const players = [0, 1, 2, 3].map((seat) => ({ id: `p${seat}`, seat }));
     const barChairs = barChairAssignment(players.map((p) => p.seat));
     const state = { phase: "defense", day: 2, map: "bar", players, barChairs, verdict: { passed: true, candidate: 1 } } as RoomState;
     const own = BAR_SEATS_FX[2];
     const world = { ...emptyWorld(), segs: { p1: restSegment(...own, 0) } };
-    expect(layoutFor(state, world, 0)?.moves).toEqual([{ playerId: "p1", dest: STAGE_SPOT }]);
-    expect(routeFx(BAR_MAP, p(own), STAGE_SPOT)).toEqual([...own, 0, 0]);
-    const executed = { ...state, phase: "execution", players: state.players.map((player) => ({ ...player, alive: player.seat !== 1 })) } as RoomState;
-    expect(layoutFor(executed, { ...world, segs: { p1: restSegment(0, 0, 0) } }, 0)?.moves).toEqual([]);
+    expect(layoutFor(state, world, 0)?.moves).toEqual([]);
+    const executed = { ...state, players: state.players.map((player) => ({ ...player, alive: player.seat !== 1 })) };
+    for (const phase of ["execution", "night", "morning", "ended"] as const) {
+      const layout = layoutFor({ ...executed, phase }, world, 0);
+      expect(layout?.slots.p1).toEqual(own);
+      expect(layout?.moves).toEqual([]);
+    }
   });
 
-  it("좌석에 고정된 바 토론은 원거리 산 상대 선택을 허용하고, 광장과 유령의 이동은 기존대로다", () => {
+  it("좌석에 고정된 토론은 원거리 산 상대 선택을 허용하고 생존 여부와 무관하게 이동을 막는다", () => {
     const players = [{ id: "a", seat: 0 }, { id: "b", seat: 1 }, { id: "c", seat: 2, alive: false }];
     const state = { phase: "discussion", day: 2, map: "bar", players } as RoomState;
     const world = { segs: { a: restSegment(-200, 0, 0), b: restSegment(200, 0, 0), c: restSegment(199, 0, 0) } };
     expect(canMoveIn("discussion", true, "bar")).toBe(false);
-    expect(canMoveIn("discussion", false, "bar")).toBe(true);
+    expect(canMoveIn("discussion", false, "bar")).toBe(false);
     expect(canMoveIn("discussion", true, "plaza")).toBe(true);
     expect(stickNote(state, world, "a", 1, 0).ok).toBe(true);
     expect(stickNote(state, world, "a", 2, 0).ok).toBe(false);

@@ -739,7 +739,7 @@ describe("차례 알약 (결정 0063-1, UI-SPEC A-1~A-6)", () => {
     expect(gauge(container)!.getAttribute("aria-label")).toBe("남은 시간 3초");
   });
 
-  it("모이는 중: 알약·막대·헤더 게이지이 없고, 라이브로 들어오면 위 한 줄 '가운데로 모여요'", () => {
+  it("지목 준비 중: 알약·막대·헤더 게이지가 없고, 라이브로 들어오면 위 한 줄 '지목을 준비해요'", () => {
     const m = mount(makeView({ count: 4, phase: "discussion" }));
     expect(block(m.container)).toBeNull();
     m.show(turn4({ i: -1 }));
@@ -747,7 +747,7 @@ describe("차례 알약 (결정 0063-1, UI-SPEC A-1~A-6)", () => {
     expect(m.container.querySelector(".mf-turn__pill")).toBeNull();
     expect(m.container.querySelector(".mf-turn__bar")).toBeNull();
     expect(gauge(m.container)).toBeNull();
-    expect(line(m.container)).toBe("가운데로 모여요");
+    expect(line(m.container)).toBe("지목을 준비해요");
   });
 
   it("지목 결과: 알약 없이 중앙에 '모두 골랐어요 · {이름} 님 {k}표'(단독 최다), '동점이에요'(동점) 또는 '고른 사람이 없어요'(0표)", () => {

@@ -25,6 +25,7 @@ import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
 import { isAlive } from "./alive";
 import { channelOf } from "./audience";
 import { botCount } from "./bots";
+import { ROOM_MAP_ID } from "./maps";
 import { endCountOf, endRequiredOf, phaseDurationOf } from "./discussion";
 import { buildSummary } from "./endgame";
 import { noExecutionOf } from "./execution";
@@ -211,10 +212,10 @@ function buildRestingView(state: RoomState, resting: Player, now: number): RoomV
     maxPlayers: MAX_PLAYERS,
     players: [row],
     me: { seat: resting.seat, isHost: false },
-    mapChoice: state.mapChoice ?? "random",
+    mapChoice: ROOM_MAP_ID,
     resting: true,
   };
-  if (state.phase !== "lobby" && state.map !== undefined) view.map = state.map;
+  if (state.phase !== "lobby") view.map = ROOM_MAP_ID;
   return view;
 }
 
@@ -412,10 +413,10 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     maxPlayers: MAX_PLAYERS,
     players,
     me: myInfo,
-    // 방장이 고른 맵은 공개 값이다(역할의 함수 아님, L44). 결정된 맵은 시작한 뒤에만 키가 생긴다(L42).
-    mapChoice: state.mapChoice ?? "random",
+    // 이전 클라이언트는 공개 mapChoice 를 읽는다. 결정 맵은 시작 뒤에만 보낸다.
+    mapChoice: ROOM_MAP_ID,
   };
-  if (state.phase !== "lobby" && state.map !== undefined) view.map = state.map;
+  if (state.phase !== "lobby") view.map = ROOM_MAP_ID;
   if (DAY_PHASES.has(state.phase)) view.day = buildDay(state, now);
   if (state.phase === "lobby" && state.bench !== undefined) {
     const reservedAnimals = state.bench.flatMap((p) => p.animal === undefined ? [] : [p.animal]).sort();

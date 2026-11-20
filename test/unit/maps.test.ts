@@ -1,13 +1,10 @@
-// 11-06: 맵 표와 선택 규칙(MAP-06, D-20·D-21·D-22) — 순수 규칙만. 광장 데이터 시험은 Task 2 에서 이 파일에 더한다.
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { BAR_MAP } from "../../shared/game/map";
 import { PLAZA_MAP } from "../../shared/game/mapPlaza";
-import { MAPS, PLAYABLE_MAPS, decideMap, mapOf, pickMap, roomMapId } from "../../shared/game/maps";
+import { ROOM_MAP_ID, mapOf } from "../../shared/game/maps";
 import { assignRoles } from "../../shared/game/roles";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { RoomState } from "../../shared/game/room";
-import type { MapChoice } from "../../shared/protocol";
-import { onlyBar } from "../helpers/playable";
 import { seededRandInt } from "../helpers/seededRandom";
 
 const HOST = "player-id-0000-aaaa";
@@ -25,168 +22,26 @@ function lobby(n = 4): RoomState {
   return state;
 }
 
-/** 호출 횟수와 인자를 남기는 난수. */
-function spy(value: number): { fn: (n: number) => number; calls: number[] } {
-  const calls: number[] = [];
-  return { fn: (n) => (calls.push(n), value % n), calls };
-}
-
-describe("맵 표 (D-22)", () => {
-  it("PLAYABLE_MAPS 는 11-13 에서 광장까지 열렸다 — [bar, plaza] (T-11-21 의 잠금 해제)", () => {
-    expect([...PLAYABLE_MAPS]).toEqual(["bar", "plaza"]);
-  });
-  it("MAPS.bar 는 BAR_MAP 이고 mapOf(bar) 가 그것을 돌려준다", () => {
-    expect(MAPS.bar).toBe(BAR_MAP);
-    expect(mapOf("bar")).toBe(BAR_MAP);
-    expect(mapOf("bar").id).toBe("bar");
-  });
-});
-
-describe("광장 등록 (D-22)", () => {
-  it("MAPS.plaza 는 PLAZA_MAP 이고 mapOf(plaza).id 는 plaza 다 — 표의 한 줄 등록", () => {
-    expect(MAPS.plaza).toBe(PLAZA_MAP);
+describe("재즈 바 고정 맵", () => {
+  it("방의 맵은 재즈 바이며 개발용 광장 데이터도 읽을 수 있다", () => {
+    expect(ROOM_MAP_ID).toBe("bar");
+    expect(mapOf(ROOM_MAP_ID)).toBe(BAR_MAP);
     expect(mapOf("plaza")).toBe(PLAZA_MAP);
-    expect(mapOf("plaza").id).toBe("plaza");
   });
-  it("roomMapId 가 plaza 인 방은 mapOf 가 광장 마스크를 돌려준다", () => {
-    const started = startGame(lobby(), HOST, 1000, seededRandInt(1));
-    if (!started.ok) throw new Error("start failed");
-    expect(mapOf(roomMapId({ ...started.state, map: "plaza" }))).toBe(PLAZA_MAP);
-  });
-});
 
-describe("decideMap (D-21)", () => {
-  // 이 묶음은 "bar 만 열린 방"의 규칙을 본다 — 광장이 열린 현재 상수와 상관없이 같은 시험이 돌게 닫아 둔다(11-13)
-  let reopen: () => void = () => {};
-  beforeEach(() => {
-    reopen = onlyBar();
+  it.each([undefined, "random", "bar", "plaza"] as const)("저장한 맵 선택 %s와 상관없이 재즈 바에서 시작한다", (mapChoice) => {
+    const state: RoomState = { ...lobby(), ...(mapChoice !== undefined ? { mapChoice } : {}) };
+    const result = startGame(state, HOST, 1000, seededRandInt(5));
+    expect(result.ok && result.state.map).toBe("bar");
   });
-  afterEach(() => reopen());
-  it("choice 가 bar 면 bar 다 — 난수를 부르지 않는다", () => {
-    const r = spy(0);
-    expect(decideMap("bar", r.fn)).toBe("bar");
-    expect(r.calls).toEqual([]);
-  });
-  it("plaza 는 playable 에 없으면 bar, 있으면 plaza", () => {
-    expect(decideMap("plaza", spy(0).fn)).toBe("bar");
-    expect(decideMap("plaza", spy(0).fn, ["bar"])).toBe("bar");
-    expect(decideMap("plaza", spy(0).fn, ["bar", "plaza"])).toBe("plaza");
-  });
-  it("random 은 playable 이 하나면 난수를 한 번도 부르지 않고 그 하나다", () => {
-    const r = spy(1);
-    expect(decideMap("random", r.fn, ["bar"])).toBe("bar");
-    expect(decideMap("random", r.fn)).toBe("bar");
-    expect(r.calls).toEqual([]);
-  });
-  it("random 은 playable 이 둘이면 randInt(2) 한 번으로 고른다", () => {
-    const a = spy(0);
-    expect(decideMap("random", a.fn, ["bar", "plaza"])).toBe("bar");
-    expect(a.calls).toEqual([2]);
-    const b = spy(1);
-    expect(decideMap("random", b.fn, ["bar", "plaza"])).toBe("plaza");
-    expect(b.calls).toEqual([2]);
-  });
-});
 
-describe("roomMapId", () => {
-  // 이 묶음은 "bar 만 열린 방"의 규칙을 본다 — 광장이 열린 현재 상수와 상관없이 같은 시험이 돌게 닫아 둔다(11-13)
-  let reopen: () => void = () => {};
-  beforeEach(() => {
-    reopen = onlyBar();
-  });
-  afterEach(() => reopen());
-  it("대기실은 늘 bar 다 (D-22) — state.map 이 있어도", () => {
-    expect(roomMapId(lobby())).toBe("bar");
-    expect(roomMapId({ ...lobby(), map: "plaza" })).toBe("bar");
-  });
-  it("시작한 뒤에는 state.map, 없으면 bar", () => {
-    const started = startGame(lobby(), HOST, 1000, seededRandInt(1));
-    if (!started.ok) throw new Error("start failed");
-    expect(roomMapId(started.state)).toBe("bar");
-    expect(roomMapId({ ...started.state, map: "plaza" })).toBe("plaza");
-    const { map: _m, ...old } = started.state;
-    expect(roomMapId(old)).toBe("bar");
-  });
-});
-
-describe("pickMap (D-20, L40)", () => {
-  // 이 묶음은 "bar 만 열린 방"의 규칙을 본다 — 광장이 열린 현재 상수와 상관없이 같은 시험이 돌게 닫아 둔다(11-13)
-  let reopen: () => void = () => {};
-  beforeEach(() => {
-    reopen = onlyBar();
-  });
-  afterEach(() => reopen());
-  const guest = "player-id-0001-aaaa";
-  const outcome = (r: { ok: boolean }): string => (r.ok ? "ok" : "no");
-  it("방장이 대기실에서 random·bar 를 고르면 받아들인다", () => {
-    const s = lobby();
-    expect(outcome(pickMap(s, HOST, "random"))).toBe("ok");
-    const r = pickMap(s, HOST, "bar");
-    expect(r.ok && r.state.mapChoice).toBe("bar");
-  });
-  it("방장이 아니면 거절", () => {
-    expect(outcome(pickMap(lobby(), guest, "bar"))).toBe("no");
-  });
-  it("대기실·ended 가 아닌 단계는 거절 (assigning ~ morning)", () => {
-    const started = startGame(lobby(), HOST, 1000, seededRandInt(1));
-    if (!started.ok) throw new Error("start failed");
-    for (const phase of ["assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning"] as const) {
-      expect(`${phase}:${outcome(pickMap({ ...started.state, phase }, HOST, "bar"))}`).toBe(`${phase}:no`);
-    }
-    expect(outcome(pickMap({ ...started.state, phase: "ended" }, HOST, "bar"))).toBe("ok");
-  });
-  it("playable 밖의 값은 거절 — bar 만 열린 방에서 plaza 는 안 된다", () => {
-    expect(outcome(pickMap(lobby(), HOST, "plaza"))).toBe("no");
-  });
-  it("광장이 열린 현재 상수(11-13)에서는 방장이 plaza 를 고를 수 있다", () => {
-    reopen();
-    const r = pickMap(lobby(), HOST, "plaza");
-    expect(r.ok && r.state.mapChoice).toBe("plaza");
-  });
-  it("주입한 playable [bar, plaza] 에서는 plaza 가 받아들여진다", () => {
-    const r = pickMap(lobby(), HOST, "plaza", ["bar", "plaza"]);
-    expect(r.ok && r.state.mapChoice).toBe("plaza");
-  });
-  it("같은 값(기본 random 포함)이면 입력 상태 그대로", () => {
-    const s = lobby();
-    const a = pickMap(s, HOST, "random");
-    expect(a.ok && a.state).toBe(s);
-    const b = pickMap({ ...s, mapChoice: "bar" }, HOST, "bar");
-    expect(b.ok && b.state.mapChoice).toBe("bar");
-    const c = pickMap(s, HOST, "bar");
-    if (!c.ok) throw new Error("expected ok");
-    const d = pickMap(c.state, HOST, "bar");
-    expect(d.ok && d.state).toBe(c.state);
-  });
-  it("값이 바뀌어도 입력 상태는 건드리지 않는다", () => {
-    const s = lobby();
-    const before = JSON.stringify(s);
-    pickMap(s, HOST, "bar");
-    expect(JSON.stringify(s)).toBe(before);
-  });
-});
-
-describe("startGame 의 맵 결정 (D-21)", () => {
-  // 이 묶음은 "bar 만 열린 방"의 규칙을 본다 — 광장이 열린 현재 상수와 상관없이 같은 시험이 돌게 닫아 둔다(11-13)
-  let reopen: () => void = () => {};
-  beforeEach(() => {
-    reopen = onlyBar();
-  });
-  afterEach(() => reopen());
-  it("map 은 decideMap 결과이고 mapChoice 를 읽는다", () => {
-    const a = startGame(lobby(), HOST, 1000, seededRandInt(5));
-    expect(a.ok && a.state.map).toBe("bar");
-    const choice: MapChoice = "bar";
-    const b = startGame({ ...lobby(), mapChoice: choice }, HOST, 1000, seededRandInt(5));
-    expect(b.ok && b.state.map).toBe("bar");
-  });
   it("재즈 바는 라운드가 시작되면 논리 좌석 사이에 빈 번호가 있어도 물리 의자를 고정한다", () => {
     const state = lobby();
     const seats = [0, 2, 4, 7];
     const result = startGame({ ...state, players: state.players.map((p, i) => ({ ...p, seat: seats[i]! })) }, HOST, 1000, seededRandInt(5));
     expect(result.ok && result.state.barChairs).toEqual({ 0: 0, 2: 2, 4: 4, 7: 5 });
   });
-  it("PLAYABLE_MAPS 가 하나라 난수 호출이 늘지 않는다 — 시작 뒤 난수 상태가 assignRoles 만 부른 것과 같다", () => {
+  it("맵 결정은 난수를 쓰지 않으므로 역할 배정에 필요한 난수만 부른다", () => {
     const state = lobby(5);
     const ids = [...state.players].sort((a, b) => a.seat - b.seat).map((p) => p.id);
     const callsOf = (run: (rnd: (n: number) => number) => void): number[] => {

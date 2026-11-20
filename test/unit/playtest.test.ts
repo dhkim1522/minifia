@@ -93,13 +93,13 @@ describe("로컬 첫날 실험 규칙", () => {
   });
 
   it.each([
-    ["roleReveal", "1:role"],
-    ["verdict", "1:firstBallot"],
-    ["defense", "1:stage"],
-    ["execution", "1:exec"],
+    ["roleReveal", "1:bar-table"],
+    ["verdict", "1:bar-table"],
+    ["defense", "1:bar-table"],
+    ["execution", "1:bar-table"],
     ["dayAnnounce", "1:bar-table"],
     ["discussion", "1:bar-table"],
-    ["night", null],
+    ["night", "1:bar-table"],
   ] as const)("실험방 %s 배치 및 이동 권한이 일치한다", (phase, key) => {
     expect(layoutKey(room(phase))).toBe(key);
     expect(canMoveIn(phase, true, "bar")).toBe(false);

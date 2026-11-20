@@ -3,6 +3,8 @@
    카메라 중심만 스테이지 사각형(헤더 아래 ~ 패널 위)으로 옮긴다. 진홍은 마피아 승리 제목 아이콘과 승리 알림 아이콘에만 쓴다(UI-SPEC 6.1 예약). */
 
 .mf-result { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; isolation: isolate; background: var(--night-950); }
+.mf-result--embedded { position: absolute; inset: 0; z-index: 1; background: transparent; pointer-events: none; }
+.mf-result--embedded :is(.mf-result__panel, .mf-dialog, .mv-dress-sheet) { pointer-events: auto; }
 
 /* 맵: 자기 쌓임 맥락을 가진다 — 맵 안의 가림막(z-modal)이 헤더를 덮지 않아 맵을 불러오는 동안에도 나갈 수 있다 */
 .mf-result > .mf-world { z-index: var(--z-world); }
@@ -41,12 +43,13 @@
 }
 
 /* 직업 칩 뒤집힘(연출 마운트만): 뒤집힐 때 transform 0.3초. 최종 상태로 곧바로 열린 마운트·모션 줄이기는 없다 */
-.mf-result[data-reveal="true"] .mv-rolechip { animation: mf-chip-flip 300ms var(--ease-out) both; }
+.mf-result[data-reveal="true"] .mv-rolechip,
+.mf-game:has(> .mf-result--embedded[data-reveal="true"]) > .mf-world .mv-rolechip { animation: mf-chip-flip 300ms var(--ease-out) both; }
 @keyframes mf-chip-flip {
   from { transform: rotateY(90deg) scale(0.8); }
   to { transform: rotateY(0deg) scale(1); }
 }
-@media (prefers-reduced-motion: reduce) { .mf-result .mv-rolechip { animation: none; } .mf-result__announce { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .mf-result .mv-rolechip, .mf-game:has(> .mf-result--embedded[data-reveal="true"]) > .mf-world .mv-rolechip { animation: none; } .mf-result__announce { animation: none; } }
 
 /* ---- 결과 탭 패널(11-07, UI-SPEC A-3) ----
    접힌 패널(전체 탭)은 게임 패널과 같은 188/244 높이를 지킨다: 탭 행 44 가 패널 위 안쪽 여백(14)을 먹고(음수 위 여백) 아래 10 간격,

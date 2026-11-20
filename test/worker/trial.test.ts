@@ -6,8 +6,7 @@ import type { RoomView, ServerMessage } from "../../shared/protocol";
 import { DEFENSE_MS, DISCUSSION_MS, NOMINATION_GATHER_MS, PHASE_DEFS, PICK_GAP_MS, PICK_TURN_MS, VERDICT_MS } from "../../shared/game/phases";
 import { env } from "cloudflare:workers";
 import { runDurableObjectAlarm } from "cloudflare:test";
-import { ringSlots } from "../../shared/game/gather";
-import { advanceTo, alarmOf, chatMsg, closePhase, connect, editRoom, endAs, flushWorld, ghostsOf, hello, killSeats, lastViewOf, layOf, mark, mapPlayers, pause, pointAs, send, settle, startedGame, storedRoom, summary, toPhase, verdictAs, worldFramesOf, worldOf } from "./helpers";
+import { advanceTo, alarmOf, chatMsg, closePhase, connect, editRoom, endAs, flushWorld, hello, killSeats, lastViewOf, layOf, mark, mapPlayers, pause, pointAs, segEndsBySeat, send, settle, startedGame, storedRoom, summary, toPhase, verdictAs, worldFramesOf } from "./helpers";
 import type { Actor, Game } from "./helpers";
 import { RULES } from "../../shared/game/ruleset";
 
@@ -307,23 +306,6 @@ describe("토론 끝내기 (DAY-03, 결정 0060-2)", () => {
 });
 
 
-// ---- 모이기·무대 배치 (DAY-04·05, 결정 0060-7, Pitfall 4·5) ----
-// 지목 단계는 저장 상태 편집(toPhase)으로 들어가되, 변론은 지목 표를 저장해 두고 실제 마감 훅(resolveNomination)으로 들어간다(08-11).
-
-/** 한 소켓이 mark 이후 받은 world.move 의 (seat -> 끝점 'x,z'). 같은 좌석이 여러 번이면 마지막 것. */
-function movesSince(sock: Game["socks"][number], from: number): Map<number, string> {
-  const out = new Map<number, string>();
-  for (const m of worldFramesOf(sock, from)) if (m.k === "move") out.set(m.s, `${m.p[m.p.length - 2]},${m.p[m.p.length - 1]}`);
-  return out;
-}
-
-const slotKeys = (n: number): Set<string> => new Set(ringSlots(n).map(([x, z]) => `${x},${z}`));
-
-/** 모든 소켓을 flush 한다(처음 소켓부터). 서버가 한 일이 끝난 뒤의 프레임 위치를 돌려준다. */
-async function flushAll(g: Game, marks: number[]): Promise<void> {
-  for (let i = 0; i < g.socks.length; i += 1) await settle(g.socks[i]!, marks[i]!);
-}
-
 /** 마감을 ago ms 전으로 당기고 알람을 한 번 돌린다(단계 하나 이상이 넘어간다). */
 async function dueAgo(code: string, ago: number): Promise<void> {
   await editRoom(code, (room) => ({ ...room, phaseEndsAt: Date.now() - ago }));
@@ -345,109 +327,38 @@ function pointedAt(target: number): (room: Record<string, unknown>) => Record<st
   };
 }
 
-describe("모이기·무대 배치(결정 0060-7)", () => {
-  it("지목에 들어간 뒤 아무 메시지나 오면 산 사람 5명이 둘레 자리 5곳으로 걷고 모든 소켓이 다섯 걸음을 받으며 배치 키는 '일차:ring' 이다", async () => {
-    const g = await startedGame("discussion", 4, "plaza");
-    await toPhase(g.code, "nomination");
-    const marks = g.socks.map(mark);
-    await flushAll(g, marks);
-
-    for (const sock of g.socks) {
-      const moves = movesSince(sock, marks[g.socks.indexOf(sock)]!);
-      expect([...moves.keys()].sort().join(",")).toBe(g.actors.map((a) => a.seat).sort().join(","));
-      const ends = [...moves.values()];
-      expect(new Set(ends).size).toBe(5);
-      expect(ends.every((e) => slotKeys(5).has(e))).toBe(true);
-    }
-    expect((await layOf(g.code)).key).toBe("1:ring");
-  }, 40_000);
-
-  it("같은 상태에서 메시지가 한 번 더 와도 새 world 프레임이 없다(멱등)", async () => {
-    const g = await startedGame("discussion", 4, "plaza");
-    await toPhase(g.code, "nomination");
-    await flushAll(g, g.socks.map(mark));
-    const marks = g.socks.map(mark);
-    await flushAll(g, marks);
-    expect(g.socks.map((s, i) => worldFramesOf(s, marks[i]!).length).join(",")).toBe("0,0,0,0,0");
-  }, 40_000);
-
-  it("서버 주도 이동은 lastMoveAt 을 건드리지 않고, world 저장값에 lay 가 있다", async () => {
-    const g = await startedGame("discussion", 4, "plaza");
-    await toPhase(g.code, "nomination");
-    await flushAll(g, g.socks.map(mark));
-    expect((await layOf(g.code)).lastMoveAtCount).toBe(0);
+describe("재즈 바 지목과 유언의 고정 좌석", () => {
+  it("지목을 시작해도 착석 구간과 저장 좌석이 그대로다", async () => {
+    const g = await startedGame("discussion", 4);
     await flushWorld(g.code);
-    const stored = (await worldOf(g.code)) as unknown as { lay?: { key: string; slots: Record<string, unknown> } };
-    expect(stored.lay?.key).toBe("1:ring");
-    expect(Object.keys(stored.lay?.slots ?? {}).length).toBe(5);
-  }, 40_000);
-
-  it("유령은 줄을 서지 않는다 — 산 사람 3명만 걷고 유령 소켓도 그 걸음을 본다", async () => {
-    const g = await startedGame("discussion", 4, "plaza");
-    const doomed = g.actors.filter((a) => a.role !== "mafia").slice(0, 2);
-    const { ghosts, living } = await ghostsOf(g, doomed.map((a) => a.seat));
-    await toPhase(g.code, "nomination");
+    const before = await segEndsBySeat(g.code, 1);
     const marks = g.socks.map(mark);
-    await flushAll(g, marks);
-    for (const a of g.actors) {
-      const moves = movesSince(a.sock, marks[g.actors.indexOf(a)]!);
-      expect([...moves.keys()].sort().join(",")).toBe(living.map((l) => l.seat).sort().join(","));
-      expect([...moves.values()].every((e) => slotKeys(3).has(e))).toBe(true);
-    }
-    expect(ghosts.length).toBe(2);
+    await advanceTo(g.code, g.socks, "nomination");
+    await settleAllSocks(g);
+    expect(g.socks.every((sock, i) => worldFramesOf(sock, marks[i]!).length === 0)).toBe(true);
+    const layout = await layOf(g.code);
+    expect(layout.key).toBe("1:bar-table");
+    expect(layout.lastMoveAtCount).toBe(0);
+    expect(await segEndsBySeat(g.code, 1)).toBe(before);
   }, 40_000);
 
-  it("지목이 끝나 변론이 되면 변론자만 무대 [0,0] 으로 걷고 나머지는 새 프레임이 없다", async () => {
-    const g = await startedGame("discussion", 4, "plaza");
+  it.each([1, 5_000])("지목 마감 %i ms 뒤 유언·처형에서도 변론자가 자기 의자에 남는다", async (delay) => {
+    const g = await startedGame("discussion", 4);
     const defender = g.actors[3]!;
+    await flushWorld(g.code);
+    const before = await segEndsBySeat(g.code, 1);
     await toPhase(g.code, "nomination", pointedAt(defender.seat));
-    await flushAll(g, g.socks.map(mark));
     const marks = g.socks.map(mark);
+    await dueAgo(g.code, delay);
+    await settleAllSocks(g);
+    expect((await storedRoom(g.code)).phase).toBe("defense");
+    expect(g.socks.every((sock, i) => worldFramesOf(sock, marks[i]!).length === 0)).toBe(true);
+    expect(await segEndsBySeat(g.code, 1)).toBe(before);
+    expect((await layOf(g.code)).key).toBe("1:bar-table");
     await dueAgo(g.code, 1);
-    await flushAll(g, marks);
-
-    expect((await storedRoom(g.code)).phase).toBe("defense");
-    for (const sock of g.socks) {
-      const moves = movesSince(sock, marks[g.socks.indexOf(sock)]!);
-      expect([...moves.entries()].map(([s, e]) => `${s}:${e}`).join("|")).toBe(`${defender.seat}:0,0`);
-    }
-    expect((await layOf(g.code)).key).toBe("1:stage");
-  }, 40_000);
-
-  it("알람이 늦어 지목 배치 없이 변론에 닿아도 변론자는 무대로, 나머지 넷은 둘레 자리로 선다", async () => {
-    const g = await startedGame("discussion", 4, "plaza");
-    const defender = g.actors[3]!;
-    await toPhase(g.code, "nomination", pointedAt(defender.seat));
-    const marks = g.socks.map(mark);
-    await dueAgo(g.code, 5_000); // 지목 마감을 5초 지나 처음 깨어난다 — 지목 배치는 한 번도 돌지 않았다
-    await flushAll(g, marks);
-
-    expect((await storedRoom(g.code)).phase).toBe("defense");
-    const moves = movesSince(g.socks[0]!, marks[0]!);
-    expect(moves.get(defender.seat)).toBe("0,0");
-    const others = [...moves.entries()].filter(([s]) => s !== defender.seat).map(([, e]) => e);
-    expect(others.length).toBe(4);
-    expect(new Set(others).size).toBe(4);
-    expect(others.every((e) => slotKeys(5).has(e))).toBe(true);
-  }, 40_000);
-
-  it("처형 단계의 처형자는 무대에 남아 움직이지 않는다(처형은 찬반이 통과한 날에만 온다, 22-09)", async () => {
-    const g = await startedGame("discussion", 4, "plaza");
-    const defender = g.actors[3]!;
-    await toPhase(g.code, "nomination", pointedAt(defender.seat));
-    await flushAll(g, g.socks.map(mark));
-    await dueAgo(g.code, 1); // -> defense (변론자 무대)
-    await flushAll(g, g.socks.map(mark));
-    await flushWorld(g.code); // toPhase 는 DO 를 퇴거시킨다 — 디바운스 중인 위치·배치 기억을 먼저 저장한다
-    await toPhase(g.code, "execution", (room) => ({
-      ...room,
-      verdict: { passed: true, candidate: defender.seat },
-      voteLog: ((room.voteLog as Array<{ exec: object }> | undefined) ?? []).map((line) => ({ ...line, exec: { yes: 3, no: 1, passed: true } })),
-    }));
-    const marks = g.socks.map(mark);
-    await flushAll(g, marks);
-    const moves = movesSince(g.socks[0]!, marks[0]!);
-    expect([...moves.keys()].join(",")).toBe("");
+    await settleAllSocks(g);
+    expect((await storedRoom(g.code)).phase).toBe("execution");
+    expect(await segEndsBySeat(g.code, 1)).toBe(before);
   }, 60_000);
 });
 
@@ -552,7 +463,7 @@ describe("실제 흐름 (결정 0060-1)", () => {
     expect(inDefense.phase).toBe("defense");
     expect(inDefense.phaseEndsAt! > Date.now() + DEFENSE_MS - 5_000).toBe(true);
     expect(lastViews(g).map((v) => v.day?.candidate).join(",")).toBe(g.socks.map(() => defender.seat).join(","));
-    expect((await layOf(g.code)).key).toBe("1:stage");
+    expect((await layOf(g.code)).key).toBe("1:bar-table");
 
     // 처형자가 유언을 남긴다(22-12): 처형 단계 view 의 day.execution.will 로 모두에게 같은 값이 간다
     await castAll(g, () => send(defender.sock, { t: "will", text: "잘 있어" }));

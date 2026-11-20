@@ -23,7 +23,6 @@ import {
   faceSrc,
   figureSrc,
   journalArt,
-  mapCardSrc,
   outfitCardSrc,
   preloadEntryAssets,
   preloadDuskAssets,
@@ -371,17 +370,8 @@ describe("outfitCardSrc (10-07)", () => {
 });
 
 // 맵 카드 두 장(560×320). 두 맵 모두 B안의 실제 렌더.
-describe("mapCardSrc (11-13)", () => {
+describe("이전 맵 카드 렌더 자산", () => {
   const mapFiles = new Set(Object.keys(import.meta.glob("/public/maps/*.png")));
-
-  it("두 맵 카드에 새 캐시 버전을 적용한다", () => {
-    expect(mapCardSrc("bar")).toBe(`/maps/map-bar.png?v=${ASSET_VERSION}`);
-    expect(mapCardSrc("plaza")).toBe(`/maps/map-plaza.png?v=${ASSET_VERSION}`);
-  });
-
-  it("ASSET_VERSION 은 i4 에서 올라갔다", () => {
-    expect(ASSET_VERSION).not.toBe("i4");
-  });
 
   it("재즈 바와 광장이 각각 560×320 PNG다", () => {
     expect(mapFiles.size).toBe(2);

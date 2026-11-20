@@ -142,11 +142,13 @@ function sceneKey(phase: PhaseId, map: RoomView["map"]): string {
     case "night":
     case "morning":
       return "gameMap";
-    // 재즈 바는 착석부터 토론까지 같은 WebGL 무대를 쓴다.
+    // 재즈 바는 착석부터 결과까지 같은 WebGL 무대를 쓴다.
     case "assigning":
     case "roleReveal":
     case "keyword":
       return map === "bar" ? "gameMap" : "preGame";
+    case "ended":
+      return map === "bar" ? "gameMap" : "ended";
     default:
       return phase;
   }
@@ -631,9 +633,26 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
         );
       case "ended":
         // 결과는 서버가 ended 에서만 모두에게 같게 싣는다(D-17). 없는 프레임(옛 서버 등)은 안내 화면으로 안전하게 폴백한다.
-        return view.result ? (
+        if (!view.result) return connecting();
+        const resultView = { ...view, result: view.result };
+        const leaveResult = () => onExit("left");
+        if (view.map === "bar") return (
+          <GameMap
+            view={view}
+            send={connection.send}
+            canSend={connection.canSend}
+            offset={connection.offset}
+            store={store}
+            chat={chat}
+            headerAction={menuAction}
+            ending={{ view: resultView, resultLog, arrivedFrom, onExit: leaveResult }}
+            epoch={connection.epoch}
+            onLeave={leaveResult}
+          />
+        );
+        return (
           <ResultScreen
-            view={{ ...view, result: view.result }}
+            view={resultView}
             store={store}
             chat={chat}
             resultLog={resultLog}
@@ -641,12 +660,10 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
             canSend={connection.canSend}
             offset={connection.offset}
             epoch={connection.epoch}
-            onExit={() => onExit("left")}
+            onExit={leaveResult}
             arrivedFrom={arrivedFrom}
             menuButton={menuAction}
           />
-        ) : (
-          connecting()
         );
       default:
         return connecting();

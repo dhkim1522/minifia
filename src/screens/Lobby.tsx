@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { ClientMessage, MapChoice, RoomView } from "../../shared/protocol";
-import { PLAYABLE_MAPS } from "../../shared/game/maps";
+import type { ClientMessage, RoomView } from "../../shared/protocol";
 import type { AnimalId } from "../../shared/game/animals";
 import { lockedOutfits } from "../../shared/game/look";
 import { connectedCount } from "../../shared/game/room";
@@ -13,10 +12,9 @@ import { Icon } from "../components/Icon";
 import { ShareSheet } from "../components/ShareSheet";
 import { RoomChatDock } from "../components/v2/RoomChatDock";
 import { V2Icon } from "../components/v2/V2Icon";
-import { DressSheet, type DressTab } from "../components/v2/DressSheet";
+import { DressSheet } from "../components/v2/DressSheet";
 import { HostRail } from "../components/v2/HostRail";
 import { HostRailButton } from "../components/v2/HostRailButton";
-import { MapChip } from "../components/v2/MapChip";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
 import { WorldStage } from "../components/WorldStage";
@@ -66,7 +64,7 @@ interface LobbyProps {
 
 // S-03 대기실(06-15, 07-13): 지하 재즈 바 맵(WorldStage) 위에 승인 로비 틀을 얹는다 — 위쪽 가림막, 헤더([나가기]·PhaseHeader "대기실"·[공유]),
 // 위 알림(TopToast), 패널 위 방장 시작 버튼, 아래 채팅 기록과 입력줄. 방 코드는 헤더의 공유 버튼과 초대 시트에 표시한다. 읽을 글은 "대기실" 과 접히는 한 줄뿐이다(3초 규칙).
-// 19-04(D-13): 방장 전용 조작([맵]·[봇])은 왼쪽 세로 줄(HostRail)에 모으고 오른쪽 열은 모두가 쓰는 [소리]·[옷장]만 둔다. 참가자에게는 줄 마크업이 없다(22-07).
+// 19-04(D-13): 방장 전용 [봇] 조작은 왼쪽 세로 줄(HostRail)에 모으고 오른쪽 열은 모두가 쓰는 [소리]·[옷장]만 둔다. 참가자에게는 줄 마크업이 없다(22-07).
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)은 WorldStage 가 React 텍스트 노드로만 그린다.
 export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offset = 0, bannerVisible = false, exiting = false, onLeave, testButton, menuButton }: LobbyProps) {
   const playtest = view.playtest === true;
@@ -160,12 +158,8 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
   const taken = useMemo(() => lockedOutfits(view.players.filter((p) => p.seat !== view.me.seat)), [view.players, view.me.seat]);
   const dressBtnRef = useRef<HTMLButtonElement>(null);
   const restoreDressFocus = useRef(false);
-  // 시트 탭(11-13): 지도 칩 → 맵 탭, 꾸미기 버튼 → 의상 탭. 칩·맵 탭은 허용 맵이 둘 이상일 때만 있다(22-07: 판 종류가 없어 늘 켜진다).
-  const [dressTab, setDressTab] = useState<DressTab>("dress");
-  const mapsOn = !playtest && PLAYABLE_MAPS.length > 1;
-  const openDress = (tab: DressTab = myAnimal ? "animal" : "dress") => {
+  const openDress = () => {
     inputRef.current?.blur();
-    setDressTab(tab);
     setDressOpen(true);
   };
   const closeDress = () => {
@@ -184,14 +178,6 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
   const botsOn = isHost && view.me.testBots !== undefined;
   // 테스트 방([테스트] 단추가 왼쪽 위에 있음): 줄이 그 아래(48)에서 시작하고 줄 최대 높이도 그만큼 줄어든다(P19-5, F-1)
   const testShift = Boolean(testButton);
-  // 맵 선택(11-13): 칩과 카드는 서버가 방송한 view.mapChoice 만 따른다. 보내기만 하고 미리 바꾸지 않는다
-  const mapChoice: MapChoice = view.mapChoice ?? "random";
-  const pickMap = (map: MapChoice) => {
-    if (canSend) send({ t: "mapPick", map });
-  };
-  // 맵 단추는 방장에게만 그린다(16-06 V-5, T-16-13): 참가자는 맵을 고르지 못하고 서버도 방장의 mapPick 만 받는다.
-  // 19-04: 방장 줄의 칸이다(rail). 연결이 끊기면 다른 줄 단추처럼 눌러도 아무 일 없다. 눌림 속성은 결과 화면과 같은 모양으로 둔다(꾸미기 시트가 열리면 줄을 그리지 않는다)
-  const mapChip = mapsOn && isHost ? <MapChip key="map" rail pressed={dressOpen && dressTab === "map"} choice={mapChoice} host={canSend} onPress={() => openDress("map")} /> : null;
   const host = view.players.find((p) => p.isHost);
   const full = view.players.length >= view.maxPlayers;
   // 서버 checkStart 와 같은 기준(연결된 사람 수)을 쓴다. 버튼 모양은 표시용이고 판정은 서버가 한다.
@@ -275,12 +261,10 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
         />
       </section>
       {/* 꾸미기 시트·키보드가 열린 동안에는 줄·오른쪽 열을 그리지 않는다(P19-16) */}
-      {dressOpen || kbOpen ? null : isHost ? (
-        // 방장 전용 왼쪽 세로 줄(19-04 D-13, 22-07): 맵(허용 맵 둘 이상) · 봇(봇 도구가 켜진 방). 방장 판정은 서버 view 의 isHost 뿐이고 참가자에게는 마크업이 없다(T-19-13)
+      {!dressOpen && !kbOpen && botsOn ? (
         <HostRail maxHeight={testShift ? Math.max(0, sideMaxH - 48) : sideMaxH} testShift={testShift}>
-          {mapChip}
           {/* 결정 0075: 방장만 [봇] — 서버가 방장 대기실 view 에만 me.testBots 를 싣는다 */}
-          {botsOn ? <HostRailButton key="bots" id="bots" icon="bot" label="봇" pressed={sheet?.kind === "bots"} disabled={!canSend} onPress={() => setSheet({ kind: "bots" })} /> : null}
+          <HostRailButton id="bots" icon="bot" label="봇" pressed={sheet?.kind === "bots"} disabled={!canSend} onPress={() => setSheet({ kind: "bots" })} />
         </HostRail>
       ) : null}
       {dressOpen ? (
@@ -290,10 +274,7 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
           onClose={closeDress}
           disabled={!canSend || exiting}
           taken={taken}
-          host={isHost && mapsOn}
-          tab={dressTab}
-          mapChoice={mapChoice}
-          onPickMap={pickMap}
+          tab={myAnimal ? "animal" : "dress"}
           {...(myAnimal === undefined ? {} : { animals: { value: myAnimal, taken: takenAnimals, pending: pendingAnimal, onPick: pickAnimal, only: playtest } })}
         />
       ) : null}

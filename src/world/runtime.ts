@@ -437,8 +437,9 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   let zoomBackStart = 0;
   let cameraSent = "";
   let tableView: {
-    seat: number; mode: "eye" | "wide"; lighting: LightingPhase; center: number;
-    focus: number | undefined; focusAt: number | undefined; yaw: number; pitch: number; panning: boolean;
+    seat: number; mode: "eye" | "wide"; center: number;
+    focus: number | undefined; focusAt: number | undefined; yaw: number; pitch: number;
+    goalYaw: number; goalPitch: number; panning: boolean;
   } | null = null;
   /** 이 좌석을 그리나: 장면이 없으면 view 의 모든 좌석, 있으면 표에서 show 인 좌석만 */
   const isShown = (seat: number): boolean => look === null || look.seats[seat]?.show === true;
@@ -1093,9 +1094,9 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     a.handle.setNotes?.(want, { animate: !(instant || first) });
   }
 
-  function tablePosition(seat: number, serverNow: number): { x: number; z: number; slot: number } | null {
+  function tablePosition(seat: number, serverNow: number, anchor = false): { x: number; z: number; slot: number } | null {
     const included = look?.seats[seat];
-    if (!included?.show || included.ghost || included.fadeAt !== undefined) return null;
+    if (!included?.show || (!anchor && (included.ghost || included.fadeAt !== undefined))) return null;
     const segment = store.segOf(seat);
     if (!segment || segmentEndsAt(segment) > serverNow) return null;
     const position = positionAt(segment, serverNow);
@@ -1114,39 +1115,38 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     }
     const eye = tableEyeAt(local);
     const center = tableAim(eye, { x: -local.x, y: 1.11, z: -local.z });
-    let other = table.focus === undefined ? null : tablePosition(table.focus, serverNow);
-    if (other?.slot === local.slot) other = null;
-    // 맞은편이 비었거나 선택한 사람이 사라지면, 실제로 앉아 있는 가장 먼 상대를 본다.
-    if (!other) {
-      let furthest = 0;
-      for (const actor of actors.values()) {
-        if (actor.seat === deps.mySeat()) continue;
-        const candidate = tablePosition(actor.seat, serverNow);
-        if (!candidate) continue;
-        const distance = (candidate.x - local.x) ** 2 + (candidate.z - local.z) ** 2;
-        if (distance > furthest) {
-          other = candidate;
-          furthest = distance;
+    const previous = tableView;
+    const sameChair = previous !== null && previous.seat === local.slot && previous.mode === table.mode;
+    if (!sameChair || previous.focus !== table.focus || previous.focusAt !== table.focusAt) {
+      let other = table.focus === undefined ? null : tablePosition(table.focus, serverNow);
+      if (other?.slot === local.slot) other = null;
+      // 처음 앉으면 맞은편에 실제로 앉아 있는 가장 먼 상대를 본다.
+      if (!other && !sameChair) {
+        let furthest = 0;
+        for (const actor of actors.values()) {
+          if (actor.seat === deps.mySeat()) continue;
+          const candidate = tablePosition(actor.seat, serverNow);
+          if (!candidate) continue;
+          const distance = (candidate.x - local.x) ** 2 + (candidate.z - local.z) ** 2;
+          if (distance > furthest) {
+            other = candidate;
+            furthest = distance;
+          }
         }
       }
+      const aim = other ? tableAim(eye, { x: other.x, y: 1.11, z: other.z }) : center;
+      const yaw = tableYaw(aim.yaw, center.yaw);
+      tableView = { seat: local.slot, mode: table.mode, center: center.yaw,
+        focus: table.focus, focusAt: table.focusAt,
+        yaw: sameChair ? previous.yaw : yaw, pitch: sameChair ? previous.pitch : aim.pitch,
+        goalYaw: !other && sameChair ? previous.yaw : yaw,
+        goalPitch: !other && sameChair ? previous.pitch : aim.pitch, panning: false };
     }
-    const aim = other ? tableAim(eye, { x: other.x, y: 1.11, z: other.z }) : center;
-    const yaw = tableYaw(aim.yaw, center.yaw);
-    const lighting = look?.lighting ?? "talk";
-    if (tableView?.seat !== local.slot || tableView.mode !== table.mode || tableView.lighting !== lighting) {
-      tableView = { seat: local.slot, mode: table.mode, lighting, center: center.yaw,
-        focus: table.focus, focusAt: table.focusAt, yaw, pitch: aim.pitch, panning: false };
-    } else {
-      if (tableView.focus !== table.focus || tableView.focusAt !== table.focusAt) {
-        tableView.focus = table.focus;
-        tableView.focusAt = table.focusAt;
-        tableView.panning = false;
-      }
-      if (!tableView.panning) {
-        const blend = immediate ? 1 : 1 - Math.exp(-13 * dt);
-        tableView.yaw = mix(tableView.yaw, yaw, blend);
-        tableView.pitch = mix(tableView.pitch, aim.pitch, blend);
-      }
+    if (tableView === null) return;
+    if (!tableView.panning) {
+      const blend = immediate ? 1 : 1 - Math.exp(-13 * dt);
+      tableView.yaw = mix(tableView.yaw, tableView.goalYaw, blend);
+      tableView.pitch = mix(tableView.pitch, tableView.goalPitch, blend);
     }
     r.setTableView?.(table.mode === "eye" ? eyeTableCamera(eye, tableView.yaw, tableView.pitch) : WIDE_TABLE_CAMERA, offsetY);
   }
@@ -1210,14 +1210,14 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     const lightNow = look?.lighting ?? deps.lighting ?? "talk";
     const suspectTargets = deps.suspectTargets?.();
     const table = compactBar ? look?.table : undefined;
-    const localTable = table === undefined ? null : tablePosition(mySeat, sNow);
+    const localTable = table === undefined ? null : tablePosition(mySeat, sNow, true);
     const voice = table?.voice;
     const voiceAge = voice === undefined ? Infinity : sNow - voice.at;
     const speakerPosition = voice && voiceAge >= -100 && voiceAge < 1800 ? tablePosition(voice.seat, sNow) : null;
     const chosen = table?.focus === undefined ? null : tablePosition(table.focus, sNow);
     const react = table?.focusAt !== undefined && sNow - table.focusAt >= -100 && sNow - table.focusAt < 1200;
     const viewer = localTable ? tableEyeAt(localTable) : null;
-    const tableFurnished = compactBar && lightNow !== "trial";
+    const tableFurnished = compactBar && (table !== undefined || lightNow !== "trial");
     r.setTableScene?.(tableFurnished);
     for (const a of actors.values()) {
       const server = segFor(a.seat);
@@ -1292,7 +1292,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       const dx = at.x - a.pos.x;
       const dz = at.z - a.pos.z;
       const moving = !resync && dx * dx + dz * dz > MOVE_EPS * MOVE_EPS;
-      a.barSeat = compactBar && !wantGhost ? barSeatAt(at) : undefined;
+      a.barSeat = compactBar && (!wantGhost || table !== undefined) ? barSeatAt(at) : undefined;
       const posed = a.barSeat !== undefined && !moving;
       const aim = pointAt ?? emotePlaying.find((p) => p.seat === a.seat && p.until > now)?.target;
       if (moving) walkingSeats.add(a.seat);
@@ -1323,6 +1323,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       }
       a.pos = { x: at.x, z: at.z };
       const eyeView = table?.mode === "eye" && localTable !== null;
+      a.handle.root.visible = !(eyeView && a.seat === mySeat && wantGhost);
       a.handle.setHeadDensity?.(posed && eyeView ? "close" : "world");
       a.handle.setSeated?.(posed, posed && eyeView && a.seat === mySeat);
       const picked = aim === undefined ? null : tablePosition(aim, sNow);

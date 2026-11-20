@@ -28,8 +28,7 @@
 //              시민 판은 어둠·맥박 화면) CPU 감속 아래 장면마다 머무는 동안(--minutes 를 두 판이 반씩) 페이지 안 rAF 간격을 재 평균 fps·끊김·p95 를 장면별 칸(scenes)과 함께
 //              `nightload-{크기}-x{감속}.json`(기본 폴더 .planning/phases/09-night-morning/perf/)으로 저장한다. 넘기기·시트 조작 동안은 기록을 멈춘다. 6페이즈 기준(5분 평균 55fps, 끊김 5회)은
 //              baseline 칸에 적을 뿐 판정하지 않는다 — 합격 판정은 실기기 확인(사용자 결정 2026-11-02). 방은 끝에 나가서 지운다. v1.0 주소는 어떤 요청보다 먼저 거부한다.
-//   --map bar|plaza (nightload, 11-13·20-09): 시작 전에 방장이 지도 칩 → 맵 탭 → 그 맵 카드를 고른다(pickMapViaUi). 시작 뒤 view.map 이 그 맵이 아니면 오류로 끝낸다.
-//              저장 이름 끝 `-bar`·`-plaza`, JSON params.map. 옵션이 없으면 아무것도 고르지 않는다(이름은 이전 그대로 끝 표시 없음, 맵 확인도 없음).
+//   --map bar|plaza: 광장은 합성 3D 측정에서 쓴다. 실제 방에서 측정하는 nightload 는 재즈 바를 쓴다.
 //   --mode light: 광장·재즈 바의 talk·morning·vote·night 화면을 같은 카메라로 찍어 평균 상대 휘도를 재고
 //              순서(talk > morning > vote > night)·배율(talk ≥ 2.0×night, morning ≥ 1.6×night)을 판정한다. 결과 `light-{크기}.json`·`light-{맵}-{단계}.png`. 실패가 있으면 종료 코드 1.
 //   사용 예:   node scripts/perf-run.mjs --mode nightload --url http://localhost:5173 --minutes 5 --throttle 4 --size 390x844
@@ -51,7 +50,7 @@ import {
   openHostPage,
   openTestSheet,
   readChatLines,
-  readGame,
+  readNightFaces,
   readWorld,
   screensOfWorld,
   setBotVote,
@@ -59,10 +58,8 @@ import {
   skipTo,
   sleep,
   startGame,
-  tapPick,
   waitWorldReady,
 } from "./e2e/browser.mjs";
-import { pickMapViaUi } from "./e2e/mapselect.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DEFAULT_OUT = join(REPO, ".planning/phases/06-world-skeleton/perf");
@@ -73,10 +70,10 @@ const NIGHTLOAD_OUT = join(REPO, ".planning/phases/09-night-morning/perf");
 /** nightload: 장면마다 머무는 시간(ms). 합 50초 = 한 바퀴. 처형·아침은 서버 타이머가 5초 안팎이라 그보다 짧게 머문다.
  * (22-06: 낮 시작 다음의 errand 장면이 없어졌다.) */
 export const NIGHTLOAD_DWELL = [
-  ["discussion", 10_000],
+  ["discussion", 14_500],
+  ["verdict", 1_500],
   ["nomination", 6_000],
   ["defense", 6_000],
-  ["verdict", 6_000],
   ["execution", 4_000],
   ["night", 14_000],
   ["morning", 4_000],
@@ -169,7 +166,7 @@ export function parseArgs(argv) {
         break;
       }
       case "--map": {
-        // 장면과 걷기 시나리오의 맵(perf 의 ?perf=1&map=, nightload 는 시작 전에 지도 칩으로 고른다) — 광장 성능 측정(MAP-06, 11-10·11-13)
+        // 합성 장면의 맵(perf 의 ?perf=1&map=).
         const v = need(a, i++);
         if (v !== "bar" && v !== "plaza") throw new UsageError(`--map 은 bar·plaza 중 하나: ${v}`);
         o.map = v;
@@ -766,15 +763,7 @@ async function nightloadOnce(browser, o, origin, chrome) {
 
     await openTestSheet(page);
     await setBots(page, tracker, o.bots);
-    await setBotVote(page, tracker, { exec: "no", pick: "other" });
-    // --map bar|plaza: 방장 줄의 [맵] 으로 맵 카드를 고른다(20-09). 선택은 방에 남는다.
-    // 옵션이 없으면 맵을 바꾸지 않는다. 옵션을 준 경우에만 아래에서 시작 뒤 view.map 을 확인한다
-    if (o.map === "bar" || o.map === "plaza") {
-      if (o.mapGiven) {
-        await pickMapViaUi(page, tracker, o.map);
-      }
-    }
-
+    await setBotVote(page, tracker, { exec: "yes", pick: "other" });
     // 한 바퀴(70초)까지 넘겨 재는 경우가 있어 측정 시간에 여유 2분을 더한 240Hz 분량
     const cap = Math.ceil((o.minutes * 60 + 120) * 240);
     await page.evaluate((capacity) => {
@@ -810,8 +799,7 @@ async function nightloadOnce(browser, o, origin, chrome) {
     const startedAt = new Date().toISOString();
     const perPassMs = (o.minutes * 60_000) / NIGHTLOAD_PASSES.length;
     const cycles = {};
-    // 옵션을 준 경우에만 기본 마피아로 바꿔 고른 맵을 기대한다(없으면 null — 맵 확인 없음)
-    const expectedMap = o.mapGiven ? o.map : null;
+    const expectedMap = "bar";
     const dwell = NIGHTLOAD_DWELL;
     let mapChecked = false;
     /** 장면별 그리기 통계(마지막 한 번씩) */
@@ -829,7 +817,7 @@ async function nightloadOnce(browser, o, origin, chrome) {
       while (measured < perPassMs) {
         await mark(`${role}:setup`, true);
         await startGame(page, tracker);
-        if (!mapChecked && expectedMap !== null) {
+        if (!mapChecked) {
           // 잘못된 맵을 잰 결과를 남기지 않는다(20-09): 시작한 판의 서버 값(view.map)이 기대한 맵이어야 한다
           const got = tracker.last()?.map ?? null;
           if (got !== expectedMap) throw new Error(`측정 맵이 기대와 다름: view.map ${got} (기대 ${expectedMap})`);
@@ -838,12 +826,6 @@ async function nightloadOnce(browser, o, origin, chrome) {
         for (const [phase, ms] of dwell) {
           await mark(`${role}:setup`, true);
           await skipTo(page, tracker, phase);
-          // 마피아 판의 밤: 대상을 눌러 내 캐릭터가 걷게 한다(이동·고리). 이름표를 누른다. 실패해도 측정은 이어 간다
-          if (role === "mafia" && phase === "night") {
-            const g = await readGame(page).catch(() => null);
-            const seat = g?.picks?.map((b) => b.seat).sort((a, b) => a - b)[0];
-            if (seat !== undefined) await tapPick(page, seat).catch(() => {});
-          }
           await mark(`${role}:${phase}`, false);
           // 장면 도중(끝나기 직전)에 그리기 통계를 한 번 읽는다(20-09) — 로비에서 읽은 값은 게임 장면과 다르다. 읽는 시간은 아래 sleep 에서 뺀다
           const sampleAt = Math.max(0, ms - 300);
@@ -852,6 +834,12 @@ async function nightloadOnce(browser, o, origin, chrome) {
           if (info) renderDuring[`${role}:${phase}`] = info;
           await sleep(ms - sampleAt);
           measured += ms;
+          // 밤 조기 종료가 측정 시간을 줄이지 않도록 측정 뒤에 대상을 고른다.
+          if (role === "mafia" && phase === "night" && tracker.last()?.phase === "night") {
+            const night = await readNightFaces(page).catch(() => null);
+            const seat = night?.faceSeats.find((candidate) => candidate !== tracker.last()?.me.seat);
+            if (seat !== undefined) await page.locator(`[data-face="${seat}"]`).click({ timeout: 4000 }).catch(() => {});
+          }
         }
         await mark(`${role}:setup`, true);
         await backToLobby(page, tracker);
@@ -926,6 +914,10 @@ export function maxRender(byScene) {
 }
 
 async function runNightload(browser, o, origin, chrome) {
+  if (o.map !== "bar") {
+    console.error("실제 방의 밤 부하를 측정하려면 --map bar를 사용하세요.");
+    return 1;
+  }
   let result;
   try {
     result = await nightloadOnce(browser, o, origin, chrome);

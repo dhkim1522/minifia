@@ -10,7 +10,7 @@ import { stripComments } from "./chatStaticGuard.test";
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
 /** 클라이언트가 import 하면 안 되는 서버 전용 모듈. 정답 추론 재료(목록·판정·답 규칙)다. */
-const SERVER_ONLY_MODULE = /shared\/game\/(keywords|keywordGuard|keywordAnswer)(\.[a-z]+)?$/;
+const SERVER_ONLY_MODULE = /shared[\\/]game[\\/](keywords|keywordGuard|keywordAnswer)(\.[a-z]+)?$/;
 
 /** 주석을 지운 본문에서 서버 전용 키워드 모듈을 가리키는 import·export from·동적 import 의 지정자를 모은다. */
 export function keywordModuleImports(path: string, src: string): string[] {
@@ -112,12 +112,13 @@ describe("클라이언트에서 닿는 모든 모듈은 서버 전용 키워드 
   });
 
   it("가드 자기 검사: 전이 경로(entry → mid → keywords)를 잡는다", () => {
+    const entry = resolve(ROOT, "shared/game/__fakeEntry.ts");
     const files: Record<string, string> = {
-      [`${ROOT}shared/game/__fakeEntry.ts`]: `import { x } from "./room";`,
-      [`${ROOT}shared/game/room.ts`]: `import { GENRES } from "./keywords";`,
-      [`${ROOT}shared/game/keywords.ts`]: ``,
+      [entry]: `import { x } from "./room";`,
+      [resolve(ROOT, "shared/game/room.ts")]: `import { GENRES } from "./keywords";`,
+      [resolve(ROOT, "shared/game/keywords.ts")]: ``,
     };
-    const hit = reachableFrom([`${ROOT}shared/game/__fakeEntry.ts`], (f) => files[f] ?? readFileSync(f, "utf8"));
+    const hit = reachableFrom([entry], (f) => files[f] ?? readFileSync(f, "utf8"));
     expect([...hit.keys()].some((f) => SERVER_ONLY_MODULE.test(f))).toBe(true);
   });
 

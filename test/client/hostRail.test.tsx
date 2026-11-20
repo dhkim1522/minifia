@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { HOST_RAIL_LABEL, HostRail } from "../../src/components/v2/HostRail";
 import { HostRailButton } from "../../src/components/v2/HostRailButton";
-import { MapChip } from "../../src/components/v2/MapChip";
 
 afterEach(() => {
   cleanup();
@@ -139,7 +138,7 @@ describe("HostRailButton — 방장 도구 타일 (19-03, D-13·D-14, UI-SPEC A-
 
 const railButtons = (onPress: () => void = () => {}) => [
   <HostRailButton key="bots-a" id="bots" icon="bot" label="봇" onPress={onPress} />,
-  <MapChip key="map" rail choice="random" host onPress={onPress} />,
+  <HostRailButton key="bots-c" id="bots" icon="bot" label="봇" onPress={onPress} />,
   <HostRailButton key="bots" id="bots" icon="bot" label="봇" onPress={onPress} />,
   // 줄 틀 시험의 단추 고정물(칸 수 4). 4번째 칸: 줄 틀 시험은 칸 수 4 에 맞춘 높이를 쓴다(토글 칸 자리의 일반 토글 단추 — 22-03 에서 [튜토리얼 먼저]가 없어졌다)
   <HostRailButton key="bots-b" id="bots" icon="bot" label="봇" switchOn onPress={onPress} />,
@@ -160,10 +159,10 @@ describe("HostRail — 방장 줄 틀 (19-03, D-13, UI-SPEC A·F-2)", () => {
     expect(rail.classList.contains("mf-hostrail")).toBe(true);
     expect(rail.hasAttribute("tabindex")).toBe(false);
     expect(rail.hasAttribute("data-test-shift")).toBe(false);
-    expect(colsOf(container)).toBe("bots,map,bots,bots");
+    expect(colsOf(container)).toBe("bots,bots,bots,bots");
     expect([...rail.children].map((c) => c.className)).toEqual(["mf-hostrail__cols"]);
     // 표식 값은 고정 낱말뿐이다(T-19-11)
-    expect([...rail.querySelectorAll("[data-host-rail-btn]")].every((b) => ["map", "bots"].includes(b.getAttribute("data-host-rail-btn") ?? ""))).toBe(true);
+    expect([...rail.querySelectorAll("[data-host-rail-btn]")].every((b) => b.getAttribute("data-host-rail-btn") === "bots")).toBe(true);
     // 줄에 보이는 글이 없다(D-15)
     expect((rail.textContent ?? "").trim()).toBe("");
   });
@@ -171,7 +170,7 @@ describe("HostRail — 방장 줄 틀 (19-03, D-13, UI-SPEC A·F-2)", () => {
   it("한 열에 안 들어가면 표식 없이 두 열로 나뉘고 줄의 접근성 이름은 남는다", () => {
     const { container } = render(<HostRail maxHeight={180}>{railButtons()}</HostRail>);
     expect(container.querySelectorAll("[data-host-rail-crown]").length).toBe(0);
-    expect(colsOf(container)).toBe("bots,map,bots | bots");
+    expect(colsOf(container)).toBe("bots,bots,bots | bots");
     expect(container.querySelector("[data-host-rail]")?.getAttribute("aria-label")).toBe("방장 전용");
   });
 
@@ -183,7 +182,7 @@ describe("HostRail — 방장 줄 틀 (19-03, D-13, UI-SPEC A·F-2)", () => {
         {false}
       </HostRail>,
     );
-    expect(colsOf(container)).toBe("bots,map,bots");
+    expect(colsOf(container)).toBe("bots,bots,bots");
     expect(container.querySelectorAll("[data-host-rail-crown]").length).toBe(0);
   });
 
@@ -208,46 +207,6 @@ describe("HostRail — 방장 줄 틀 (19-03, D-13, UI-SPEC A·F-2)", () => {
     expect(container.querySelectorAll("[data-host-rail-btn]").length).toBe(4);
     for (const b of container.querySelectorAll("[data-host-rail-btn]")) fireEvent.click(b);
     expect(onPress).toHaveBeenCalledTimes(4);
-  });
-});
-
-describe("MapChip 줄 변형 (19-03, P19-4)", () => {
-  it("rail 이면 방장 단추 모양·표식 map 이고 data-side-button 이 없다. 아이콘·data-map-chip·이름은 그대로다", () => {
-    const { container } = render(<MapChip rail choice="plaza" host onPress={() => {}} />);
-    const chip = container.querySelector("[data-map-chip]");
-    expect(chip?.getAttribute("data-host-rail-btn")).toBe("map");
-    expect(chip?.getAttribute("data-map-chip")).toBe("plaza");
-    expect(chip?.className).toBe("mf-mapchip mv-hostrail-btn");
-    expect(chip?.hasAttribute("data-side-button")).toBe(false);
-    expect(chip?.getAttribute("aria-label")).toBe("맵 광장");
-    expect(chip?.getAttribute("aria-pressed")).toBe("false");
-    expect(chip?.querySelector("svg")).not.toBeNull();
-  });
-
-  it("rail + pressed 면 aria-pressed=true 다(꾸미기 시트의 맵 탭이 열려 있음)", () => {
-    const { container } = render(<MapChip rail pressed choice="bar" host onPress={() => {}} />);
-    expect(container.querySelector("[data-map-chip]")?.getAttribute("aria-pressed")).toBe("true");
-  });
-
-  it("rail 이어도 누르면 onPress 한 번, 방장이 아니면 0번이다", () => {
-    const onPress = vi.fn();
-    const a = render(<MapChip rail choice="random" host onPress={onPress} />);
-    expect(a.container.querySelector("[data-host-rail-btn]")).not.toBeNull();
-    fireEvent.click(a.container.querySelector("[data-map-chip]")!);
-    expect(onPress).toHaveBeenCalledTimes(1);
-    a.unmount();
-    const b = render(<MapChip rail choice="random" host={false} onPress={onPress} />);
-    fireEvent.click(b.container.querySelector("[data-map-chip]")!);
-    expect(onPress).toHaveBeenCalledTimes(1);
-  });
-
-  it("rail 없이 그리면 지금 마크업 그대로다(기존 화면은 바뀌지 않는다)", () => {
-    const { container } = render(<MapChip choice="bar" host onPress={() => {}} />);
-    const chip = container.querySelector("[data-map-chip]");
-    expect(chip?.getAttribute("data-side-button")).toBe("map");
-    expect(chip?.className).toBe("mf-mapchip");
-    expect(chip?.hasAttribute("data-host-rail-btn")).toBe(false);
-    expect(chip?.hasAttribute("aria-pressed")).toBe(false);
   });
 });
 

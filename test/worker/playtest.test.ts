@@ -60,8 +60,6 @@ describe("첫날 실험방 HTTP·소켓", () => {
     const restore = openKeyword();
     try {
       const { code, host, sockets } = await seatFour();
-      send(host, { t: "mapPick", map: "bar" });
-      await nextFrame(host, (msg) => msg.t === "state" && msg.view.mapChoice === "bar");
       send(host, { t: "start" });
       await nextFrame(host, (msg) => msg.t === "state" && msg.view.phase === "assigning");
       await closePhase(code);

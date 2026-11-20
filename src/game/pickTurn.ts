@@ -11,7 +11,7 @@ export const TURN_COPY = {
   count: (no: number, total: number): string => `${no} / ${total}`,
   turnOf: (name: string): string => `${name} 님 차례`,
   seconds: (n: number): string => `${n}초`,
-  gather: "가운데로 모여요",
+  gather: "지목을 준비해요",
   pointed: (name: string, target: string): string => `${name} 님이 ${target} 님을 가리켜요`,
   abstained: (name: string): string => `${name} 님이 고르지 못했어요`,
   allPicked: "모두 골랐어요",

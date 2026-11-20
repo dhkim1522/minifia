@@ -4,7 +4,6 @@ import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import "../helpers/singleLineErrors";
 import { FloatAction } from "../../src/components/v2/FloatAction";
-import { MapChip } from "../../src/components/v2/MapChip";
 import { SideColumn, splitSideColumn } from "../../src/components/v2/SideColumn";
 
 afterEach(cleanup);
@@ -103,14 +102,6 @@ describe("SideColumn — 부품", () => {
 });
 
 describe("열 단추 표식·모양 (V-2)", () => {
-  it("MapChip 은 data-side-button=map, 글·안쪽 원 요소가 없다", () => {
-    const { container } = render(<MapChip choice="bar" host onPress={() => {}} />);
-    const chip = container.querySelector("[data-map-chip]")!;
-    expect(chip.getAttribute("data-side-button")).toBe("map");
-    expect(chip.querySelector(".mf-mapchip__disc")).toBeNull();
-    expect(chip.textContent).toBe("");
-  });
-
   it("FloatAction 은 side 를 줄 때만 data-side-button 을 단다 (bots·dress), 글이 없다", () => {
     const { container } = render(
       <>
@@ -127,7 +118,7 @@ describe("열 단추 표식·모양 (V-2)", () => {
   });
 
   it("CSS: 열 단추는 52px 타일, 소리는 누아르 패널과 구분선을 쓴다", () => {
-    for (const sel of [".mv-sound", ".mf-mapchip", '.mv-float[data-side-button]']) {
+    for (const sel of [".mv-sound", '.mv-float[data-side-button]']) {
       const b = body(sel);
       expect(b, sel).toMatch(/width:\s*var\(--control-button\)/);
       expect(b, sel).toMatch(/height:\s*var\(--control-button\)/);
@@ -136,11 +127,9 @@ describe("열 단추 표식·모양 (V-2)", () => {
     expect(body(".mv-sound")).toMatch(/background:\s*var\(--noir-control\)/);
     expect(body(".mv-sound")).toMatch(/border:\s*1px solid/);
     expect(body(".mv-sound")).toMatch(/border:\s*1px solid var\(--noir-control-line\)/);
-    for (const sel of [".mf-mapchip", ".mv-float"]) {
-      expect(body(sel), sel).toMatch(/border-radius:\s*var\(--noir-control-radius\)/);
-      expect(body(sel), sel).toMatch(/background:\s*var\(--noir-control\)/);
-      expect(body(sel), sel).toMatch(/border:\s*1px solid var\(--noir-control-line\)/);
-    }
+    expect(body(".mv-float")).toMatch(/border-radius:\s*var\(--noir-control-radius\)/);
+    expect(body(".mv-float")).toMatch(/background:\s*var\(--noir-control\)/);
+    expect(body(".mv-float")).toMatch(/border:\s*1px solid var\(--noir-control-line\)/);
   });
 
   it("CSS: 소리 단추는 독의 오른쪽에 고정된다", () => {

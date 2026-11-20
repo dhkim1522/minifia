@@ -27,7 +27,6 @@ import { useTutorialScene } from "../net/useTutorialScene";
 import { WorldStore } from "../world/store";
 import { GameMap } from "./GameMap";
 import { Keyword } from "./Keyword";
-import { PreGame } from "./PreGame";
 import { RoleReveal } from "./RoleReveal";
 import "../styles/room.css";
 import "../styles/playtest.css";
@@ -45,7 +44,7 @@ function selectorFor(target: TutorialTargetId, scene: TutorialSceneId, playtest:
     case "endDiscussion": return "[data-end-discussion]";
     case "first-ballot": return "[data-first-ballot] [data-face], [data-first-ballot-hold]";
     case "yes": return '[data-verdict="yes"]';
-    case "tag-4": return scene === "postit" ? '[data-suspect-tag="4"]' : '[data-pick="4"]';
+    case "tag-4": return scene === "postit" ? '[data-table-seat="4"][data-suspect-tag="4"]' : '[data-table-seat="4"][data-pick="4"]';
     case "face-0": return '[data-face="0"]';
     case "night-done": return "[data-night-done]";
     case "suspect-btn": return playtest ? '[data-playtest-action="suspect"]' : "[data-suspect-btn]";
@@ -115,7 +114,7 @@ export function TutorialScreen({ onExit, playtest = false }: { onExit: () => voi
   const bottomEdge = useTutorialLayout(root, selector, sceneId, beatId);
   const [store] = useState(() => {
     const world = new WorldStore();
-    world.applyFrame(tutorialSnap("roles", startedAt, playtest), 0);
+    world.applyFrame(tutorialSnap(startedAt), 0);
     return world;
   });
   const [chat] = useState(() => new ChatStore());
@@ -131,7 +130,7 @@ export function TutorialScreen({ onExit, playtest = false }: { onExit: () => voi
 
   useEffect(() => preloadRoleAssets(), []);
   useLayoutEffect(() => {
-    store.applyFrame(tutorialSnap(sceneId, startedAt, playtest), 0);
+    store.applyFrame(tutorialSnap(startedAt), 0);
     if (sceneId === "roles") {
       chat.reset();
       setCardSeen(false);
@@ -229,19 +228,14 @@ export function TutorialScreen({ onExit, playtest = false }: { onExit: () => voi
         ? sound.supported && <HostDock sound={sound} />
         : <HostBand view={timelessView} offset={0} cardSeen={cardSeen} sound={sound.supported ? sound : null} />}
       <div className="mf-room__body">
-        {pregame ? (
-          <PreGame view={view} store={store} send={send} canSend offset={0} onLeave={onExit}>
-            {sceneId === "roles" ? (
-              <RoleReveal view={playtest ? timelessView : view} offset={0} myRoleButton={null} onSeenFront={() => setCardSeen(true)} send={send} canSend />
-            ) : (
-              <Keyword key={beatId} view={view} offset={0} myRoleButton={null} send={send} canSend timeless />
-            )}
-          </PreGame>
-        ) : (
-          <GameMap view={view} store={store} chat={chat} send={send} canSend offset={0} tod={false}
-            timeless bottomExtra={60} onLeave={onExit} announce={liveAnnouncements[0] ?? null}
-            {...(fading === undefined ? {} : { fading })} />
-        )}
+        <GameMap view={view} store={store} chat={chat} send={send} canSend offset={0} tod={false}
+          timeless bottomExtra={60} onLeave={onExit} announce={liveAnnouncements[0] ?? null}
+          opening={pregame ? sceneId === "roles" ? (
+            <RoleReveal view={playtest ? timelessView : view} offset={0} myRoleButton={null} onSeenFront={() => setCardSeen(true)} send={send} canSend embedded />
+          ) : (
+            <Keyword key={beatId} view={view} offset={0} myRoleButton={null} send={send} canSend timeless embedded />
+          ) : undefined}
+          {...(fading === undefined ? {} : { fading })} />
       </div>
       {sceneId === "roles" && (beatId === "b" || beatId === "c") ? (
         <div className="tut-role-icons" aria-hidden="true">

@@ -8,11 +8,10 @@ import { Sheet } from "../../src/components/Sheet";
 import { ChatPanel, type ChatPanelProps } from "../../src/components/v2/ChatPanel";
 import { DressSheet } from "../../src/components/v2/DressSheet";
 import { FloatAction } from "../../src/components/v2/FloatAction";
-import { MapChip } from "../../src/components/v2/MapChip";
 import { ResultPanel, type ResultPanelProps, type ResultTab } from "../../src/components/v2/ResultPanel";
 import { WillSheet } from "../../src/components/v2/WillSheet";
 import { EMOTE_TRAY_ORDER } from "../../src/game/chatText";
-import { DRESS_TEXT, MAP_CHIP_NAME } from "../../src/game/dressText";
+import { DRESS_TEXT } from "../../src/game/dressText";
 import { setEngineForTest } from "../../src/audio/unlock";
 import { makeRig } from "../helpers/soundRig";
 import type { RoleId } from "../../shared/game/roles";
@@ -268,18 +267,6 @@ describe("시트 닫기·결과 탭 (TOOL-04, D-01·V-7)", () => {
 });
 
 describe("머리·떠 있는 단추·옷장 (TOOL-04, D-01)", () => {
-  it("MapChip: 글 없이 아이콘과 접근성 이름 '맵 …' — 손님(aria-disabled)도 이름이 남는다", () => {
-    for (const host of [true, false]) {
-      for (const choice of ["bar", "plaza", "random"] as const) {
-        const { container, unmount } = render(<MapChip choice={choice} host={host} onPress={() => {}} />);
-        const chip = container.querySelector("[data-map-chip]");
-        expectIconButton(chip, MAP_CHIP_NAME[choice]);
-        expect(chip?.getAttribute("aria-disabled") === "true").toBe(!host);
-        unmount();
-      }
-    }
-  });
-
   it("DRESS_TEXT.open 은 '옷장' 이고 FloatAction(옷장)은 아이콘과 같은 이름뿐이다", () => {
     expect(DRESS_TEXT.open).toBe("옷장");
     const { container } = render(<FloatAction kind="dress" icon="hanger" label={DRESS_TEXT.open} onPress={() => {}} />);
@@ -292,24 +279,15 @@ describe("머리·떠 있는 단추·옷장 (TOOL-04, D-01)", () => {
     expectIconButton(container.querySelector("[data-float=dress]"), "옷장");
   });
 
-  it("옷장 시트: 이름 '옷장', 방장 탭 둘은 '맵'·'의상' 글자 그대로, 닫기는 × 뿐", () => {
-    const { container } = render(<DressSheet value="coat" onPick={() => {}} onClose={() => {}} host tab="map" mapChoice="random" onPickMap={() => {}} />);
-    expect(container.querySelector("[data-dress-sheet]")?.getAttribute("aria-label")).toBe("옷장");
-    expectTextControl(container.querySelector("[data-map-tab=map]"), "맵", { name: "맵" });
-    expectTextControl(container.querySelector("[data-map-tab=dress]"), "의상", { name: "의상" });
-    const close = container.querySelector(".mv-dress-sheet__close");
-    expectIconButton(close, "닫기");
-    expect(close?.classList.contains("mv-closepill")).toBe(true);
-  });
-
-  it("손님의 옷장 시트에는 탭이 없고 닫기는 있다", () => {
+  it("의상 전용 옷장 시트에는 의상 카드와 닫기가 있다", () => {
     const { container } = render(<DressSheet value="coat" onPick={() => {}} onClose={() => {}} />);
     expect(container.querySelector("[data-map-tab]")).toBeNull();
+    expect(container.querySelector("[data-dress-sheet]")?.getAttribute("aria-label")).toBe("옷장");
+    expect(container.querySelectorAll("[data-outfit]")).toHaveLength(9);
     expectIconButton(container.querySelector(".mv-dress-sheet__close"), "닫기");
   });
 
-  it("CSS: 맵 칩은 52 원, 떠 있는 단추는 48 원(옆 열 단추는 52)이다 (16-06, 상자가 곧 면)", () => {
-    expect(rule(".mf-mapchip")).toContain("width: var(--control-button)");
+  it("CSS: 떠 있는 단추는 48 원(옆 열 단추는 52)이다 (16-06, 상자가 곧 면)", () => {
     expect(rule(".mv-float")).toContain("width: var(--control-input)");
     expect(rule(".mv-float[data-side-button]")).toContain("width: var(--control-button)");
   });

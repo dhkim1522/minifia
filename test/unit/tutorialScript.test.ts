@@ -3,12 +3,9 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { isWalkable, cellOfFx, UNIT } from "../../shared/game/map";
-import { mapOf } from "../../shared/game/maps";
-import { NOTE_REACH_ON_PCT, withinNoteReach } from "../../shared/game/postit";
+import { BAR_SEATS_FX } from "../../shared/game/map";
 import { hostLineOf } from "../../src/game/hostLine";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
-import type { Segment } from "../../shared/game/world";
 import {
   TUTORIAL_CAST,
   TUTORIAL_PILLS,
@@ -327,30 +324,14 @@ describe("12초 대행 = 눌렀을 때와 같은 결과(P24-27)", () => {
 });
 
 describe("postit 장면 — 둘째 날 포스트잇(D-22·D-23)", () => {
-  const segs = (at: number): Record<number, Segment> => {
-    const snap = tutorialSnap("postit", at);
-    return Object.fromEntries(snap.ents.map((e) => [e.s, { p: e.p, t0: e.t0, v: e.v } satisfies Segment]));
-  };
-
-  it("시작 스냅: 내 자리(5)와 하린(4)·민준(0)·지호(3)는 가깝고(켜는 문턱 92%) 도윤(1)·서연(2)은 멀다", () => {
-    const s = segs(T0);
-    for (const near of [4, 0, 3]) expect(withinNoteReach(s[5], s[near], T0, NOTE_REACH_ON_PCT), `5↔${near}`).toBe(true);
-    for (const far of [1, 2]) expect(withinNoteReach(s[5], s[far], T0, NOTE_REACH_ON_PCT), `5↔${far}`).toBe(false);
-  });
-
-  it("스냅의 모든 자리가 플라자 지도에서 걸을 수 있는 칸이다(모든 장면)", () => {
-    const map = mapOf("plaza");
-    for (const s of TUTORIAL_SCENES) {
-      for (const e of tutorialSnap(s.id, T0).ents) {
-        const { c, r } = cellOfFx(e.p[0]!, e.p[1]!, map);
-        expect(isWalkable(map, c, r), `${s.id} seat ${e.s}`).toBe(true);
-      }
-    }
-    expect(UNIT).toBe(100);
+  it("일반과 실험 모드 모두 재즈 바에서 같은 실제 6인 의자에 배치된다", () => {
+    expect(tutorialSnap(T0).ents.map(({ p }) => p)).toEqual([0, 1, 2, 3, 6, 7].map((chair) => BAR_SEATS_FX[chair]));
+    for (const scene of TUTORIAL_SCENES) expect(tutorialView(scene.id).map).toBe("bar");
+    for (const scene of TUTORIAL_PLAYTEST_SCENES) expect(tutorialView(scene.id, undefined, T0, 0, { playtest: true }).map).toBe("bar");
   });
 
   it("스냅은 좌석 6개를 오름차순으로 싣고 t0 가 주어진 시각이다", () => {
-    const snap = tutorialSnap("discussion", T0);
+    const snap = tutorialSnap(T0);
     expect(snap.ents.map((e) => e.s)).toEqual([0, 1, 2, 3, 4, 5]);
     expect(snap.at).toBe(T0);
     for (const e of snap.ents) expect(e.t0).toBe(T0);

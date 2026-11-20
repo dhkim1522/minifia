@@ -23,7 +23,7 @@ import { pickFreeAnimal } from "./animalRoster";
 import { hostSuccessor } from "./continuity";
 import { resolveLookConflicts } from "./look";
 import { barChairAssignment } from "./map";
-import { decideMap } from "./maps";
+import { ROOM_MAP_ID } from "./maps";
 import { enterNomination } from "./nomination";
 import type { NoteRow } from "./postit";
 import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, NOMINATION_GATHER_MS } from "./phases";
@@ -206,10 +206,10 @@ export interface RoomState {
    * 이들이 받는 것은 buildView 의 쉬는 사람 분기가 만든 state 뿐이다. 판이 ended 로 들어서면 enterEnded 가 sat 로 players 에 합류시킨다.
    */
   bench?: Player[];
-  /** 방장이 고른 맵(결정 D-20). 공개 값이다(view.mapChoice). 없으면 "random" — pickMap 이 쓰고, 대기실 복귀·다시 하기 뒤에도 남는다. */
+  /** 이전 버전에서 저장한 맵 선택. 새 판은 재즈 바에서 열린다. */
   mapChoice?: MapChoice;
   /**
-   * 서버 전용(결정 0089-2·D-05). 첫날 키워드 — beginGame 이 decideMap 뒤 randInt 두 번(장르·단어)으로 고른다. 없으면 keyword 단계를 건너뛴다(D-29, 옛 저장 방·시험 스위치 끔).
+   * 서버 전용(결정 0089-2·D-05). 첫날 키워드 — beginGame 이 역할 배정 뒤 randInt 두 번(장르·단어)으로 고른다. 없으면 keyword 단계를 건너뛴다(D-29, 옛 저장 방·시험 스위치 끔).
    * view 키 day.keyword(장르 라벨)·me.keyword(시민 편 본인의 단어)와 이름이 같아 SERVER_ONLY_KEYS 이름 검사에 넣지 않고 값으로 지킨다(RESEARCH P2).
    */
   keyword?: { genre: string; word: string };
@@ -234,7 +234,7 @@ export interface RoomState {
    * 다시 하기 허용 목록 밖이라 새 판에 넘어가지 않는다. 어떤 view·프레임에도 싣지 않는다(T-23-31).
    */
   earlyFrom?: { phase: PhaseId; day: number; endsAt: number };
-  /** 서버 전용 결정값(결정 D-21). startGame 이 mapChoice 로 정해 싣는다 — 시작 전에는 어떤 view·프레임에도 싣지 않는다(L42). 대기실 복귀가 버린다. */
+  /** 판의 맵. 새 판은 재즈 바이며 예전 광장 저장은 복원할 때 이전한다. */
   map?: MapId;
   /** 라운드 시작 때 고정한 재즈 바의 논리 좌석 → 물리 의자. 좌석 번호나 공개 위치 프레임은 바꾸지 않는다. */
   barChairs?: Partial<Record<number, number>>;
@@ -451,8 +451,7 @@ export function startGame(
 }
 
 /**
- * 새 판의 본체(startGame 과 다시 하기 rematch 가 함께 쓴다, 11-08): state.players 전원에게 역할을 주고 맵을 정해 assigning 으로 보낸다.
- * 호출 순서·난수 순서는 startGame 이 쓰던 그대로다 — 좌석 오름차순 id 로 assignRoles → 테스트 방 직업 맞바꿈 → decideMap(허용 맵이 하나면 난수를 부르지 않는다).
+ * 새 판의 본체(startGame 과 다시 하기 rematch 가 함께 쓴다, 11-08): 전원에게 역할과 재즈 바 좌석을 배정한다.
  * 만료(expiresAt)는 건드리지 않는다 — 시작은 now + ROOM_TTL_MS, 다시 하기는 min(방 생성 + 12시간, now + ROOM_TTL_MS)로 호출하는 쪽이 정한다.
  * 시작 순간 겹친 옷을 푼다(D-01) — 역할을 붙이기 전에 resolveLookConflicts 를 부르며 난수·역할을 읽지 않으므로 위 난수 순서는 그대로다.
  * players 는 4~8명이어야 한다(호출하는 쪽이 보장). 입력은 바꾸지 않는다.
@@ -472,9 +471,7 @@ export function beginGame(
     state.testMode === true && state.testRole !== undefined && rolesInPlay(seated.length).includes(state.testRole)
       ? giveRoleTo(shuffled, orderedIds, state.hostId, state.testRole)
       : shuffled;
-  // 맵은 역할 배정 난수를 모두 쓴 뒤에 정한다(결정 D-21) — 허용 맵이 하나면 난수를 부르지 않아 기존 시드 시험이 그대로다.
-  const map = decideMap(state.mapChoice ?? "random", randInt);
-  // 키워드는 맨 끝 난수 두 번이다(D-29) — 역할 → 맵 순서와 기존 시드 시험은 그대로. 고르는 함수가 없으면(스위치 끔) 들어온 상태의 keyword 도 지운다(다시 하기가 옛 값을 끌고 오지 않게).
+  // 키워드는 역할 배정 뒤 난수 두 번이다(D-29). 고르는 함수가 없으면(스위치 끔) 이전 판의 keyword 도 지운다.
   // 의심 포스트잇(notes)도 같은 구조 분해로 뺀다 — 새 판에 어제 판의 종이가 따라오지 않게(벨트, D-08).
   const { keyword: _prevKeyword, notes: _prevNotes, barChairs: _prevChairs, ...rest } = state;
   const keyword = pickKeyword !== undefined ? pickKeyword(randInt) : undefined;
@@ -486,9 +483,9 @@ export function beginGame(
   return {
     ...rest,
     ...(keyword !== undefined ? { keyword } : {}),
-    ...(map === "bar" ? { barChairs: barChairAssignment(seated.map((p) => p.seat)) } : {}),
+    barChairs: barChairAssignment(seated.map((p) => p.seat)),
     startedAt: now,
-    map,
+    map: ROOM_MAP_ID,
     phase: "assigning",
     phaseEndsAt: now + ASSIGNING_MS,
     players: dressed.map((p) => ({ ...p, role: roles.get(p.id) })),
@@ -635,7 +632,7 @@ const LEGACY_V3_ROOM_KEYS: readonly string[] = ["tutorialPassed", "lamps", "scen
 const LEGACY_V3_PLAYER_KEYS: readonly string[] = ["tutorialDone", "skipVote", "errandCut", "sceneSeen", "errandPlaces", "errandDone", "errandNear", "errandSeen", "errandFake", "stats"];
 const LEGACY_V3_PHASES: readonly string[] = ["tutorial", "errand"];
 
-/** 22-05: 마을 맵으로 저장된 방인가(MapId 에서 빠진 값이라 문자열로 비교한다). 맵 조회(roomMapId)·MAPS 조회보다 먼저 돌아야 한다(T-22-08). */
+/** 22-05: 마을 맵으로 저장된 방인가(MapId 에서 빠진 값이라 문자열로 비교한다). */
 function hasLegacyTown(stored: RoomState): boolean {
   return (stored.map as string | undefined) === "town" || (stored.mapChoice as string | undefined) === "town";
 }
@@ -690,7 +687,7 @@ export function toLobbyFromLegacy(stored: RoomState): RoomState {
     // 쉬는 사람(bench)도 참가자로 합류시켜 아무도 잃지 않는다(resetToLobby 와 같다).
     players: [...stored.players, ...benchAsPlayers(stored)].map((p) => pickKeys(p, REMATCH_PLAYER_KEYS)),
   };
-  // 방장이 고른 값 중 마을은 기본값으로(키를 지워 pickMap 의 기본값 "random" 이 받는다, D-03).
+  // 옛 마을 선택 값은 제거한다(D-03).
   if ((lobby.mapChoice as string | undefined) === "town") {
     const { mapChoice: _dropped, ...rest } = lobby;
     return rest;

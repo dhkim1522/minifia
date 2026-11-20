@@ -12,7 +12,7 @@ import type { V2IconName } from "./V2Icon";
 // 방장 판정은 서버가 한다 — 이 부품은 화면 조작일 뿐이다(결정 0002).
 
 export interface HostRailButtonProps {
-  /** 표식 data-host-rail-btn 의 값. [맵] 은 MapChip 의 줄 변형이 "map" 을 단다 */
+  /** 표식 data-host-rail-btn 의 값 */
   id: "bots";
   /** 안에 그릴 아이콘 24 */
   icon: V2IconName;

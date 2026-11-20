@@ -1367,8 +1367,9 @@ test("parseBarMask·walkableCenters: shared/game/map.ts 원문에서 28줄 마�
   assert.ok(rows.every((r) => r.length === 28));
   const centers = walkableCenters(rows);
   assert.equal(centers.length, rows.join("").split(".").length - 1);
-  const first = centers[0];
-  assert.deepEqual(first, { x: -7 + rows[2].indexOf(".") * 0.5 + 0.25, z: -7 + 2 * 0.5 + 0.25 });
+  const firstWalkableRow = rows.findIndex((row) => row.includes("."));
+  const firstWalkableCol = rows[firstWalkableRow].indexOf(".");
+  assert.deepEqual(centers[0], { x: -7 + firstWalkableCol * 0.5 + 0.25, z: -7 + firstWalkableRow * 0.5 + 0.25 });
   assert.throws(() => parseBarMask("export const X = 1;"), /BAR_MASK/);
   assert.throws(() => parseBarMask('export const BAR_MASK: readonly string[] = ["..", "."];'), /정사각/);
 });
@@ -1414,7 +1415,7 @@ test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더�
   const flows = readFileSync(new URL("./flows.mjs", import.meta.url), "utf8");
   const entries = [...flows.matchAll(/\{ id: "([a-z0-9-]+)", run: [A-Za-z(), ]+?(, extraSizes: LOBBY_EXTRA_SIZES)?(?:, skipByDefault: true)? \}/g)];
   const withExtra = entries.filter((m) => m[2]).map((m) => m[1]);
-  assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "day", "ghost", "will-flow-sizes", "keyword-sizes", "night-sizes", "result-reveal", "map-select", "basic-vote", "politics-badge", "politics-whisper", "politics-pin", "politics-verdict", "politics-runoff", "politics-showdown", "avatar-emote", "avatar-dress", "sound-unlock", "emcee-band", "polish-reveal"]);
+  assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "day", "ghost", "will-flow-sizes", "keyword-sizes", "night-sizes", "result-reveal", "basic-vote", "politics-badge", "politics-whisper", "politics-pin", "politics-verdict", "politics-runoff", "politics-showdown", "avatar-emote", "avatar-dress", "sound-unlock", "emcee-band", "polish-reveal"]);
 });
 
 test("꺼진 장치 흐름 6개(배지·귓속말·결선 둘·결전 둘)는 skipByDefault 이고 politics-pin(22-13, 순차 지목이 기본 규칙)·politics-verdict 는 기본 실행에 남는다 (13-05 → 22-13)", () => {

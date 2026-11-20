@@ -25,15 +25,16 @@ export const MAP_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>([
 ]);
 
 /**
- * 로비에는 모두 움직일 수 있고 지도 단계의 유령은 자유다(A4). 산 사람은 광장 낮 시작·토론에 움직인다. 바 토론에서는 정해진 좌석을 쓴다.
+ * 로비에는 모두 움직일 수 있다. 재즈 바에서는 착석한 생존자와 유령 모두 자기 자리를 유지한다.
  * 밤에는 산 사람 누구도 움직이지 않는다(D-05, 역할 무관) — 모두 어둠 속에 서 있다.
  * 화면이 view 의 단계와 내 alive 로 같은 표를 쓰게 따로 내보낸다 — 권위는 서버다.
  */
 export function canMoveIn(phase: PhaseId, alive: boolean, map: MapId = "plaza"): boolean {
   if (phase === "lobby") return true;
+  if (map === "bar") return false;
   if (!MAP_PHASES.has(phase)) return false; // assigning·roleReveal·ended 와 옛 투표 단계
   if (!alive) return true; // 유령은 모든 지도 단계에서 자유(A4)
-  return map !== "bar" && (phase === "dayAnnounce" || phase === "discussion");
+  return phase === "dayAnnounce" || phase === "discussion";
 }
 
 /** 이 사람이 지금 이동 요청을 낼 수 있는지(서버가 받을지). 방에 있는지는 보지 않는다 — 단계와 생존만 본다. */

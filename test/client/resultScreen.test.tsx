@@ -6,15 +6,13 @@ import "../helpers/singleLineErrors";
 import { phaseKey } from "../../shared/game/audience";
 import { BAR_SEATS_FX, barChairAssignment } from "../../shared/game/map";
 import type { RoleId } from "../../shared/game/roles";
-import type { GameWinner, MapId, RoomView, SummaryRow } from "../../shared/protocol";
-import { PLAYABLE_MAPS } from "../../shared/game/maps";
+import type { GameWinner, RoomView, SummaryRow } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import type { ResultPanelProps } from "../../src/components/v2/ResultPanel";
 import type { RoomConnection, RoomEvent } from "../../src/net/useRoomConnection";
 import { LOG_H } from "../../src/game/chatUi";
 import { RESULT_TABS_SHOWN } from "../../src/game/resultText";
 import { GATHER_CENTER } from "../../src/world/camera";
-import { openPlaza } from "../helpers/playable";
 
 function barSeats(count: number) {
   const seats = Array.from({ length: count }, (_, seat) => seat);
@@ -1268,7 +1266,7 @@ describe("결과 단계 꾸미기 (11-12, D-16)", () => {
     expect(skip(r.container)).toBeNull();
   });
 
-  it("방장이면 5600 에 공용 도구 줄의 [dress] 와 왼쪽 줄(맵 단추 포함)이 한 번에 나타난다 — 떠 있는 [넘기기]는 없다 (16-06 D-05 → 19-05 D-13)", () => {
+  it("연출 뒤 방장에게 공용 옷장과 다시 하기 조작을 연다", () => {
     const r = renderRoom(executionView());
     r.rerenderRoom(makeView({ me: 0 }));
     advance(5600 - 100);
@@ -1278,11 +1276,10 @@ describe("결과 단계 꾸미기 (11-12, D-16)", () => {
     advance(100);
     expect(skip(r.container)).toBeNull();
     expect(r.container.querySelectorAll("[data-room-chat] [data-room-tool=dress]")).toHaveLength(1);
-    expect(r.container.querySelectorAll("[data-host-rail]")).toHaveLength(1);
+    expect(r.container.querySelectorAll("[data-host-rail]")).toHaveLength(0);
     expect(dress(r.container)!.getAttribute("data-room-tool")).toBe("dress");
-    // 맵 단추는 오른쪽 열이 아니라 왼쪽 줄에 있다(허용 맵이 둘 이상인 빌드)
-    expect(r.container.querySelectorAll("[data-side-column] [data-map-chip]")).toHaveLength(0);
-    expect(r.container.querySelectorAll("[data-host-rail] [data-map-chip]")).toHaveLength(PLAYABLE_MAPS.length > 1 ? 1 : 0);
+    expect(r.container.querySelector("[data-map-chip]")).toBeNull();
+    expect(r.container.querySelector("[data-ready-pill]")).not.toBeNull();
   });
 
   it("연출 중(5600 전)에도 [꾸미기]는 없다", () => {
@@ -1326,7 +1323,7 @@ describe("결과 단계 꾸미기 (11-12, D-16)", () => {
     expect(r.container.querySelector("button[data-outfit='coat']")?.hasAttribute("data-taken")).toBe(false);
   });
 
-  it("꾸미기 시트는 의상 카드만이다 (지도 탭은 11-13 몫)", () => {
+  it("꾸미기 시트에는 의상 카드만 있다", () => {
     const r = renderRoom(makeView({ me: 1 }));
     fireEvent.click(dress(r.container)!);
     expect(r.container.querySelectorAll("[data-map-card], [data-map-tab]")).toHaveLength(0);
@@ -1363,318 +1360,12 @@ describe("방장 이양 알림 (11-12, D-17)", () => {
   });
 });
 
-describe("결과 단계 지도 칩과 맵 탭 (11-13, D-20·O-11)", () => {
-  let restore = () => {};
-  beforeEach(() => {
-    restore = openPlaza();
-  });
-  afterEach(() => restore());
-  const chip = (c: ParentNode) => c.querySelector<HTMLElement>("[data-map-chip]");
-  const sideButtons = (c: ParentNode) => [...c.querySelectorAll("[data-room-chat] [data-room-tool=dress]")].map((e) => e.getAttribute("data-room-tool"));
-  const railIds = (c: ParentNode) => [...c.querySelectorAll("[data-host-rail] [data-host-rail-btn]")].map((e) => e.getAttribute("data-host-rail-btn")).join(",");
-  const withMap = (v: RoomView, mapChoice: "bar" | "plaza" | "random", map?: "bar" | "plaza"): RoomView => ({ ...v, mapChoice, ...(map ? { map } : {}) });
-  const basicView = (o: Parameters<typeof makeView>[0] = {}): RoomView => makeView(o);
-
-  it("칩은 방장에게만 보이고 서버의 mapChoice(random 이 정해진 뒤에도 choice, 결과 map 은 노출하지 않음)를 따른다", () => {
-    for (const [choice, map, name] of [["plaza", undefined, "맵 광장"], ["random", "plaza", "맵 랜덤"], ["bar", "bar", "맵 재즈 바"]] as const) {
-      const r = renderRoom(withMap(basicView({ me: 0 }), choice, map));
-      expect(chip(r.container)?.getAttribute("aria-label")).toBe(name);
-      r.unmount();
-    }
-  });
-
-  it("참가자 화면에는 칩이 없다 — 공용 도구 줄에 [dress] 하나(16-06 V-5, T-16-13)", () => {
-    const r = renderRoom(withMap(basicView({ me: 1 }), "plaza"));
-    expect(chip(r.container)).toBeNull();
-    expect(sideButtons(r.container)).toEqual(["dress"]);
-  });
-
-  it("최종 상태에서 방장의 공용 도구 줄에 [dress] 하나이고 맵 단추는 왼쪽 줄의 첫 칸이다 (16-06 D-05 → 19-05 D-13 → 22-07 [판 종류] 없어짐)", () => {
-    const r = renderRoom(basicView({ me: 0 }));
-    expect(r.container.querySelectorAll("[data-room-chat] [data-room-tool=dress]")).toHaveLength(1);
-    expect(sideButtons(r.container).join(",")).toBe("dress");
-    expect(railIds(r.container)).toBe("map");
-    expect(r.container.querySelectorAll("[data-host-rail] [data-map-chip]")).toHaveLength(1);
-    expect(r.container.querySelectorAll("[data-side-column] [data-map-chip]")).toHaveLength(0);
-    expect(chip(r.container)?.hasAttribute("data-side-button")).toBe(false); // 줄 변형은 오른쪽 열 표식을 달지 않는다
-  });
-
-  it("mapChoice 가 없는 옛 view 는 랜덤으로 읽는다", () => {
-    const r = renderRoom(basicView());
-    expect(chip(r.container)?.getAttribute("aria-label")).toBe("맵 랜덤");
-  });
-
-  it("방장이 누르면 맵 탭으로 시트가 열리고 카드를 누르면 {t:'mapPick', map} 만 간다 — 서버 값이 오기 전에는 바뀌지 않는다", () => {
-    const r = renderRoom(basicView({ me: 0 }));
-    fireEvent.click(chip(r.container)!);
-    expect(r.container.querySelectorAll("button[data-map-card]")).toHaveLength(3);
-    expect(r.container.querySelectorAll("button[data-map-tab]")).toHaveLength(2);
-    expect(r.container.querySelector("[data-side-column]")).toBeNull(); // 시트가 열린 동안 열은 그리지 않는다
-    r.send.mockClear();
-    fireEvent.click(r.container.querySelector("button[data-map-card='plaza']")!);
-    expect(r.send.mock.calls.map((c) => c[0])).toEqual([{ t: "mapPick", map: "plaza" }]);
-    expect(r.container.querySelector("button[data-map-card='random']")?.getAttribute("aria-pressed")).toBe("true");
-    r.rerenderRoom(withMap(basicView({ me: 0 }), "plaza"));
-    expect(r.container.querySelector("button[data-map-card='plaza']")?.getAttribute("aria-pressed")).toBe("true");
-    fireEvent.click(screen.getByRole("button", { name: "닫기" }));
-    expect(chip(r.container)?.getAttribute("aria-label")).toBe("맵 광장");
-  });
-
-  it("방장이 [꾸미기]로 열면 의상 탭이고 탭 둘이 있다", () => {
-    const r = renderRoom(basicView({ me: 0 }));
-    fireEvent.click(r.container.querySelector<HTMLElement>("[data-float='dress']")!);
-    expect(r.container.querySelectorAll("button[data-outfit]")).toHaveLength(9);
-    expect(r.container.querySelectorAll("button[data-map-tab]")).toHaveLength(2);
-  });
-
-  it("참가자는 꾸미기 시트에 탭이 없다", () => {
-    const r = renderRoom(basicView({ me: 1 }));
-    expect(chip(r.container)).toBeNull();
-    fireEvent.click(r.container.querySelector<HTMLElement>("[data-float='dress']")!);
-    expect(r.container.querySelector("[data-map-tab]")).toBeNull();
-  });
-
-  it("허용 맵이 하나뿐이면 칩이 없다", () => {
-    restore();
-    const list = PLAYABLE_MAPS as MapId[];
-    const saved = [...list];
-    list.splice(0, list.length, "bar");
-    try {
-      const r = renderRoom(basicView());
-      expect(chip(r.container)).toBeNull();
-    } finally {
-      list.splice(0, list.length, ...saved);
-      restore = openPlaza();
-    }
-  });
-});
-
-// ---------- 19-05: 결과 화면 방장 줄과 판 종류 (D-05·D-06·D-07·D-13, UI-SPEC D 절, P19-10·P19-13) ----------
-// 연출이 끝난 뒤(5600) 방장은 왼쪽 줄 [판 종류]·[맵](20-07 D-02: [맵]은 기본 마피아 판에만), 참가자는 읽기 전용 칩. 고른 표시는 서버 view.mode 만 따른다(결정 0002)
-describe("결과 화면 방장 줄 [맵] (19-05, D-06·D-13 → 22-07 에서 [판 종류]·칩 없어짐, P22-15)", () => {
-  let restore = () => {};
-  beforeEach(() => {
-    restore = openPlaza();
-  });
-  afterEach(() => restore());
-  const executionView = (): RoomView => {
-    const v = makeView();
-    v.phase = "execution";
-    delete (v as { result?: unknown }).result;
-    v.day = { ...v.day!, candidate: 3, execution: { seat: 3 } };
-    return v;
-  };
-  // 표시각(100ms 배수)마다 React 가 그리도록 100ms 경계에서 끊어 나아간다
-  const advance = (ms: number) => {
-    let left = ms;
-    while (left > 0) {
-      const into = (Date.now() - NOW) % 100;
-      const step = Math.min(left, into === 0 ? 100 : 100 - into);
-      act(() => void vi.advanceTimersByTime(step));
-      left -= step;
-    }
-  };
-  const rails = (c: ParentNode) => c.querySelectorAll("[data-host-rail]").length;
-  /** 판 종류 화면의 표식 네 가지 수 — 22-07 이후 늘 0 이다 */
-  const modeMarks = (c: ParentNode) => ['[data-host-rail-btn="mode"]', "[data-mode-sheet]", "[data-mode-card]", "[data-mode-chip]"].map((sel) => c.querySelectorAll(sel).length).join(",");
-  const railIds = (c: ParentNode) => [...c.querySelectorAll("[data-host-rail] [data-host-rail-btn]")].map((e) => e.getAttribute("data-host-rail-btn")).join(",");
-  const side = (c: ParentNode) => [...c.querySelectorAll("[data-room-chat] [data-room-tool=dress]")].map((e) => e.getAttribute("data-room-tool")).join(",");
-  const toastText = (c: ParentNode) => c.querySelector(".mv-toast")?.textContent ?? "";
-  const pillOf = (c: ParentNode) => c.querySelector<HTMLElement>("[data-result-panel] [data-ready-pill]");
-  /** 방장 줄의 기대값 — 허용 맵이 둘 이상일 때만 [맵] 하나다(없으면 줄 자체가 없다) */
-  const railWant = PLAYABLE_MAPS.length > 1 ? "map" : "";
-
-  it("방장(최종 상태): 왼쪽 줄 하나에 [맵]뿐이고 [봇]·[튜토리얼 먼저]·[판 종류]는 없다. 공용 도구 줄에 [옷장]이 있다", () => {
-    // 봇 도구 값이 실려 와도(대기실 전용 키) 결과 화면 줄에는 [봇]이 없다
-    const v = makeView({ me: 0 });
-    const r = renderRoom({ ...v, me: { ...v.me, testBots: 2 } });
-    expect(rails(r.container)).toBe(1);
-    expect(railIds(r.container)).toBe(railWant);
-    expect(r.container.querySelectorAll('[data-host-rail-btn="bots"], [data-host-rail-btn="tutorial"], [data-float="bots"], [data-tutorial-toggle]')).toHaveLength(0);
-    expect(modeMarks(r.container)).toBe("0,0,0,0");
-    expect(side(r.container)).toBe("dress");
-    expect(r.container.querySelectorAll("[data-side-column] [data-map-chip]")).toHaveLength(0);
-    expect(r.container.querySelector("[data-host-rail]")?.getAttribute("aria-label")).toBe("방장 전용");
-  });
-
-  it("참가자: 방장 줄 마크업이 없고 그 자리에 칩도 없다 — 판 종류 표식 네 가지 0건, 알림도 없다 (T-19-16, P22-15)", () => {
-    const r = renderRoom(makeView({ me: 1 }));
-    expect(r.container.querySelectorAll("[data-host-rail], [data-host-rail-btn], [data-map-chip]")).toHaveLength(0);
-    expect(modeMarks(r.container)).toBe("0,0,0,0");
-    expect(toastText(r.container)).toBe("");
-    r.rerenderRoom({ ...makeView({ me: 1 }), mapChoice: "bar" });
-    expect(toastText(r.container)).toBe("");
-  });
-
-  it("참가자 화면은 [맵] 단추가 없다", () => {
-    const r = renderRoom({ ...makeView({ me: 1 }), mapChoice: "plaza" });
-    expect(r.container.querySelectorAll('[data-host-rail-btn="map"], [data-map-chip]')).toHaveLength(0);
-  });
-
-  it("방장이 [옷장]으로 연 시트에는 맵 탭이 있고 [맵]으로 연 시트는 맵 카드 셋이 보인다", () => {
-    const ext = renderRoom(makeView({ me: 0 }));
-    fireEvent.click(ext.container.querySelector<HTMLElement>('[data-float="dress"]')!);
-    expect(ext.container.querySelectorAll("button[data-map-tab]")).toHaveLength(2);
-    expect(ext.container.querySelectorAll("button[data-outfit]")).toHaveLength(9);
-    ext.unmount();
-    const r = renderRoom(makeView({ me: 0 }));
-    fireEvent.click(r.container.querySelector<HTMLElement>("[data-host-rail] [data-map-chip]")!);
-    expect(r.container.querySelectorAll("button[data-map-card]")).toHaveLength(3);
-  });
-
-  it("허용 맵이 하나뿐이면 방장 줄 자체가 없다", () => {
-    restore();
-    const list = PLAYABLE_MAPS as MapId[];
-    const saved = [...list];
-    list.splice(0, list.length, "bar");
-    try {
-      const r = renderRoom(makeView({ me: 0 }));
-      expect(rails(r.container)).toBe(0);
-    } finally {
-      list.splice(0, list.length, ...saved);
-      restore = openPlaza();
-    }
-  });
-
-  it("방장: 연출이 끝나기 전(5600 전)에는 줄이 없고 5600 에 줄이 옷장과 함께 나타난다 (줄에 [맵])", () => {
-    const r = renderRoom(executionView());
-    r.rerenderRoom(makeView({ me: 0 }));
-    for (const ms of [0, 1200, 3400, 900]) {
-      advance(ms);
-      expect(rails(r.container)).toBe(0);
-    }
-    advance(100);
-    expect(r.container.querySelectorAll("[data-room-chat] [data-room-tool=dress]")).toHaveLength(1);
-    expect(rails(r.container)).toBe(1);
-    expect(railIds(r.container)).toBe(railWant);
-  });
-
-  it("참가자: 5600 에도 방장 줄이 나타나지 않는다", () => {
-    const r = renderRoom(executionView());
-    r.rerenderRoom(makeView({ me: 1 }));
-    for (const ms of [0, 1200, 3400, 900, 100]) {
-      advance(ms);
-      expect(rails(r.container)).toBe(0);
-    }
-    expect(r.container.querySelectorAll("[data-room-chat] [data-room-tool=dress]")).toHaveLength(1);
-  });
-
-  it("방장 [시작] 알약의 마크업·자리(패널 안)와 준비 수는 줄과 무관하다 (D-06, P19-13)", () => {
-    const r = renderRoom(makeView({ me: 0, ready: [0, 1, 2] }));
-    expect(rails(r.container)).toBe(1);
-    expect(pillOf(r.container)!.outerHTML).toContain('data-ready-count="3/5"');
-    expect(r.container.querySelectorAll("[data-ready-pill]")).toHaveLength(1);
-    expect(r.container.querySelectorAll("[data-host-rail] [data-ready-pill]")).toHaveLength(0);
-  });
-
-  it("방장 알림 한 줄이 그대로 뜬다 — 방장이 바뀐 view 가 오면 '방장 · 하윤'", () => {
-    const r = renderRoom(makeView({ me: 2, hostSeat: 0 }));
-    expect(toastText(r.container)).toBe("");
-    r.rerenderRoom(makeView({ me: 2, hostSeat: 1 }));
-    expect(toastText(r.container)).toBe("방장 · 하윤");
-  });
-
-  it("방장이 바뀌면 다음 view 에서 줄이 나오고 사라진다 — 서버 view 의 isHost 로만", () => {
-    const r = renderRoom(makeView({ me: 1, hostSeat: 0 }));
-    expect(rails(r.container)).toBe(0);
-    r.rerenderRoom(makeView({ me: 1, hostSeat: 1 }));
-    expect(rails(r.container)).toBe(1);
-    r.rerenderRoom(makeView({ me: 1, hostSeat: 0 }));
-    expect(rails(r.container)).toBe(0);
-  });
-
-  it("줄의 [맵]을 누르면 꾸미기 시트의 맵 탭이 열린다(대기실과 같은 줄 변형: 금빛 방장 단추, 오른쪽 열 표식 없음)", () => {
-    const r = renderRoom(makeView({ me: 0 }));
-    const map = r.container.querySelector<HTMLElement>("[data-host-rail] [data-map-chip]");
-    expect(map?.getAttribute("data-host-rail-btn") ?? "없음").toBe("map");
-    expect(map!.classList.contains("mv-hostrail-btn")).toBe(true);
-    expect(map!.hasAttribute("data-side-button")).toBe(false);
-    fireEvent.click(map!);
-    expect(r.container.querySelectorAll("button[data-map-card]")).toHaveLength(3);
-  });
-
-  // ---- 숨김 조건과 화면 이동 (P19-16): 기록 늘림 · 꾸미기 시트 · 키보드, 가상 뷰포트 ----
-  const count = (c: ParentNode) => `${rails(c)}`;
-  const expandedOf = (c: ParentNode) => c.querySelector("[data-result-panel]")?.getAttribute("data-expanded") ?? "없음";
-  const dressBtn = (c: ParentNode) => c.querySelector<HTMLElement>('[data-float="dress"]');
-  /** 가짜 visualViewport(높이 844)를 깔고 fn 을 돌린 뒤 되돌린다. open() 은 입력칸 포커스 + 키보드 336, shut() 은 블러 + 원래 높이 */
-  const withKeyboard = (fn: (kb: { open(c: ParentNode): void; shut(c: ParentNode): void }) => void) => {
-    const vv = Object.assign(new EventTarget(), { height: 844, offsetTop: 0 });
-    Object.defineProperty(window, "visualViewport", { value: vv, configurable: true, writable: true });
-    const realInnerH = window.innerHeight;
-    Object.defineProperty(window, "innerHeight", { value: 844, configurable: true, writable: true });
-    const input = (c: ParentNode) => c.querySelector<HTMLInputElement>("[data-chat-input]")!;
-    // 훅은 다음 프레임(rAF)과 100ms 뒤 다시 읽기로 높이를 잰다. 이 파일은 시계를 과거(NOW)로 돌려 두어 가짜 rAF 의 다음 프레임까지가 16~32ms 로 달라지므로, 다시 읽기(100ms)까지 넉넉히 넘긴다
-    const resize = (h: number) => {
-      vv.height = h;
-      act(() => void vv.dispatchEvent(new Event("resize")));
-      advance(120);
-    };
-    try {
-      fn({
-        open: (c) => {
-          act(() => input(c).focus());
-          resize(844 - 336);
-        },
-        shut: (c) => {
-          act(() => input(c).blur());
-          resize(844);
-        },
-      });
-    } finally {
-      Reflect.deleteProperty(window, "visualViewport");
-      Object.defineProperty(window, "innerHeight", { value: realInnerH, configurable: true, writable: true });
-    }
-  };
-  const kbOf = (c: ParentNode) => c.querySelector("main.mf-result")?.getAttribute("data-kb-open") ?? "없음";
-
-  it("방장: 연출 뒤 전체 기록이 늘어난 동안(expanded)에는 줄이 없고, 접으면 다시 있다", () => {
-    const r = renderRoom(makeView({ me: 0 }));
-    expect(count(r.container)).toBe("1");
-    act(() => panel.props!.onTab("mafia"));
-    expect(expandedOf(r.container)).toBe("true");
-    expect(count(r.container)).toBe("0");
-    act(() => stage.props!.onStageTap!()); // 무대 탭 = 접기
-    expect(expandedOf(r.container)).toBe("false");
-    expect(count(r.container)).toBe("1");
-  });
-
-  it("방장: 꾸미기 시트를 열면(옷장·줄의 [맵] 어느 쪽이든) 줄이 없고 닫으면 다시 있다", () => {
-    const r = renderRoom(makeView({ me: 0 }));
-    expect(count(r.container)).toBe("1");
-    fireEvent.click(dressBtn(r.container)!);
-    expect(r.container.querySelectorAll("button[data-outfit]").length).toBeGreaterThan(1);
-    expect(count(r.container)).toBe("0");
-    fireEvent.click(screen.getByRole("button", { name: "닫기" }));
-    advance(300);
-    expect(r.container.querySelectorAll("button[data-outfit]")).toHaveLength(0);
-    expect(count(r.container)).toBe("1");
-    fireEvent.click(r.container.querySelector<HTMLElement>("[data-host-rail] [data-map-chip]")!);
-    expect(r.container.querySelectorAll("button[data-map-card]")).toHaveLength(3);
-    expect(count(r.container)).toBe("0");
-  });
-
-  it("방장: 키보드가 열리면(data-kb-open) 줄이 없고 닫히면 다시 있다", () => {
-    withKeyboard((kb) => {
-      const r = renderRoom(makeView({ me: 0 }));
-      expect(count(r.container)).toBe("1");
-      kb.open(r.container);
-      expect(kbOf(r.container)).toBe("true");
-      expect(count(r.container)).toBe("0");
-      kb.shut(r.container);
-      expect(kbOf(r.container)).toBe("없음");
-      expect(count(r.container)).toBe("1");
-    });
-  });
-
-  it("result.css: 가상 뷰포트 이동 줄(--mf-vv-top)에 방장 줄이 옷장과 함께 묶여 있고 판 종류 칩 선택자는 없다", () => {
-    const css = readFileSync("src/styles/result.css", "utf8");
-    const line = css.split("\n").find((l) => l.includes("translateY(var(--mf-vv-top")) ?? "";
-    const selectors = (line.split("{")[0] ?? "").split(",").map((x) => x.trim());
-    const want = [".mf-result .mv-side", ".mf-result .mf-hostrail"];
-    expect(want.filter((w) => selectors.includes(w)).join(" | ")).toBe(want.join(" | "));
-    expect(selectors.includes(".mf-result .mf-modechip")).toBe(false);
-  });
+it.each([0, 1])("이전 광장 선택을 받은 결과 화면의 좌석 %i에도 맵 선택이 없다", (me) => {
+  const r = renderRoom({ ...makeView({ me }), mapChoice: "plaza" });
+  expect(r.container.querySelector("[data-map-chip], [data-host-rail]")).toBeNull();
+  fireEvent.click(r.container.querySelector<HTMLButtonElement>("[data-room-tool=dress]")!);
+  expect(r.container.querySelector("[data-map-card], [data-map-tab]")).toBeNull();
+  expect(r.container.querySelectorAll("button[data-outfit]")).toHaveLength(9);
 });
 
 // ---------- 12-11: 결과·시상 사건 신호 — 시계가 낸 사건에 소리가 붙는다 (D-15, LS-10, T-12-41, T-12-44) ----------

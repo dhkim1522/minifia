@@ -32,7 +32,7 @@ import type { WillSheetProps } from "../components/v2/WillSheet";
 import { TensionVignette } from "../components/TensionVignette";
 import { TableControls } from "../components/TableControls";
 import { WorldStage } from "../components/WorldStage";
-import type { WorldPick } from "../components/WorldStage";
+import type { WorldPick, WorldStageProps } from "../components/WorldStage";
 import { ownAnimalOf } from "../game/playerIdentity";
 import { jobOutfit } from "../world/jobOutfit";
 import { todOf, todWordOf } from "../game/timeOfDay";
@@ -66,6 +66,8 @@ import { worldTestHooksEnabled } from "../world/testHooks";
 import type { RingKind } from "../world/runtime";
 import type { WorldStore } from "../world/store";
 import { GamePanel } from "./GamePanel";
+import { ResultScreen } from "./ResultScreen";
+import type { ResultScreenProps } from "./ResultScreen";
 import "../styles/game.css";
 import "../styles/phase-story.css";
 import "../styles/sheet.css";
@@ -131,6 +133,7 @@ interface GameMapProps {
   headerAction?: ReactNode;
   /** 재즈 바의 착석·역할·라이어 화면을 같은 무대 위에 그린다. */
   opening?: ReactNode;
+  ending?: Pick<ResultScreenProps, "view" | "resultLog" | "arrivedFrom" | "onExit">;
   /** 헤더 시간대 글자(0083-1, "낮 · 토론"). 튜토리얼만 false — 17·18 레이아웃을 건드리지 않는다. 기본 true */
   tod?: boolean;
   /** 아래 패널을 그리지 않는 지도 장면(18-03) */
@@ -199,7 +202,7 @@ function TurnBlock({ view, offset, line, compact, reducedMotion }: { view: RoomV
 // 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내 + 시간 링 + [역할 카드]), [테스트], 결과 알림, 아래 패널을 얹는다.
 // 낮 시작·낮 토론·찬반·지목·유언·처형이 이 화면 하나를 같은 장면 키로 그려 단계가 바뀌어도 맵이 다시 만들어지지 않는다.
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)·알림 글자는 React 텍스트 노드로만 그린다.
-export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, headerAction, opening, tod = true, panelless, camera, testButton, announce = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onLeave, bottomExtra = 0, timeless = false }: GameMapProps) {
+export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, headerAction, opening, ending, tod = true, panelless, camera, testButton, announce = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onLeave, bottomExtra = 0, timeless = false }: GameMapProps) {
   const toast = useTopToast();
   const { show } = toast;
   // 스테이지 측정과 키보드 올림은 대기실과 같은 훅이다. 토론은 키보드가 열리면 기록 칸만 줄인다.
@@ -207,24 +210,24 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 튜토리얼 지도 장면(panelless prop, 18-03)은 아래 패널이 없다: 스테이지가 띠 아래부터 화면 아래까지 넓어진다
   const playtest = view.playtest === true;
   const phase = phaseKey({ phase: view.phase, day: view.day?.n, round: view.round });
-  const tableKey = `${epoch}:${phase}`;
-  const [tableChoice, setTableChoice] = useState<{ key: string; mode: "eye" | "wide"; focus?: number; focusAt?: number }>();
+  const tableKey = `${epoch}:${view.round ?? 1}`;
+  const [tableChoice, setTableChoice] = useState<{ key: string; focus: number; focusAt: number }>();
   const [liveTableVoice, setLiveTableVoice] = useState<{ phase: string; epoch: number; seat: number; at: number }>();
   const me = view.players.find((p) => p.seat === view.me.seat);
   const meAlive = me === undefined || isAlive(me);
   const inOpening = opening !== undefined;
-  const tableEligible = view.map === "bar" && meAlive && view.spectate === undefined && !camera && !timeless && !panelless;
-  const tableOn = tableEligible && (view.phase === "discussion" || view.phase === "nomination");
-  const firstDayAnnounce = view.phase === "dayAnnounce" && (view.day?.n ?? 1) === 1;
-  const tableCameraOn = tableEligible && (inOpening || firstDayAnnounce || tableOn);
-  const tableMode = tableChoice?.key === tableKey ? tableChoice.mode : "eye";
+  const inEnding = ending !== undefined;
+  const [resultStage, setResultStage] = useState<WorldStageProps>();
+  const activeResultStage = inEnding && resultStage?.view.round === view.round ? resultStage : undefined;
+  const tableCameraOn = view.map === "bar" && !camera && !panelless;
+  const tableOn = tableCameraOn && (view.phase === "discussion" || view.phase === "nomination" || view.phase === "runoff" || view.phase === "showdown");
   const rawTableFocus = tableChoice?.key === tableKey ? tableChoice.focus : undefined;
   const tableFocus = view.players.some((p) => p.seat === rawTableFocus && isAlive(p)) ? rawTableFocus : undefined;
   const tableFocusAt = tableFocus !== undefined && tableChoice?.key === tableKey ? tableChoice.focusAt : undefined;
   const toastText = playtest && toast.props.visible ? toast.props.text : undefined;
   const playtestPanel = tableOn || toastText !== undefined || view.me.chat === "ghost" || view.phase === "discussion" || view.phase === "night" && view.spectate === undefined || view.phase === "verdict" || view.phase === "defense" && view.day?.candidate === view.me.seat;
   const noPanel = panelless === true || (playtest && !playtestPanel);
-  const { rootRef, headerRef, panelRef, inputRef, kbOpen: kbLifted, kbInSheet, turnCompact: compactTurn, stageInsets: measuredInsets } = useMapInsets(blockModeOf(view) !== null, noPanel, !inOpening);
+  const { rootRef, headerRef, panelRef, inputRef, kbOpen: kbLifted, kbInSheet, turnCompact: compactTurn, stageInsets: measuredInsets } = useMapInsets(blockModeOf(view) !== null, noPanel, !inOpening && !inEnding);
   // 튜토리얼(24 D-31): 아래 여백에 bottomExtra 를 더한다. 키보드 높이를 프레임마다 읽는 getter 는 그대로 살린다. 실제 판은 0 이라 측정값 그대로다.
   const stageInsets = useMemo(
     () =>
@@ -365,7 +368,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 지목에는 표마다 띄우는 위 알림이 없다(차례 위 한 줄이 대신, UI-SPEC A-7). 동시 투표 화면은 22-10 에서 지웠다(D-12).
 
   // 이동 권한: 산 사람은 낮 시작·토론에서만, 유령은 언제나(MAP-04). 권위는 서버 canMove 이고 화면은 같은 표로 맵 탭만 막는다.
-  // 밤에는 산 사람 누구도 걷지 않는다(15페이즈 D-05) — 서버와 같은 이동 권한 표(canMoveIn)다.
+  // 착석 뒤 이동 요청을 받는지 서버와 같은 규칙으로 확인한다.
   const canWalk = canMoveIn(view.phase, meAlive, view.map);
   // 유령 화면(GHOST-02, 결정 0021): 내가 탈락했고 서버가 관전 정보(spectate)를 보냈을 때만 그린다. 서버가 안 보낸 view 에서는 이 분기가 아예 없다 — 받아서 감추는 방식이 아니다.
   const spectate = !meAlive ? view.spectate : undefined;
@@ -689,7 +692,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
 
   // 판결 순간(UI-SPEC C-1, 22-12 P22-13·P22-14): 처형자 존재 기준 처형 진입 시각의 어둡게 막·카메라 줌·유언 공개 카드(0~3.0초). 모션 줄이기는 줌 없이 막·핀·카드만 쓴다
   const moment = useVerdictMoment(view, offset);
-  const verdictZoom = moment.active && !reducedMotion && !playtest ? moment.zoom : undefined;
+  const verdictZoom = !tableCameraOn && moment.active && !reducedMotion && !playtest ? moment.zoom : undefined;
   const investigated = morningPolice === null ? undefined : view.players.find((player) => player.seat === morningPolice.seat);
   const willReveal = moment.will?.visible === true ? moment.will : null;
   const executed = view.players.find((player) => player.seat === view.day?.execution?.seat);
@@ -707,7 +710,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       return;
     }
     if (seat !== view.me.seat && view.players.some((p) => p.seat === seat && isAlive(p))) {
-      setTableChoice({ key: tableKey, mode: "eye", focus: seat, focusAt: Date.now() + offset });
+      setTableChoice({ key: tableKey, focus: seat, focusAt: Date.now() + offset });
     }
   };
 
@@ -715,7 +718,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     const look = sceneLook(view, { stageH, ...(fading ? { fading } : {}), ...(mine !== undefined ? { mine } : {}), ...(verdictZoom !== undefined ? { verdictZoom } : {}) });
     if (camera) look.camera = camera;
     if (tableCameraOn) look.table = {
-      mode: tableMode,
+      mode: "eye",
       ...(tableFocus !== undefined ? { focus: tableFocus } : {}),
       ...(tableFocusAt !== undefined ? { focusAt: tableFocusAt } : {}),
       ...(tableVoice ? { voice: { seat: tableVoice.seat, at: tableVoice.at } } : {}),
@@ -733,11 +736,11 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     const ownRoleOutfit = role === "mafia" || (ownAnimalOf(view) !== undefined && (role === "police" || role === "doctor"));
     if (!inOpening && ownSeat && meAlive && view.spectate === undefined && ownRoleOutfit) ownSeat.costume = jobOutfit(role);
     return look;
-  }, [view, stageH, fading, mine, verdictZoom, camera, meAlive, inOpening, tableCameraOn, tableOn, tableMode, tableFocus, tableFocusAt, tableVoice]);
+  }, [view, stageH, fading, mine, verdictZoom, camera, meAlive, inOpening, tableCameraOn, tableOn, tableFocus, tableFocusAt, tableVoice]);
 
   return (
-    <main ref={rootRef} className={inOpening ? "mf-root mf-pregame mf-pregame--seated" : "mf-root mf-game"} data-game-stage={inOpening ? undefined : ""} data-phase={view.phase} data-night-dark={nightDark ? "true" : undefined} data-ghost-view={ghost ? "true" : undefined} data-ghost-enter={ghost && entering ? "true" : undefined} data-kb-open={kbLifted ? "true" : undefined} data-suspect-mode={inOpening ? undefined : suspect.mode ? "on" : "off"} data-suspects={suspectsMirror}>
-      {!inOpening ? <>
+    <main ref={rootRef} className={inOpening ? "mf-root mf-pregame mf-pregame--seated" : "mf-root mf-game"} data-game-stage={inOpening || inEnding ? undefined : ""} data-phase={view.phase} data-night-dark={nightDark ? "true" : undefined} data-ghost-view={ghost ? "true" : undefined} data-ghost-enter={ghost && entering ? "true" : undefined} data-kb-open={kbLifted ? "true" : undefined} data-suspect-mode={inOpening || inEnding ? undefined : suspect.mode ? "on" : "off"} data-suspects={suspectsMirror}>
+      {!inOpening && !inEnding ? <>
       {/* DOM 순서 = Tab 순서: 헤더 조작 → 맵 이름표 → 아래 패널 입력 */}
       <div className="mf-game__scrim" aria-hidden="true" />
       <header ref={headerRef} className="mf-game__header">
@@ -756,7 +759,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         />
       </header>
       </> : null}
-      <WorldStage
+      {activeResultStage ? <WorldStage key="world" {...activeResultStage} /> : <WorldStage
         key="world"
         view={view}
         store={store}
@@ -769,7 +772,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         scene={scene}
         canWalk={!inOpening && canWalk}
         underlay={
-          inOpening || playtest ? null : nightDark ? (
+          inOpening || inEnding || playtest ? null : nightDark ? (
             <TensionVignette reducedMotion={reducedMotion} onCue={onTensionCue} />
           ) : (
             // 지목 동안 화면을 살짝 어둡게(UI-SPEC A-1): 모이기·차례·확정에 켜고 끝 알림에 걷는다. 캔버스 위·이름표 층 아래라서 WorldStage 의 underlay 자리에 둔다
@@ -783,8 +786,11 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         {...(stageTagProps ? { tagProps: stageTagProps } : {})}
         onNotice={(text) => show(text)}
         onLeave={() => onLeave?.()}
-      />
-      {inOpening ? <div className="mf-pregame__content">{opening}</div> : <>
+      />}
+      {ending ? (
+        <ResultScreen {...ending} store={store} chat={chat} send={send} canSend={canSend} offset={offset} epoch={epoch}
+          menuButton={headerAction} stageHost={setResultStage} />
+      ) : inOpening ? <div className="mf-pregame__content">{opening}</div> : <>
       {!playtest ? <TopToast {...toast.props} /> : null}
       {/* 붙인 사람에게만 읽히는 한 줄(P24-8) — 서버 view(me.suspectTo)가 확인한 뒤에만 채워진다. 화면에는 안 보인다 */}
       {suspect.visible ? (
@@ -848,12 +854,10 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           tableControls={tableOn && !kbLifted && layerKind === null ? (
             <TableControls
               players={view.players.filter((p) => p.seat !== view.me.seat && isAlive(p))}
-              mode={tableMode}
               {...(tableFocus !== undefined ? { focus: tableFocus } : {})}
               {...(pick ? { pick } : {})}
               notes={suspectStack}
               onChoose={chooseTableSeat}
-              onToggle={() => setTableChoice({ key: tableKey, mode: tableMode === "eye" ? "wide" : "eye", ...(tableFocus !== undefined ? { focus: tableFocus } : {}) })}
             />
           ) : undefined}
           suspect={suspect.visible && (!playtest || layerKind === null) ? {

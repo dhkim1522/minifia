@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { CLOSE_CODES, MAX_FRAME_BYTES } from "../shared/protocol";
-import type { AnimalId, ApiErrorCode, BadgeId, BotVoteExec, BotVotePick, ChatChannel, ChatRejectWhy, ClientMessage, EmoteId, MapChoice, OutfitId, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
+import type { AnimalId, ApiErrorCode, BadgeId, BotVoteExec, BotVotePick, ChatChannel, ChatRejectWhy, ClientMessage, EmoteId, OutfitId, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
 import { ANIMAL_PICK_MIN_GAP_MS, normalizeAnimalRoster, setAnimal } from "../shared/game/animalRoster";
 import { botMafiaTarget, botWakeAt, isBot, syncBotPlan, takeDueBotSteps } from "../shared/game/bots";
 import type { BotStep } from "../shared/game/bots";
@@ -56,10 +56,10 @@ import { castVerdict } from "../shared/game/verdict";
 import { discussionMajorityAt, endReached, toggleEnd } from "../shared/game/discussion";
 import { MAP_PHASES, canMove } from "../shared/game/movement";
 import { layoutFor, layoutKey } from "../shared/game/gather";
-import { STAGE_SPOT } from "../shared/game/map";
+import { BAR_MAP, BAR_SEATS_FX, STAGE_SPOT, barChairAssignment } from "../shared/game/map";
 import type { MapDef } from "../shared/game/map";
-import { mapOf, pickMap, roomMapId } from "../shared/game/maps";
-import { WORLD_FLUSH_MS, captureHome, compactWorld, despawnPlayer, emptyWorld, forceSegment, moveFrame, nextWanderAt, planMoveSegment, planWander, positionAtFx, requestMove, respawnAll, restSegment, restoreWorld, segmentEndsAt, snapFrame, spawnPlayer, teleportHome } from "../shared/game/world";
+import { ROOM_MAP_ID } from "../shared/game/maps";
+import { WORLD_FLUSH_MS, captureHome, compactWorld, despawnPlayer, emptyWorld, forceSegment, moveFrame, nextWanderAt, planMoveSegment, planWander, positionAtFx, requestMove, respawnAll, restSegment, restoreWorld, segmentEndsAt, snapFrame, spawnPlayer } from "../shared/game/world";
 import type { Segment, WorldState } from "../shared/game/world";
 import { buildPreview, buildView } from "../shared/game/view";
 import { ClientMessageSchema } from "../shared/schemas";
@@ -158,8 +158,11 @@ export class Room extends DurableObject<Env> {
       if (stored) {
         // 1페이즈 종착 단계로 저장된 방은 낮 시작 발표로 옮긴다(RESEARCH Pattern 6). 바뀌지 않으면 같은 객체다.
         const restored = normalizeAnimalRoster(normalizeStoredRoom(stored, Date.now()));
-        const normalized = restored.phase !== "lobby" && restored.map === undefined
-          ? { ...restored, map: "bar" as const }
+        const migratedChairs = restored.phase !== "lobby" && restored.map === "plaza"
+          ? barChairAssignment(restored.players.filter((p) => p.sat !== true).map((p) => p.seat))
+          : undefined;
+        const normalized: RoomState = restored.phase !== "lobby" && restored.map !== ROOM_MAP_ID
+          ? { ...restored, map: ROOM_MAP_ID, ...(migratedChairs !== undefined ? { barChairs: migratedChairs } : {}) }
           : restored;
         // 옛 표시가 있어 대기실로 되돌려진 방인가(22 WR-04). 방 상태만 되돌리면 옛 판의 채팅 저장분과 월드의 lay·home 이 남는다.
         const wasLegacy = isLegacyV3Room(stored);
@@ -188,8 +191,19 @@ export class Room extends DurableObject<Env> {
         };
         // 저장된 위치를 되살린다. world 키가 없거나 손상된 사람은 입장 지점에 선다(MAP-05).
         const map = this.mapDef();
-        this.world = restoreWorld(got.get("world"), this.room.players, Date.now(), map);
-        this.restoredBarLayout = map.id === "bar";
+        const restoredAt = Date.now();
+        this.world = restoreWorld(migratedChairs === undefined ? got.get("world") : undefined, this.room.players, restoredAt, map);
+        this.restoredBarLayout = migratedChairs === undefined;
+        if (migratedChairs !== undefined) {
+          // 광장의 좌표와 자리 기억을 폐기하고 진행 중이던 판은 각자의 의자에서 이어 간다.
+          for (const player of this.room.players) {
+            const chair = migratedChairs[player.seat];
+            if (chair === undefined) continue;
+            const [x, z] = BAR_SEATS_FX[chair]!;
+            this.world = forceSegment(this.world, player.id, restSegment(x, z, restoredAt));
+          }
+          if (this.room.day !== undefined) this.world = captureHome(this.world, Object.keys(this.world.segs), this.room.day);
+        }
         if (wasLegacy) {
           // 다시 하기·대기실로 되돌리기(handleRematch·handleTestReset)와 같은 길: 채팅 저장 키를 모두 지우고(아래 복원이 빈 줄을 읽는다),
           // 월드는 모두를 입장 지점에 다시 세운다 — 옛 자리 기억(lay·home)을 버려 새 판 1일차가 옛 키를 재사용하지 않게 한다.
@@ -199,7 +213,8 @@ export class Room extends DurableObject<Env> {
           await ctx.storage.put("world", compactWorld(this.world, resetAt));
         }
         if (normalized !== stored) {
-          await ctx.storage.put("room", this.room);
+          if (migratedChairs === undefined) await ctx.storage.put("room", this.room);
+          else await ctx.storage.put({ room: this.room, world: compactWorld(this.world, restoredAt) });
           // 정규화로 생긴 이른 마감(now + 2초)이 기존 만료 알람(90초 뒤 등)보다 먼저 깨어나야 하므로 마감이 바뀐 경우에만 여기서 알람을 건다.
           // 옛 messages 키만 지운 경우(결정 0017-7)는 마감이 그대로라 대기 중인 알람을 건드리지 않는다.
           if (normalized.phaseEndsAt !== stored.phaseEndsAt) await ctx.storage.setAlarm(nextWakeAt(this.room));
@@ -207,6 +222,10 @@ export class Room extends DurableObject<Env> {
         // 보관 줄을 되살린다(MAP-05 와 같은 복원 규칙, 결정 0058-1). 손상 레코드는 restoreChatLog 가 버린다. 방이 없으면 줄도 없다.
         const lines = await ctx.storage.list({ prefix: CHAT_KEY_PREFIX });
         this.chatLog = restoreChatLog(lines.values());
+        if (migratedChairs !== undefined) {
+          this.broadcast(true);
+          this.snapEachViewer(restoredAt);
+        }
       }
     });
   }
@@ -394,7 +413,7 @@ export class Room extends DurableObject<Env> {
         await this.handleAnimalPick(ws, msg.animal);
         return;
       case "mapPick":
-        await this.handleMapPick(ws, msg.map);
+        this.replyToLegacyMapPick(ws);
         return;
       case "ready":
         await this.handleReady(ws, msg.on, msg.round);
@@ -547,13 +566,8 @@ export class Room extends DurableObject<Env> {
     }
     // 판 id(D-16): 순수 beginGame 은 uuid 를 만들지 못해 워커가 붙인다. D1 games 의 id 이고 어떤 view·프레임에도 나가지 않는다.
     this.room = { ...result.state, gameId: crypto.randomUUID() };
-    // 재즈 바는 로비 위치에서 자기 의자로, 광장은 새 맵의 입장 지점으로 간다.
-    // 처음 위치는 보는 사람마다 assigning state 뒤에 snap 으로 보낸다.
-    if (this.mapDef().id === "bar") this.syncLayout(now, false);
-    else {
-      this.world = respawnAll(this.world, this.room.players, now, this.mapDef());
-      this.markWorldDirty();
-    }
+    // 로비 위치에서 자기 의자로 걸어간다. 구간은 assigning state 뒤에 보낸다.
+    this.syncLayout(now, false);
     await this.persistAndBroadcast();
     this.snapEachViewer(now);
     await this.reschedule();
@@ -689,22 +703,14 @@ export class Room extends DurableObject<Env> {
     await this.persistAndBroadcast();
   }
 
-  // 맵 선택(11-06, 결정 D-20): 신원은 소켓 첨부의 playerId 뿐이다. 방장·단계·허용 값은 규칙 함수(pickMap)가 서버 상태로 판정한다(T-11-18).
-  // 어떤 거절이든(방장 아님·단계 틀림·허용 밖 값) 사람·사유와 무관하게 같은 응답 — 오류 프레임 없이 보낸 소켓의 최신 state 한 프레임(L40). 같은 값은 무변화(프레임 0).
-  private async handleMapPick(ws: WebSocket, choice: MapChoice): Promise<void> {
+  // 배포 전에 열린 클라이언트의 맵 선택 입력은 현재 상태로 응답한다.
+  private replyToLegacyMapPick(ws: WebSocket): void {
     const att = this.attachmentOf(ws);
     if (!att || !this.room) {
       this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
       return;
     }
-    const result = pickMap(this.room, att.playerId, choice);
-    if (!result.ok) {
-      this.sendTo(ws, { t: "state", view: buildView(this.room, att.playerId, Date.now()) });
-      return;
-    }
-    if (result.state === this.room) return;
-    this.room = result.state;
-    await this.persistAndBroadcast();
+    this.sendTo(ws, { t: "state", view: buildView(this.room, att.playerId, Date.now()) });
   }
 
   // 다시 하기 준비(11-08, 결정 D-12): 신원은 소켓 첨부의 playerId 뿐이다. 거절은 사유(방장 아님·단계·판 번호·쉬는 사람…)와 무관하게 같은 응답 —
@@ -747,7 +753,7 @@ export class Room extends DurableObject<Env> {
     this.writeAt.clear();
     // 새 참가자만 새 맵에 세우고 재즈 바에서 첫 착석 경로를 만든다.
     this.world = respawnAll(this.world, this.room.players, now, this.mapDef());
-    if (this.mapDef().id === "bar") this.syncLayout(now, false);
+    this.syncLayout(now, false);
     await this.persistAndBroadcast({ includeBench: true }); // 쉬는 사람도 이 한 번은 자기 전용 state 를 받는다
     this.markWorldDirty();
     this.snapEachViewer(now);
@@ -1377,7 +1383,6 @@ export class Room extends DurableObject<Env> {
     }
     // 위치는 단계가 바뀌었는지와 무관하게 '지금 단계가 요구하는 모습'으로 맞춘다(멱등, 알람 따라잡기·퇴거에도 안전).
     // 새 유령 snap 은 전환 때만 보낸다: 퇴거로 비워진 ghostSnapped 때문에 깨어날 때마다 같은 snap 을 다시 보내지 않는다(08 동작 유지).
-    await this.syncHome(now);
     this.syncLayout(now);
   }
 
@@ -1406,21 +1411,19 @@ export class Room extends DurableObject<Env> {
     if (ids.length > 0) this.markWorldDirty();
   }
 
-  // 단계 전환 뒤처리 한 곳(결정 0061-19): 단계 마감(advance)·토론 끝내기(applyEndDiscussion)·테스트 넘기기(handleTestSkip)가 모두 여기를 지난다.
-  // 순서가 계약이다: home 기억(지목 배치보다 먼저, 즉시 저장) → 분필 좌표(저장·방송 전에 채워 모든 view 가 같은 값을 싣는다) → 저장·방송
-  // → 위치 동기화(밤·아침 home → 새 유령 snap → 근처 단계 들고남 snap → 지목·토론 배치) → 사망 카드(유언·쪽지, 결정 0061-11) → 알람.
+  // 단계 마감·토론 끝내기·테스트 넘기기는 착석 확인, 상태 방송, 보는 사람별 위치와 사망 카드 전송 순서를 공유한다.
   // prev 는 전환 전 상태다 — 사망은 전후 alive 비교로 찾는다(처형·암살 한 길, 알람 따라잡기로 여러 단계를 지나도 사망마다 한 번).
   private async afterTransition(prev: RoomState, now: number): Promise<void> {
+    const phase = this.room?.phase;
+    // 역할 확인을 앞당기거나 예전 판을 이어도 단계 상태보다 먼저 의자를 맞춘다.
+    const seated = phase !== "assigning" && this.syncLayout(now, false);
+    if (seated) await this.flushWorld();
     if (this.captureHomeNow()) await this.flushWorld();
     this.fillChalk(prev);
-    // 넘기기로 역할 공개가 당겨졌으면 먼저 착석을 확정하고, 보정 스냅은 단계 상태 뒤에 보낸다.
-    const phase = this.room?.phase;
-    const settledOpening = (phase === "roleReveal" || phase === "keyword")
-      && this.mapDef().id === "bar" && this.syncLayout(now, false);
-    if (settledOpening) await this.flushWorld();
     await this.persistAndBroadcast();
-    if (settledOpening) this.snapEachViewer(now);
-    await this.syncPositions(now);
+    // 밤의 가시 좌석은 입장 시 본인만, 종료 시 기존 생존/관전 규칙으로 돌아온다.
+    const nightBoundary = phase !== prev.phase && (phase === "night" || prev.phase === "night" || phase === "morning");
+    this.syncPositions(now, seated || nightBoundary);
     await this.emitDeathCards(prev, now);
     this.emitResultLog(prev);
     // 판 기록 행은 여기서(동기로, 전환 직후 상태로) 만들고, 삽입은 알람 재설정 뒤에 기다린다(WR-04) — 판 진행·알람에 지연이 없다.
@@ -1523,8 +1526,7 @@ export class Room extends DurableObject<Env> {
     this.deliver(ids, { t: "chat", ...toWire(appended.record) });
   }
 
-  // 그날 처음으로 걷기 단계(dayAnnounce·discussion)를 벗어난 지도 단계에 들어오면 각자 토론이 끝난 자리를 기억한다(결정 0061-5).
-  // captureHome 이 같은 일차면 입력을 그대로 돌려주므로(멱등) 지목 → 변론 → 밤처럼 이어지는 단계에서 자리를 덮지 않는다. 바뀌었으면 true.
+  // 그날 첫 투표 단계에서 암살 현장으로 기록할 의자 좌표를 기억한다.
   private captureHomeNow(): boolean {
     const room = this.room;
     if (!room || room.day === undefined) return false;
@@ -1539,40 +1541,10 @@ export class Room extends DurableObject<Env> {
     return true;
   }
 
-  // 위치 동기화 한 번: 밤·아침 home → 방금 탈락한 사람 snap → 지목 배치. 모두 지금 단계 키와 world.lay.key 비교로 멱등이다.
-  private async syncPositions(now: number): Promise<void> {
-    await this.syncHome(now);
-    this.snapNewGhosts(now);
-    this.syncLayout(now);
-  }
-
-  // 밤·아침 위치(결정 0061-3·4): 키 '{일차}:night'·'{일차}:morning' 이 world.lay.key 와 다르면 home 으로 순간이동하고 보는 사람 한 명씩 snap 을 보낸다.
-  // 밤은 산 사람 전원, 아침은 산 사람 + 그 밤의 피해자(마피아가 걸은 구간을 버린다, UI-SPEC A1). home 이 없는 사람은 teleportHome 이 건드리지 않는다(fail-safe).
-  // 전송은 새 길을 만들지 않는다: 소켓마다 worldVisibleTo 로 거른 snapFrame 을 deliver 한 명씩(연구 Don't Hand-Roll).
-  // 밤의 시민 편은 본인 한 칸, 아침은 산 사람 소켓 모두가 같은 좌석·같은 좌표다. 방금 탈락한 피해자는 이 snap 으로 ghostSnapped 에 올라 같은 snap 을 두 번 받지 않는다(A3).
-  private async syncHome(now: number): Promise<void> {
-    const room = this.room;
-    if (!room || room.day === undefined) return;
-    // 알람 따라잡기로 아침을 건너뛴 경우(WR-01): 밤 키가 남은 채 지도 단계에 들어왔다. 정상 아침 경로와 같이 되돌리고 snap 을 한 번 보낸다.
-    // 키를 ':morning' 으로 바꿔 두므로 같은 단계에서 다시 불려도 멱등이다. 이어서 syncLayout 이 지금 단계 배치를 맞춘다.
-    const staleNight = room.phase !== "night" && room.phase !== "morning" && MAP_PHASES.has(room.phase) && this.world.lay?.key.endsWith(":night") === true;
-    if (staleNight) {
-      const staleKey = this.world.lay!.key.replace(/:night$/, ":morning");
-      const victimNow = room.morning?.eliminated;
-      const movedNow = room.players.filter((p) => isAlive(p) || (victimNow !== undefined && p.seat === victimNow)).map((p) => p.id);
-      this.world = { ...teleportHome(this.world, movedNow, now), lay: { key: staleKey, slots: this.world.lay?.slots ?? {} } };
-      await this.flushWorld();
-      this.snapEachViewer(now);
-      return;
-    }
-    if (room.phase !== "night" && room.phase !== "morning") return;
-    const key = `${room.day}:${room.phase}`;
-    if (key === this.world.lay?.key) return;
-    const victimSeat = room.phase === "morning" ? room.morning?.eliminated : undefined;
-    const moved = room.players.filter((p) => isAlive(p) || (victimSeat !== undefined && p.seat === victimSeat)).map((p) => p.id);
-    this.world = { ...teleportHome(this.world, moved, now), lay: { key, slots: this.world.lay?.slots ?? {} } };
-    await this.flushWorld();
-    this.snapEachViewer(now);
+  // 의자는 그대로 두고 보는 사람마다 지금 받을 수 있는 참가자의 위치만 보낸다.
+  private syncPositions(now: number, refreshViewerPositions = false): void {
+    if (refreshViewerPositions) this.snapEachViewer(now);
+    else this.snapNewGhosts(now);
   }
 
   // 보는 사람 한 명씩 worldVisibleTo 로 거른 snap 을 보낸다(밤·아침·알람 따라잡기가 함께 쓴다). 탈락자는 ghostSnapped 에 올려 같은 snap 을 두 번 받지 않게 한다.
@@ -1601,11 +1573,7 @@ export class Room extends DurableObject<Env> {
     );
   }
 
-  // 지금 단계의 배치(지목 둘레 자리·변론 무대·부결 복귀)를 서버가 걷게 한다(DAY-04·05, 결정 0060-7).
-  // 단계 전환 이벤트가 아니라 지금 단계의 배치를 맞춘다(알람 따라잡기·퇴거). 복원한 바의 첫 배치를 점검한 뒤 같은 키는 건너뛴다.
-  // 일반 배치는 forceSegment 로 적용하고 위치 구간을 중계한다. 역할 확인 전의 착석은 보는 사람마다 snap 으로 보낸다.
-  // 배치 기억 lay 는 world 저장에 실려 퇴거 뒤에도 자리가 뒤섞이지 않는다.
-  // 밤·아침은 layoutKey 가 null 이고 syncHome 이 맞춘다(결정 0061-3·4).
+  // 착석 구간과 의자를 서버에서 정한다. 저장에서 복구한 한 번은 같은 키라도 실제 위치를 맞춘다.
   private syncLayout(now: number, broadcast = true): boolean {
     const room = this.room;
     if (!room) return false;
@@ -1616,21 +1584,17 @@ export class Room extends DurableObject<Env> {
     const layout = layoutFor(room, this.world, now);
     if (layout === null || (layout.moves.length === 0 && key === this.world.lay?.key)) return false;
     const map = this.mapDef();
-    const assigning = map.id === "bar" && room.phase === "assigning";
-    const settling = map.id === "bar" && (room.phase === "roleReveal" || room.phase === "keyword");
+    const assigning = room.phase === "assigning";
     for (const m of layout.moves) {
-      const me = room.players.find((p) => p.id === m.playerId);
       const cur = Object.prototype.hasOwnProperty.call(this.world.segs, m.playerId) ? this.world.segs[m.playerId] : undefined;
-      if (!me || !cur) continue;
+      if (!cur) continue;
       // 넘기기나 예전 방 복원으로 역할 화면에 먼저 도달했으면 남은 걸음을 마친 자리를 사용한다.
       const seg = assigning ? openingSeatSegment(cur, m.dest, now, map, room.phaseEndsAt ?? now)
-        : settling ? restSegment(m.dest.x, m.dest.z, now)
-        : planMoveSegment(cur, m.dest, now, map);
+        : restSegment(m.dest.x, m.dest.z, now);
       this.world = forceSegment(this.world, m.playerId, seg);
-      if (broadcast && !assigning && !settling) this.emitWorld(moveFrame(me.seat, seg), me.id);
     }
     this.world = { ...this.world, lay: { key: layout.key, slots: layout.slots } };
-    if (broadcast && layout.moves.length > 0 && (assigning || settling || room.phase === "roleReveal")) this.snapEachViewer(now);
+    if (broadcast && layout.moves.length > 0) this.snapEachViewer(now);
     // 방송을 미룬 호출자는 바뀐 위치를 즉시 저장한다.
     if (broadcast) this.markWorldDirty();
     return layout.moves.length > 0;
@@ -1731,7 +1695,7 @@ export class Room extends DurableObject<Env> {
 
     // 옛 경로를 복원한 바는 새 소켓을 붙이기 전에 현재 단계의 자리를 맞춘다.
     // 입장하는 소켓에는 보정 이동 방송 대신 아래 순서대로 state → snap 을 보낸다.
-    if (this.mapDef().id === "bar") this.syncLayout(Date.now());
+    this.syncLayout(Date.now());
 
     // 연결된 사람이 돌아오면 배회와 현재 단계 행동의 알람을 다시 건다.
     const wasIdle = !room.players.some((p) => !isBot(p) && p.connected);
@@ -2020,7 +1984,7 @@ export class Room extends DurableObject<Env> {
   }
 
   // 사람과 봇 배회가 같은 본체를 쓴다(특권 없음, 결정 0024). 방에 없는 사람·이 단계에서 못 움직이는 신분(canMove, MAP-04)·150ms 안·경로 실패는 모두 조용히 버린다.
-  // 단계 × 신분 표는 shared/game/movement.ts 한 곳이다: 산 사람은 낮 시작·토론에서만, 유령은 모든 지도 단계에서 걷는다.
+  // 재즈 바의 자유 이동은 대기실에만 허용한다. 화면과 shared/game/movement.ts를 공유한다.
   private applyMove(playerId: string, dest: { x: number; z: number }, now: number): void {
     const room = this.room;
     if (!room) return;
@@ -2074,9 +2038,9 @@ export class Room extends DurableObject<Env> {
     return room.players.some(isBot) && room.players.some((p) => !isBot(p) && p.connected);
   }
 
-  // 방의 지금 맵(결정 D-22): 이동 판정·입장 지점·배회가 모두 이것을 읽는다. 방이 없거나 대기실이면 bar.
+  // 재즈 바의 이동 판정·입장 지점·배회가 같은 맵을 읽는다.
   private mapDef(): MapDef {
-    return mapOf(this.room === null ? "bar" : roomMapId(this.room));
+    return BAR_MAP;
   }
 
   private wanderBots(): { id: string; seat: number }[] {

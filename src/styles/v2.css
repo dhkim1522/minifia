@@ -249,7 +249,7 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 /* 아이콘 단추가 빛나면 빛 테두리가 단추 상자(= 면)를 따라간다: 머리와 입력줄 모두 도구 타일과 같은 반경 */
 .mv-tool--head.is-call::after, .mv-tool--head.is-call::before { border-radius: inherit; }
 /* 52 원 열 단추·48 원 떠 있는 단추가 빛나면 빛 테두리가 상자(= 면)를 따라간다 — 원 */
-.mv-sound.is-call::after, .mv-sound.is-call::before, .mf-mapchip.is-call::after, .mf-mapchip.is-call::before, .mv-float.is-call::after, .mv-float.is-call::before { border-radius: inherit; }
+.mv-sound.is-call::after, .mv-sound.is-call::before, .mv-float.is-call::after, .mv-float.is-call::before { border-radius: inherit; }
 
 @media (prefers-reduced-motion: reduce) {
   .mv-toast, .mv-ring__bar, .mv-phase__hint { transition: none; }
@@ -412,7 +412,6 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-animal-card { justify-content: center; height: 88px; }
 .mv-animal-card__img { width: 52px; height: 52px; object-fit: contain; }
 .mv-animal-card[data-taken] { opacity: 0.58; }
-/* 방장의 맵 카드: 96×112, 간격 8. 카드 띠의 좌우 여백을 6px씩 줄여 320px 화면에도 세 장을 담는다. */
 .mv-dress-sheet__tabs { display: flex; align-items: center; }
 /* 14-07 TOOL-01: 탭은 아이콘 20 위 + 라벨 14 아래(높이 44 안), 폭은 글자 따라(최소 44) */
 .mv-dress-sheet__tab { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; box-sizing: border-box; min-width: var(--tap-min); height: var(--tap-min); padding: 0 var(--space-sm); border: 0; background: none; color: var(--gray-300); font-family: var(--font-ui); cursor: pointer; }
@@ -421,19 +420,6 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-dress-sheet__tab.is-selected .mv-dress-sheet__tab-label { font-weight: 700; }
 .mv-dress-sheet__tab.is-selected::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 0; height: 2px; background: var(--noir-paper); }
 .mv-dress-sheet__tab:focus-visible { outline: 2px solid var(--gray-100); outline-offset: -2px; }
-.mv-dress-sheet__maps { flex: none; display: flex; justify-content: safe center; gap: var(--space-sm); margin-inline: -6px; overflow: auto hidden; scrollbar-width: none; }
-.mv-map-card { position: relative; flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; box-sizing: border-box; width: 96px; height: 112px; padding: 7px 0 0; border: 1px solid var(--noir-control-line); border-radius: var(--noir-control-radius); background: var(--noir-control); color: var(--noir-paper); font-family: inherit; cursor: pointer; }
-.mv-map-card.is-selected { box-shadow: inset 0 0 0 1px var(--noir-paper); border-color: var(--noir-paper); background: var(--noir-control-on); color: var(--noir-paper); }
-.mv-map-card__img { flex: none; display: block; width: 80px; height: 80px; object-fit: cover; border-radius: var(--radius-sm); pointer-events: none; -webkit-user-drag: none; }
-.mv-map-card__shuffle { display: grid; place-items: center; background: var(--noir-inset); color: var(--gray-100); }
-.mv-map-card__name { max-width: 100%; font-size: 14px; line-height: 1.2; font-weight: 700; white-space: nowrap; overflow: hidden; }
-.mv-map-card__check { position: absolute; top: 5px; right: 5px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: var(--radius-pill); background: var(--overlay-ink-strong); color: var(--gray-100); }
-.mv-map-card[aria-disabled="true"] { opacity: 0.45; cursor: default; }
-.mv-map-card:focus-visible { outline: 2px solid var(--gray-100); outline-offset: -2px; }
-/* 맵 단추는 52px 도구 타일에 24px 아이콘을 둔다. */
-.mf-mapchip { position: relative; flex: none; display: grid; place-items: center; box-sizing: border-box; width: var(--control-button); height: var(--control-button); margin: 0; padding: 0; border: 1px solid var(--noir-control-line); border-radius: var(--noir-control-radius); background: var(--noir-control); color: var(--noir-paper); cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; }
-.mf-mapchip[aria-disabled="true"] { cursor: default; }
-.mf-mapchip:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 .mv-dress-card:focus-visible, .mv-dress-sheet__close:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .mv-dress-sheet__strip { scroll-behavior: auto; } }
 .mf-float[data-float-single] { min-height: 0; }

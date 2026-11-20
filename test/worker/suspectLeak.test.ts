@@ -1,11 +1,7 @@
 // 의심 포스트잇 누설 시험(24-02, 결정 0089-10·0021, D-06·D-07·D-26, T-24-06·T-24-07): 포스트잇은 역할과 무관한 공개 값이지만
 // ① 마피아와 시민이 같은 suspect 를 보냈을 때 받는 프레임 종류·순서와 view 키 집합이 같고, ② 거절 응답이 사유와 역할에 따라 달라지지 않으며,
 // ③ 서버 전용 이름 notes 는 어떤 프레임의 어떤 키 경로에도 없다. keywordLeak.test.ts 의 마피아·시민 프레임 대조 모양을 따른다.
-// 위치는 서버 전용 월드 구간이라 suspect.test.ts 와 같이 DO 의 인메모리 world 를 직접 정한다.
-import { env } from "cloudflare:workers";
-import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { restSegment } from "../../shared/game/world";
 import type { ServerMessage } from "../../shared/protocol";
 import { framesOf, killSeats, mark, send, settle, startedGame, summary, toPhase, withRole } from "./helpers";
 import type { Actor, Game } from "./helpers";
@@ -40,23 +36,12 @@ const viewShape = (msg: StateMsg): { top: string[]; me: string[]; day: string[];
 
 const sleep = (ms: number): Promise<void> => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-/** 방을 day 일차 phase 로 옮기고 좌석별 x 좌표(fx)에 모두를 세운다(z=0). xBySeat 에 없는 좌석은 0. */
-async function gameAt(day: number, xBySeat: Readonly<Record<number, number>> = {}, phase: "discussion" | "verdict" = "discussion"): Promise<Game> {
-  const g = await startedGame("discussion", 5, "plaza");
+/** 실제 착석 상태에서 원하는 일차와 단계로 옮긴다. */
+async function gameAt(day: number, phase: "discussion" | "verdict" = "discussion"): Promise<Game> {
+  const g = await startedGame("discussion");
   await toPhase(g.code, phase, (room) => ({ ...room, day }));
-  await place(g, xBySeat);
   for (const s of g.socks) await settle(s, mark(s));
   return g;
-}
-
-async function place(g: Game, xBySeat: Readonly<Record<number, number>>): Promise<void> {
-  await runInDurableObject(env.ROOM.getByName(g.code), async (instance) => {
-    const inst = instance as unknown as { room: { players: Array<{ id: string; seat: number }> }; world: { segs: Record<string, unknown> } };
-    const now = Date.now();
-    const segs: Record<string, unknown> = {};
-    for (const p of inst.room.players) segs[p.id] = restSegment(xBySeat[p.seat] ?? 0, 0, now);
-    inst.world = { ...inst.world, segs } as typeof inst.world;
-  });
 }
 
 /** 한 사람이 suspect 를 보내고 모든 소켓의 프레임을 g.actors 순서로 돌려준다(보낸 쪽 flush 가 먼저다). */
@@ -79,7 +64,7 @@ const pickPair = (g: Game): { m: Actor; c: Actor } => {
 const otherThan = (g: Game, ...skip: Actor[]): Actor => g.actors.find((a) => !skip.includes(a))!;
 
 describe("① 마피아·시민이 같은 suspect 를 보내면 프레임 종류·순서와 view 키 집합이 같다 (T-24-07)", () => {
-  it("둘째 날 토론: 마피아 M 과 시민 C 가 각자 가까운 사람에게 붙이면 보낸 사람 프레임 열·view 모양이 같고, 지켜본 마피아·시민의 프레임도 같으며 day.suspects 는 모두 같다", async () => {
+  it("둘째 날 토론: 마피아 M 과 시민 C 가 각자 다른 참가자에게 붙이면 보낸 사람 프레임 열·view 모양이 같고, 지켜본 마피아·시민의 프레임도 같으며 day.suspects 는 모두 같다", async () => {
     const g = await gameAt(2);
     const { m, c } = pickPair(g);
     const tM = otherThan(g, m, c);
@@ -123,7 +108,6 @@ describe("① 마피아·시민이 같은 suspect 를 보내면 프레임 종류
     await sleep(700); // 연타 간격(600ms)을 넘긴 뒤 옮긴다
     await suspectFrom(g, m, tC.seat);
     await toPhase(g.code, "verdict", (room) => room);
-    await place(g, {});
     for (const s of g.socks) await settle(s, mark(s));
     for (const a of g.actors) {
       const frames = framesOf(a.sock);
@@ -155,12 +139,10 @@ describe("② 거절 응답은 사유와 역할에 따라 달라지지 않는다
     });
   }
 
-  it("멀리 있는 대상: 마피아·시민 응답이 같다", async () => {
+  it("빈 좌석: 마피아·시민 응답이 같다", async () => {
     const g = await gameAt(2);
     const { m, c } = pickPair(g);
-    const far = otherThan(g, m, c);
-    await place(g, { [far.seat]: 1000 });
-    await rejectedSame(g, m, c, far.seat, far.seat, "discussion");
+    await rejectedSame(g, m, c, 7, 7, "discussion");
   });
 
   it("죽은 대상: 마피아·시민 응답이 같다", async () => {
@@ -168,7 +150,6 @@ describe("② 거절 응답은 사유와 역할에 따라 달라지지 않는다
     const { m, c } = pickPair(g);
     const dead = otherThan(g, m, c);
     await killSeats(g, [dead.seat]);
-    await place(g, {});
     await rejectedSame(g, m, c, dead.seat, dead.seat, "discussion");
   });
 
@@ -179,7 +160,7 @@ describe("② 거절 응답은 사유와 역할에 따라 달라지지 않는다
   });
 
   it("찬반 단계: 마피아·시민 응답이 같다", async () => {
-    const g = await gameAt(2, {}, "verdict");
+    const g = await gameAt(2, "verdict");
     const { m, c } = pickPair(g);
     const t = otherThan(g, m, c);
     await rejectedSame(g, m, c, t.seat, t.seat, "verdict");

@@ -107,9 +107,8 @@ test("readSoundState: page.evaluate 가 던지면 null", async () => {
   assert.equal(await readSoundState(page), null);
 });
 
-test("NIGHTLOAD_DWELL: 토론이 첫 장면이고 errand 장면이 없으며 한 바퀴 합은 50초다", () => {
-  assert.deepEqual(NIGHTLOAD_DWELL.map(([phase]) => phase), ["discussion", "nomination", "defense", "verdict", "execution", "night", "morning"]);
-  assert.deepEqual(NIGHTLOAD_DWELL[0], ["discussion", 10_000]);
+test("NIGHTLOAD_DWELL은 실제 낮·밤 순서를 따르고 한 바퀴가 50초다", () => {
+  assert.deepEqual(NIGHTLOAD_DWELL.map(([phase]) => phase), ["discussion", "verdict", "nomination", "defense", "execution", "night", "morning"]);
   assert.equal(NIGHTLOAD_DWELL.reduce((sum, [, ms]) => sum + ms, 0), 50_000);
 });
 

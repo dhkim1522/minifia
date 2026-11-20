@@ -58,6 +58,7 @@ import {
   readCallCount,
   readGuide,
   readHostBand,
+  readHostRail,
   readJoinFit,
   readHeaderContrast,
   resetAndLeave,
@@ -141,7 +142,6 @@ import {
 import { makeAvatarFlows } from "./avatar.mjs";
 import { makeDayFlows } from "./day.mjs";
 import { makeKeywordFlows } from "./keyword.mjs";
-import { makeMapSelectFlows, pickMapViaUi } from "./mapselect.mjs";
 import { SHORT_PHONE_H, readBenchView, readRematchState, readResultHidden, readRestSheet, readResultStage, rematchChecks, resultHiddenChecks, resultSkipChecks, resultStageChecks } from "./result.mjs";
 import { makePoliticsFlows } from "./politics.mjs";
 import { makeSoundFlows } from "./sound.mjs";
@@ -249,7 +249,7 @@ async function lobbyFlow(ctx) {
   const g1 = await readGuide(page);
   recOne(rec, "lobby/lobby", guideChecks(g1, { phase: "lobby" }));
   recOne(rec, "lobby/lobby", docHeightChecks(g1, { h }));
-  // 16-06 오른쪽 한 줄 열: 방장도 소리·옷장 52 원 둘(19페이즈 — 맵·봇은 왼쪽 방장 줄, map-select 흐름이 잰다), 머리에는 44 정사각 둘, 교차 없음(예외 조합 없음)
+  // 오른쪽 열에는 방장도 소리·옷장 52 원 둘이 있고 머리에는 44 정사각 둘이 있다.
   const sideHost = await readSideColumn(page);
   for (const r of sideColumnChecks({ viewport: { w, h }, screen: "lobby", host: true, ...sideHost })) recOne(rec, "lobby/lobby", r);
 
@@ -1468,19 +1468,30 @@ async function botFillFlow(ctx) {
   }
 }
 
-/** 재즈 바는 역할 공개 전에 서버 자리 배치와 실제 눈높이 전환을 끝낸다. */
+/** 재즈 바 로비에서 걸은 뒤 역할 확인부터 결과까지 같은 의자와 눈높이로 진행한다. */
 async function seatedOpeningFlow(ctx) {
   const id = "seated-opening";
   const rec = recorder(ctx);
   const { page, tracker } = await startHost(ctx, id);
   const total = ctx.size.w <= 360 ? 4 : 8;
-  await pickMapViaUi(page, tracker, "bar");
+  await waitWorldReady(page, 1);
+  const mapControls = page.locator("[data-map-chip], [data-map-tab], [data-map-card]");
+  rec(`${id}/lobby`, "SO0", "대기실은 재즈 바이고 맵 선택이 없다", await page.evaluate(() => window.__mfMap === "bar") && await mapControls.count() === 0);
+  const rail = await readHostRail(page);
+  rec(`${id}/lobby`, "SO0B", "테스트 방장 줄에 봇 단추가 있다", rail.buttons.map(button => button.id).join(",") === "bots");
+  const hostSeat = tracker.last().me.seat;
+  const lobbyPosition = await sampleWorld(page, hostSeat);
+  const lobbyTarget = lobbyPosition && await farWalkableOnSurface(page, ctx.size, lobbyPosition);
+  const lobbyWalk = lobbyTarget && await tapWorld(page, tracker, hostSeat, lobbyTarget.x, lobbyTarget.z);
+  rec(`${id}/lobby`, "SO0W", "대기실에서는 바닥을 눌러 걸을 수 있다", !!lobbyWalk?.move);
   await openTestSheet(page);
   await setBots(page, tracker, total - 1);
+  await chooseRole(page, tracker, "mafia");
+  await setBotVote(page, tracker, { exec: "yes", pick: "other" });
   await closeSheet(page);
   await page.locator("[data-lobby-start]").click();
   const assigning = await tracker.waitFor((v) => v.phase === "assigning", 5000, "착석 시작");
-  rec(`${id}/assigning`, "SO1", "착석 중에는 역할과 동료를 공개하지 않는다", assigning.me.role === undefined && assigning.me.allies === undefined);
+  rec(`${id}/assigning`, "SO1", "재즈 바에서 착석 중에는 역할과 동료를 공개하지 않는다", assigning.map === "bar" && assigning.me.role === undefined && assigning.me.allies === undefined);
 
   const reveal = await tracker.waitFor((v) => v.phase === "roleReveal", 8000, "역할 확인 도착");
   await page.locator(".mf-reveal__stage .mf-card").waitFor({ state: "visible", timeout: 8000 });
@@ -1501,18 +1512,42 @@ async function seatedOpeningFlow(ctx) {
 
   const sameStage = () => page.evaluate(() => window.__seatedOpeningCanvas !== null
     && window.__seatedOpeningCanvas === document.querySelector("[data-world-stage] canvas"));
+  const original = chairs[reveal.players.findIndex(p => p.seat === reveal.me.seat)];
+  const atOwnChair = async () => {
+    const seated = await sampleWorld(page, reveal.me.seat);
+    return !!seated && !!original && Math.hypot(seated.x - original.x, seated.z - original.z) < 0.01;
+  };
   await skipTo(page, tracker, "keyword");
   await page.locator("[data-keyword-card]").waitFor({ state: "visible", timeout: 6000 });
   await eye();
-  rec(`${id}/keyword`, "SO4", "라이어게임까지 역할 확인과 같은 눈높이 장면이 이어진다", await sameStage());
+  rec(`${id}/keyword`, "SO4", "라이어게임까지 역할 확인과 같은 눈높이 장면이 이어진다", await sameStage() && await atOwnChair());
 
   await skipTo(page, tracker, "discussion");
   await untilGame(page, (v) => v.phase === "discussion", 6000, "첫 토론");
   await eye();
-  const seated = await sampleWorld(page, reveal.me.seat);
-  const original = chairs[reveal.players.findIndex(p => p.seat === reveal.me.seat)];
-  rec(`${id}/discussion`, "SO5", "첫 토론에서 같은 좌석과 눈높이 장면을 이어 쓴다", !!seated && !!original
-    && Math.hypot(seated.x - original.x, seated.z - original.z) < 0.01 && await sameStage());
+  rec(`${id}/discussion`, "SO5", "첫 토론에서 같은 좌석과 눈높이를 쓰고 전체 보기 전환이 없다", await sameStage() && await atOwnChair()
+    && await page.locator("[data-table-view]").count() === 0);
+
+  for (const [phase, title] of [["verdict", "찬반"], ["nomination", "지목"], ["defense", "유언"], ["execution", "처형"], ["night", "밤"]]) {
+    await skipTo(page, tracker, phase);
+    await untilGame(page, v => v.phase === phase, 6000, title);
+    await eye();
+    rec(`${id}/${phase}`, "SO6", `${title}에서도 같은 좌석과 눈높이를 유지한다`, await sameStage() && await atOwnChair());
+  }
+
+  await page.waitForSelector("[data-face]", { timeout: 8000 });
+  const target = (await readNightFaces(page)).faceSeats.find(seat => seat !== reveal.me.seat);
+  if (target !== undefined) await tapFace(page, target);
+  await skipTo(page, tracker, "morning");
+  await eye();
+  rec(`${id}/morning`, "SO7", "아침에도 같은 좌석과 눈높이를 유지한다", await sameStage() && await atOwnChair());
+
+  if (total === 4) {
+    await toEnded({ hp: page, ht: tracker });
+    await page.locator("[data-result-stage]").waitFor({ state: "visible", timeout: 6000 });
+    await eye();
+    rec(`${id}/result`, "SO8", "결과를 같은 좌석 눈높이에서 보고 맵 선택이 없다", await sameStage() && await atOwnChair() && await mapControls.count() === 0);
+  }
 }
 
 /** 모든 페이지가 같은 단계에 닿을 때까지 기다린다(손님·방장 화면이 그 단계 틀을 그린 뒤). */
@@ -1607,7 +1642,7 @@ async function dayFlow(ctx) {
     await allAt(pages, "discussion");
     await Promise.all(pages.map((p) => settle(p)));
 
-    // 낮 토론: 고정 채팅 패널 높이, 투표 요청의 과반 집계, 맵 탭으로 걷기를 확인한다.
+    // 낮 토론: 채팅 패널과 과반 집계를 보고 착석 뒤에는 바닥 탭으로 움직이지 않는지 확인한다.
     {
       const sc = `${id}/discussion`;
       for (const x of humans) {
@@ -1618,11 +1653,12 @@ async function dayFlow(ctx) {
       }
       const g0 = await readGame(hp);
       const target = g0.stage ? await findTapTarget(hp, g0.stage, hostSeat, ctx.size) : null;
-      if (!target) rec(sc, "DY0", "토론에서는 맵 탭이 걷기(move)를 보낸다", false, "탭할 목적지를 찾지 못함");
-      else {
-        const tap = await tapWorld(hp, ht, hostSeat, target.x, target.z);
-        rec(sc, "DY0", "토론에서는 맵 탭이 걷기(move)를 보낸다", !!tap.move, "3초 안에 내 구간이 오지 않음");
-      }
+      const sent = ht.sentMoveAt.length;
+      if (target) await hp.mouse.click(target.sx, target.sy);
+      await settle(hp);
+      const eye = await hp.evaluate(() => window.__mfCamera?.projection === "eye");
+      rec(sc, "DY0", "토론에서는 자리에 앉은 눈높이를 유지한다", eye && !!target && ht.sentMoveAt.length === sent,
+        target ? "" : "탭할 바닥을 찾지 못함");
     }
 
     // [토론 끝내기]: 두 명이 눌러도 토론이 이어지고, 세 번째(과반)에서 찬반으로 넘어간다(22페이즈 D-10)
@@ -1709,7 +1745,7 @@ async function dayFlow(ctx) {
           }),
         ),
       );
-      picked.forEach((r, i) => rec(sc, "NM4", `내 차례에 이름표를 누르면 확정된다 (${humans[i].who})`, r.ok, r.detail));
+      picked.forEach((r, i) => rec(sc, "NM4", `내 차례에 초상화를 누르면 확정된다 (${humans[i].who})`, r.ok, r.detail));
       const rep = await noRecord();
       recMany(rec, sc, turnBlockChecks(rep.turnSample, ctx.size.w, ctx.size.h), " (차례 알약)");
       rec(sc, "NM5", `차례 알약이 한 명씩 돈다(본 차례 번호 ${[...rep.nos].join(",") || "없음"})`, rep.nos.size >= 2, `본 번호 ${[...rep.nos].join(",")}`);
@@ -1809,13 +1845,15 @@ async function dayFlow(ctx) {
 }
 
 /**
- * 순차 지목(22페이즈 D-12)에서 한 사람이 자기 차례에 target 을 가리킨다: 내 차례(day.turn.order[i] === 내 좌석, 확정 전)가 올 때까지 기다린 뒤 이름표를 누른다.
+ * 순차 지목에서 한 사람이 자기 차례에 초상화를 누르고 서버가 선택을 확정할 때까지 기다린다.
  * x = { page, tracker } (방장은 ht, 손님은 guests[i].tracker).
  */
 async function pickOnTurn(x, target) {
   const me = x.tracker.last().me.seat;
   await x.tracker.waitFor((v) => v.phase === "nomination" && v.day?.turn !== undefined && v.day.turn.order[v.day.turn.i] === me && v.day.turn.doneAt === undefined, 90_000, "내 차례");
   await tapTurnPick(x.page, target);
+  await x.tracker.waitFor(v => v.phase === "nomination" && v.day?.turn?.doneAt !== undefined
+    && v.day.turn.order[v.day.turn.i] === me && v.day.turn.skip !== true, 3000, "서버 지목 확인");
 }
 
 /**
@@ -1882,7 +1920,7 @@ async function ghostViewSettled(page, view, ms) {
 /** ghost 흐름 단계 순회가 모두 거쳐야 하는 단계(낮 시작·토론·찬반·지목·유언·처형·밤·아침) */
 const STAGE_TARGETS = ["dayAnnounce", "discussion", "verdict", "nomination", "defense", "execution", "night", "morning"];
 
-// ---- ghost: 처형된 사람은 유령 화면(직업 칩·유령 채널)으로 다음 날도 맵을 걷고, 산 사람 화면·소켓에는 아무것도 없다 ----
+// ---- ghost: 탈락자는 자기 의자에서 관전하고 생존자에게는 유령이 보이지 않는다 ----
 
 /** 방장이 처형되도록 새 낮 순서(찬반 → 지목 → 유언)를 넘겨 execution 에 닿는다(봇 찬성·봇 지목 = 방장; 손님은 찬성을 누른다, 22페이즈 D-10). */
 async function executeHost(game) {
@@ -1957,55 +1995,25 @@ async function ghostFlow(ctx) {
       }
     }
 
-    // 다음 날 지목에서도 유령은 맵을 걷는다. 산 사람 페이지의 world 기록에는 유령 좌석 구간이 없다
+    // 다음 날 지목에서도 유령은 자기 자리에 있고 생존 페이지에는 유령의 위치가 오지 않는다.
     {
-      const sc = `${id}/walk`;
+      const sc = `${id}/seat`;
       await skipTo(hp, ht, "nomination");
-      const g0 = await untilGame(hp, (x) => x.phase === "nomination" && x.ghostView, 9000, "다음 날 지목 도착(유령)");
+      await untilGame(hp, (x) => x.phase === "nomination" && x.ghostView, 9000, "다음 날 지목 도착(유령)");
       await settle(hp);
       const movesBefore = guests.map((g) => g.tracker.moves.get(hostSeat)?.n ?? 0);
-      // 14페이즈: 앱의 스테이지(useMapInsets)는 윗변이 자막 띠 면 아랫변이다 — 목적지도 띠 아래에서 고른다(띠 밑으로 걸어간 유령 이름표는 띠 면이 글자를 덮어 대비를 재지 못한다, 360x560 에서 간헐)
-      const bandNow = g0.stage ? await readHostBand(hp) : null;
-      const stageBelowBand = g0.stage ? { ...g0.stage, top: Math.max(g0.stage.top, bandNow?.bandRect?.bottom ?? 0) } : null;
-      const target = stageBelowBand ? await findTapTarget(hp, stageBelowBand, hostSeat, ctx.size) : null;
-      if (!target) rec(sc, "GH10", "유령이 다음 날 지목에서도 맵을 걷는다", false, "탭할 목적지를 찾지 못함");
-      else {
-        const tap = await tapWorld(hp, ht, hostSeat, target.x, target.z);
-        rec(sc, "GH10", "유령이 다음 날 지목에서도 맵을 걷는다(구간을 받음)", !!tap.move, "3초 안에 내 구간이 오지 않음");
-        // D-21: 유령도 산 캐릭터처럼 걷는 방향으로 몸을 돌리고, 멈추면 마지막 방향을 유지한다. 기대 방향 = 마지막 걸음 선분의 atan2(dx, dz)(runtime 의 travelYaw 와 같은 규칙)
-        {
-          const p = tap.move?.p ?? [];
-          const facingOf = async () => {
-            const g = (await readGhosts(hp)).ghosts;
-            const i = g === null ? -1 : g.seats.indexOf(hostSeat);
-            return i < 0 ? null : g.facing[i];
-          };
-          // 멈출 때까지(화면 위치가 0.6초 안 바뀜) 기다린다
-          let last = null;
-          let stillSince = performance.now();
-          const t0 = performance.now();
-          while (performance.now() - t0 < 12000) {
-            const sh = await hp.evaluate((s0) => window.__mfWorld?.shown(s0) ?? null, hostSeat);
-            if (sh && last && Math.abs(sh.x - last.x) < 1e-3 && Math.abs(sh.z - last.z) < 1e-3) {
-              if (performance.now() - stillSince > 600) break;
-            } else stillSince = performance.now();
-            last = sh;
-            await sleep(100);
-          }
-          const f1 = await facingOf();
-          await sleep(1000);
-          const f2 = await facingOf();
-          const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
-          if (p.length >= 4 && f1 !== null && f2 !== null) {
-            const n = p.length;
-            const want = Math.atan2(p[n - 2] - p[n - 4], p[n - 1] - p[n - 3]);
-            const hold = Math.abs(wrap(f2 - f1)) < 0.011;
-            const near = Math.abs(wrap(f1 - want)) <= 0.35;
-            rec(sc, "GH17", "유령이 걸으면 몸 방향(facing)이 걸은 방향과 0.35 라디안 안이고, 멈춘 뒤 1초 동안 바뀌지 않는다(D-21)", near && hold, `기대 ${want.toFixed(2)}, 걸은 뒤 ${f1}, 1초 뒤 ${f2}`, true);
-          } else infoRow(ctx, sc, "GH17", "유령 방향 판정을 건너뜀(걸음 선분 점 부족 또는 훅 없음)", `p ${JSON.stringify(p)}, facing ${f1}/${f2}`);
-        }
-        rec(sc, "GH10b", "유령 화면에는 지목 버튼이 없다", (await readGame(hp)).picks.length === 0, "유령에게 이름표 버튼이 있음");
+      const sent = ht.sentMoveAt.length;
+      const position = await sampleWorld(hp, hostSeat);
+      if (position) {
+        const target = await farWalkableOnSurface(hp, ctx.size, position);
+        if (target) await hp.mouse.click(target.sx, target.sy);
       }
+      await settle(hp);
+      const held = await sampleWorld(hp, hostSeat);
+      const eye = await hp.evaluate(() => window.__mfCamera?.projection === "eye");
+      rec(sc, "GH10", "다음 날에도 유령은 자기 의자의 눈높이를 유지한다", eye && !!position && !!held
+        && Math.hypot(held.x - position.x, held.z - position.z) < 0.01 && ht.sentMoveAt.length === sent);
+      rec(sc, "GH10b", "유령 화면에는 지목 버튼이 없다", (await readGame(hp)).picks.length === 0, "유령에게 이름표 버튼이 있음");
       await sleep(1200);
       // 유령 이름표 글자 대비(09.1-09 판정): 이름표가 불투명이 되었으므로 4.5:1 이상이다. 문턱을 낮추지 않는다. GH9(참고 줄)는 이 줄로 대체됐다
       {
@@ -2028,8 +2036,8 @@ async function ghostFlow(ctx) {
         const worst = judgedPool.length > 0 ? Math.min(...judgedPool.map((c) => c.ratio)) : null;
         const detail = pool.length === 0 ? "측정한 유령 이름표 없음" : pool.map((c) => `자리 ${c.seat} ${Math.round(c.ratio * 100) / 100}:1(불투명도 ${Math.round(c.opacity * 100) / 100}, 밝은 ${Math.round(c.hi * 1000) / 1000}, 어두운 ${Math.round(c.lo * 1000) / 1000})`).join(", ");
         // 모두 띠 밑이면 판정할 이름표가 없다 — 정보 줄(GH13k)만 남고 GH13 은 건너뛴다. 하나라도 보이면 그 이름표가 4.5 이상이어야 한다
-        if (judgedPool.length > 0 || occluded.length === 0) rec(sc, "GH13", "유령 이름표 글자 대비가 4.5:1 이상이다(이름표는 불투명)", worst !== null && worst >= 4.5, detail, true);
-        rec(sc, "GH13b", "유령 이름표 불투명도가 1 이다(이름표 면에 흐림이 없다)", pool.length > 0 && pool.every((c) => c.opacity === 1), detail, true);
+        if (judgedPool.length > 0) rec(sc, "GH13", "보이는 유령 이름표의 글자 대비가 4.5:1 이상이다", worst !== null && worst >= 4.5, detail, true);
+        if (pool.length > 0) rec(sc, "GH13b", "유령 이름표 불투명도가 1 이다", pool.every((c) => c.opacity === 1), detail, true);
       }
       // 밤에 더 죽은 사람이 있으면 그 사람도 같은 유령 그림이다(마피아·경찰·의사였어도 모습이 같다)
       {
@@ -2045,14 +2053,13 @@ async function ghostFlow(ctx) {
           infoRow(ctx, sc, "GH0", `손님${i + 1} 은 밤에 죽어 유령 화면이라 산 사람 규칙 검사에서 뺀다`, `산 사람 ${aliveOf(gv).join(",")}`);
           continue;
         }
-        recMany(rec, sc, ghostDomChecks(gg.counts), ` (손님${i + 1}, 유령이 걸은 뒤)`);
+        recMany(rec, sc, ghostDomChecks(gg.counts), ` (손님${i + 1}, 다음 날 지목)`);
         const after = g.tracker.moves.get(hostSeat)?.n ?? 0;
         const before = movesBefore[i];
-        rec(sc, "GH11", `유령이 걷는 동안 산 사람 페이지가 유령 좌석 구간을 받지 않는다 (손님${i + 1})`, after === before, `받은 구간 번호 ${before} → ${after}`);
-        // 유령이 걸어도 생존자 화면에는 몸·이름표가 나타나지 않는다.
+        rec(sc, "GH11", `생존자 페이지가 유령 좌석 구간을 받지 않는다 (손님${i + 1})`, after === before, `받은 구간 번호 ${before} → ${after}`);
         const deadNow = gv.players.filter((p) => p.alive === false).map((p) => p.seat);
         const lg = await liveGhostSettled(g.page, deadNow.length > 0 ? deadNow : [hostSeat], 4000);
-        for (const r of lg.rows) rec(sc, r.id, `산 사람 화면 유령 — ${r.label} (손님${i + 1}, 유령이 걸은 뒤, ${lg.phase})`, r.ok, r.detail, r.ok);
+        for (const r of lg.rows) rec(sc, r.id, `산 사람 화면 유령 — ${r.label} (손님${i + 1}, ${lg.phase})`, r.ok, r.detail, r.ok);
         await gameGH(ctx, id, `nomination-guest${i + 1}`, g);
       }
     }
@@ -3743,7 +3750,6 @@ async function pcFlow(ctx) {
   }
 
   // ③ 역할 확인과 낮 토론: 밤의 의사 선택을 재현할 5인방
-  await pickMapViaUi(page, tracker, "bar");
   await openTestSheet(page);
   await setBots(page, tracker, 4);
   await chooseRole(page, tracker, "doctor");
@@ -3915,9 +3921,6 @@ const { keywordFlow, keywordSizesFlow, earlyFlow } = makeKeywordFlows({ recorder
 // 캐릭터 동작·의상 화면(10페이즈): avatar-emote(10-05)·avatar-dress(10-07). 흐름 본문은 avatar.mjs, 도우미만 넘긴다
 const { avatarEmoteFlow, avatarDressFlow, avatarPhasesFlow, avatarPhasesNightFlow } = makeAvatarFlows({ recorder, startHost, openGuest, attempt, walkableCentersOfApp, LOBBY_HOST_NICK, WORLD_GUEST_NICK, resetAndLeave, openGame, closeGame, untilGame });
 
-// 맵 선택 화면(11페이즈 11-13): map-select. 흐름 본문은 mapselect.mjs, 도우미만 넘긴다
-const { mapSelectFlow } = makeMapSelectFlows({ recorder, startHost, openGuest, attempt, LOBBY_HOST_NICK, WORLD_GUEST_NICK, settledResult });
-
 // 소리(12페이즈): sound-render(12-06) 시험 페이지 오프라인 렌더 70개. 흐름 본문은 sound.mjs, 도우미만 넘긴다
 const { soundRenderFlow, soundUnlockFlow, soundScriptFlow, soundNightParityFlow, soundResultFlow } = makeSoundFlows({ recorder, attempt, startHost, openGame, closeGame, nightScenario });
 
@@ -3962,7 +3965,6 @@ export const FLOWS = [
   { id: "result-rematch", run: resultRematchFlow, size: REMATCH_HOST_SIZE },
   { id: "host-handoff", run: hostHandoffFlow, size: HANDOFF_SIZE },
   // 맵 선택(11-13, MAP-06): 칩·시트·카드 기하, 손님 읽기 전용, 선택 반영, 시작 뒤 같은 맵, 광장 한 판 ended
-  { id: "map-select", run: mapSelectFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "chat-game", run: chatGameFlow, size: GAME_SIZE },
   // 13페이즈 기본판(결정 0072): basic-off = 봇 판 한 판 전체(로비 → 낮 → 밤 → 결과)에서 꺼진 장치 DOM·프레임·단계 순서·결과 탭 0건, basic-vote = 8명 투표 화면(이름표 버튼 7개 44×44·무가림, 묶음 G·H). 폰 6종은 basic-vote 만
   { id: "basic-off", run: basicOffFlow, size: GAME_SIZE },

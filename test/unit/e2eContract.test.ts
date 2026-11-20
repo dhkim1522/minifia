@@ -43,8 +43,6 @@ import * as smoke from "../../scripts/smoke.mjs";
 // @ts-expect-error -- 선언 없는 스크립트 모듈
 import * as resultE2e from "../../scripts/e2e/result.mjs";
 // @ts-expect-error -- 선언 없는 스크립트 모듈
-import * as mapSelectE2e from "../../scripts/e2e/mapselect.mjs";
-// @ts-expect-error -- 선언 없는 스크립트 모듈
 import * as polishE2e from "../../scripts/e2e/polish.mjs";
 import { TOD_LABEL, TOD_ORDER, todOf } from "../../src/game/timeOfDay";
 import { enterMorning, pickTarget } from "../../shared/game/night";
@@ -530,9 +528,7 @@ describe("12페이즈 소리 시험 페이지 E2E 표식·문턱(12-06)", () => 
     expect(text).not.toMatch(/role=|seat|nonce|mafia/i);
   });
 
-  // 19-04·19-05(D-13): 봇·맵 단추가 방장 줄(data-host-rail-btn)로 옮겨 가 오른쪽 열은 방장도 소리·옷장 둘이다. 19-06: E2E 사본 SIDE_ORDER 도 둘이다.
-  // src 에 남은 값 map 은 어느 화면도 쓰지 않는 MapChip 의 줄 아닌 변형 한 곳뿐이다 — 화면이 그 변형을 다시 쓰면 아래 단언이 잡는다
-  it("옆 열의 표식은 구 화면의 sound·map에 한정하고 옷장은 공용 도구 표식을 쓴다", () => {
+  it("옆 열에는 소리 표식과 공용 옷장 도구가 있다", () => {
     const side = e2eLib as unknown as { SIDE_MARKERS: readonly string[]; SIDE_ORDER: readonly string[] };
     expect(side.SIDE_MARKERS).toEqual(["data-side-column", "data-side-button"]);
     expect(side.SIDE_MARKERS.filter((m) => !sources.some((s) => s.text.includes(m)))).toEqual([]);
@@ -542,14 +538,8 @@ describe("12페이즈 소리 시험 페이지 E2E 표식·문턱(12-06)", () => 
       for (const m of s.text.replace(/\/\/.*$/gm, "").matchAll(/data-side-button(?:"?\s*[:=]\s*|=)\{?"([a-z]+)"/g)) found.push({ value: m[1]!, f: s.f });
       for (const m of s.text.replace(/\/\/.*$/gm, "").matchAll(/<FloatAction\b[^>]*\sside="([a-z]+)"/g)) found.push({ value: m[1]!, f: s.f });
     }
-    expect([...new Set(found.map((x) => x.value))].sort().join(",")).toBe("map,sound");
+    expect([...new Set(found.map((x) => x.value))].sort().join(",")).toBe("sound");
     expect(sources.some((s) => s.text.includes('data-room-tool="dress"'))).toBe(true);
-    const outside = found.filter((x) => !side.SIDE_ORDER.includes(x.value));
-    expect(outside.map((x) => `${x.value}@${x.f}`).join(",")).toBe("map@src/components/v2/MapChip.tsx");
-    // 화면은 MapChip 을 줄 변형(rail)으로만 쓴다 — 오른쪽 열에 맵이 다시 생기지 않는다
-    const uses = sources.filter((s) => s.f.startsWith("src/screens/")).flatMap((s) => [...s.text.matchAll(/<MapChip\b[^>]*>/g)].map((m) => m[0]));
-    expect(uses.length).toBeGreaterThan(0);
-    expect(uses.filter((u) => !/\srail[\s/>]/.test(u))).toEqual([]);
   });
 
   it("E2E 문턱 개수는 SOUND_IDS.length 와 같고, 앱 쪽 SOUND_LIMITS 와 한 글자도 다르지 않다(문턱 완화 방지, T-12-22)", () => {
@@ -610,37 +600,6 @@ describe("12페이즈 sound-night-parity E2E (12-09)", () => {
     const known = new Set<string>(SOUND_IDS);
     expect(lib.NIGHT_PARITY_IDS.filter((id) => !known.has(id))).toEqual([]);
     expect([...lib.NIGHT_PARITY_IDS].sort()).toEqual(["bed.night", "night.cue", "night.fall"]);
-  });
-});
-
-describe("11페이즈 맵 선택 E2E 표식·기하 (11-13)", () => {
-  const maps = mapSelectE2e as unknown as { MAP_MARKERS: readonly string[]; MAP_CHIP: { disc: number; hit: number }; MAP_CARD: { w: number; h: number; gap: number; total: number } };
-  const root = new URL("../../", import.meta.url);
-  const tracked = execFileSync("git", ["ls-files", "src"], { cwd: root, encoding: "utf8" })
-    .split("\n")
-    .filter((f) => /\.(tsx?|css)$/.test(f));
-  const sources = tracked.map((f) => ({ f, text: readFileSync(new URL(f, root), "utf8") }));
-
-  it("MAP_MARKERS 가 4개이고 각 표식이 git 이 추적하는 src/ 파일 어딘가에 있다(표식 이름 오타 방지)", () => {
-    expect(maps.MAP_MARKERS.length).toBe(4);
-    const missing = maps.MAP_MARKERS.filter((m) => !sources.some((s) => s.text.includes(m)));
-    expect(missing).toEqual([]);
-  });
-
-  it("칩·카드 기하가 앱 CSS 와 같다 — 어긋나면 E2E 가 거짓 통과·거짓 실패한다", () => {
-    const css = readFileSync(new URL("src/styles/v2.css", root), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
-    const body = (sel: string): string => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((m) => (m[1] ?? "").trim() === sel)?.[2] ?? "";
-    expect(maps.MAP_CHIP.disc).toBe(52); // 16-06: 상자가 곧 52 원(--control-button)
-    expect(body(".mf-mapchip")).toContain("width: var(--control-button)");
-    expect(body(".mf-mapchip")).toContain("height: var(--control-button)");
-    expect(maps.MAP_CHIP.hit).toBe(52);
-    // 19-06: 칩은 왼쪽 방장 줄의 칸이다 — 줄 안 자리(왼쪽 16·띠 아래 12)는 lib.mjs HOST_RAIL_E2E 계약이 고정한다
-    expect(Object.keys(maps.MAP_CHIP).sort().join(",")).toBe("disc,hit");
-    const card = body(".mv-map-card");
-    expect(card).toContain(`width: ${maps.MAP_CARD.w}px`);
-    expect(card).toContain(`height: ${maps.MAP_CARD.h}px`);
-    expect(body(".mv-dress-sheet__maps")).toContain("gap: var(--space-sm)");
-    expect(maps.MAP_CARD.total).toBe(3 * maps.MAP_CARD.w + 2 * maps.MAP_CARD.gap);
   });
 });
 
@@ -1055,15 +1014,16 @@ describe("방장 줄 E2E 사본 계약 (19-06, T-19-18·T-19-19; 22-07 판 종�
     }
   });
 
-  it("판 종류 흐름(mode-rail·mode-pick·mode-basic·mode-leak)과 modes.mjs 는 없고 방장 줄 판정(hostRailChecks)은 lib.mjs 에 남아 map-select 가 쓴다", () => {
+  it("게임 종류·맵 선택 흐름은 없고 고정 좌석 흐름을 실행한다", () => {
     const flows = readFileSync(new URL("scripts/e2e/flows.mjs", root), "utf8");
     expect(flows).not.toMatch(/id: "mode-/);
     expect(flows).not.toContain("modes.mjs");
+    expect(flows).not.toContain('id: "map-select"');
+    expect(flows).toContain('id: "seated-opening"');
     expect(execFileSync("git", ["ls-files", "scripts/e2e/modes.mjs"], { cwd: root, encoding: "utf8" }).trim()).toBe("");
     const libText = readFileSync(new URL("scripts/e2e/lib.mjs", root), "utf8");
     expect(libText).toMatch(/export function hostRailChecks\b/);
     for (const gone of ["modeChipChecks", "modeSheetChecks", "MODE_NAMES_E2E", "basicModeChecks"]) expect(libText, gone).not.toContain(gone);
-    expect(readFileSync(new URL("scripts/e2e/mapselect.mjs", root), "utf8")).toContain("hostRailChecks");
   });
 
   it("대기실 패널 기대 높이(HR8)는 160 = lobbyPanelHeight(LOG_H) 이다", () => {
@@ -1074,13 +1034,11 @@ describe("방장 줄 E2E 사본 계약 (19-06, T-19-18·T-19-19; 22-07 판 종�
     expect(lib.HOST_RAIL_MARKERS.join(",")).toBe("data-host-rail,data-host-rail-btn");
     expect(lib.HOST_RAIL_MARKERS.filter((m) => !sources.some((s) => s.text.includes(m)))).toEqual([]);
     const text = (file: string): string => sources.find((s) => s.f.endsWith(file))!.text.replace(/\/\/.*$/gm, "");
-    // 줄 단추 표식 값: HostRailButton 의 id 유니언 + MapChip 줄 변형의 "map" = HOST_RAIL_ORDER
+    // 방장 줄에는 봇 도구 하나가 있다.
     const union = /id: ((?:"[a-z]+"(?: \| )?)+);/.exec(text("components/v2/HostRailButton.tsx"))?.[1] ?? "";
     const ids = [...union.matchAll(/"([a-z]+)"/g)].map((m) => m[1]!);
     expect(text("components/v2/HostRailButton.tsx")).toContain("data-host-rail-btn={id}");
-    expect(text("components/v2/MapChip.tsx")).toContain('"data-host-rail-btn": "map"');
-    expect([...ids, "map"].sort().join(",")).toBe([...lib.HOST_RAIL_ORDER].sort().join(","));
-    expect(lib.HOST_RAIL_ORDER.join(",")).toBe("map,bots");
+    expect(ids).toEqual(["bots"]);
     // 줄을 표시하던 왕관 장식은 제거했다.
     expect(text("components/v2/HostRail.tsx")).toContain('data-host-rail=""');
     expect(text("components/v2/HostRail.tsx")).not.toContain('data-host-rail-crown');

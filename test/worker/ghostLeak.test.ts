@@ -1,21 +1,14 @@
 // GHOST-01 누설 증명, 결정 0060-8, RESEARCH 메타모픽 설계 (08-09).
-// 유령의 위치·움직임은 유령의 폰으로만 간다 — 산 사람 폰에는 네트워크로도 가지 않는다(화면에서 숨기는 방식이 아니다, 결정 0002·0021).
+// 유령의 위치는 유령의 폰으로만 간다(결정 0002·0021). 의자에서 이동을 요청해도 누구에게도 방송하지 않는다.
 // "오지 않았음" 은 settle(ping/pong)로 증명한다. 실패 출력은 한 줄이어야 해서(TAP) 프레임은 요약 문자열로 비교한다.
 import { describe, expect, it } from "vitest";
-import type { MapId, ServerMessage } from "../../shared/protocol";
+import type { ServerMessage } from "../../shared/protocol";
 import { advanceTo, chatSend, chatsOf, connect, ghostsOf, mark, nextFrame, observe, pause, resetChatRates, seat, send, settle, stable, startedGame, summary, toPhase, typingSend, withRole, worldFramesOf } from "./helpers";
 import type { Actor, Game } from "./helpers";
 
-/** world move 프레임만 'seat' 모양으로. */
-const moveSeats = (msgs: ServerMessage[]): string =>
-  msgs
-    .filter((m): m is Extract<ServerMessage, { t: "world"; k: "move" }> => m.t === "world" && m.k === "move")
-    .map((m) => `move:${m.s}`)
-    .join(",");
-
 /** 5명 판(방장 + 손님 4)을 토론 단계까지 시작해 마피아가 아닌 두 명을 유령으로 만든다. */
-async function fiveWithTwoGhosts(map?: MapId): Promise<{ g: Game; ghosts: Actor[]; living: Actor[] }> {
-  const g = await startedGame("discussion", 4, map);
+async function fiveWithTwoGhosts(): Promise<{ g: Game; ghosts: Actor[]; living: Actor[] }> {
+  const g = await startedGame("discussion", 4);
   const doomed = g.actors.filter((a) => a.role !== "mafia").slice(0, 2);
   expect(doomed.length).toBe(2);
   const { ghosts, living } = await ghostsOf(
@@ -25,29 +18,15 @@ async function fiveWithTwoGhosts(map?: MapId): Promise<{ g: Game; ghosts: Actor[
   return { g, ghosts, living };
 }
 
-describe("유령 한 걸음 — 트레이서 (GHOST-01, MAP-04)", () => {
-  it("유령 X 의 move 는 다른 유령 Y 소켓에 world.move(s = X)로 가고 산 사람 세 소켓은 한 프레임도 받지 않는다", async () => {
+describe("유령 착석 — 트레이서 (GHOST-01, MAP-04)", () => {
+  it("유령 X 의 move 는 보낸 사람과 다른 유령, 생존자에게 모두 무시된다", async () => {
     const { g, ghosts, living } = await fiveWithTwoGhosts();
-    const [x, y] = ghosts as [Actor, Actor];
+    const x = ghosts[0]!;
     expect(living.length).toBe(3);
 
-    const marks = new Map(g.socks.map((sock) => [sock, mark(sock)] as const));
     const got = await observe(g, x, () => send(x.sock, { t: "move", x: 200, z: 200 }));
 
-    expect(moveSeats(got[g.actors.indexOf(y)]!)).toBe(`move:${x.seat}`);
-    expect(moveSeats(got[g.actors.indexOf(x)]!)).toBe(`move:${x.seat}`); // 자기 걸음도 돌려받는다(예측 보정과 같은 길)
-    for (const a of living) expect(summary(got[g.actors.indexOf(a)]!)).toBe("[]");
-    // 직접 불변식: 산 사람 소켓이 이 걸음 뒤에 받은 world 프레임은 0개다(로비에서 입장 때 받은 프레임은 걸음 전 위치).
-    expect(living.map((a) => worldFramesOf(a.sock, marks.get(a.sock)!).length).join(",")).toBe("0,0,0");
-  }, 30_000);
-
-  it("광장에서 산 사람 A 가 토론 중 움직이면 유령을 포함한 모든 소켓이 world.move(s = A)를 받는다", async () => {
-    const { g, living } = await fiveWithTwoGhosts("plaza");
-    const a = living[0]!;
-
-    const got = await observe(g, a, () => send(a.sock, { t: "move", x: -200, z: 100 }));
-
-    for (const actor of g.actors) expect(moveSeats(got[g.actors.indexOf(actor)]!)).toBe(`move:${a.seat}`);
+    for (const messages of got) expect(summary(messages)).toBe("[]");
   }, 30_000);
 });
 
@@ -121,7 +100,7 @@ interface Rounds {
 
 /**
  * 같은 방에서 같은 산 사람 대본(L1 이 한 줄 보내고 L2 가 한 줄 보낸다)을 두 구간으로 돌린다.
- * 구간 A(quiet): 유령이 가만히 있다. 구간 B(busy): 유령 X 가 세 번 걷고 입력 중을 켜고 유령 채팅 한 줄을 보내고 끈다.
+ * 구간 A(quiet): 유령이 가만히 있다. 구간 B(busy): 유령 X 가 이동을 요청하고 입력 중을 켜고 유령 채팅 한 줄을 보내고 끈다.
  */
 async function twoRounds(): Promise<Rounds> {
   const { g, ghosts, living } = await fiveWithTwoGhosts();
@@ -157,7 +136,7 @@ async function twoRounds(): Promise<Rounds> {
   return { g, ghosts, living, quiet, busy, from };
 }
 
-describe("메타모픽 — 유령이 가만히 있을 때(A)와 걷고 입력하고 말할 때(B)의 산 사람 프레임 열이 같다 (GHOST-01)", () => {
+describe("유령이 가만히 있을 때와 입력하고 말할 때 생존자 프레임 열이 같다 (GHOST-01)", () => {
   it("산 사람 세 소켓이 받은 프레임 열(휘발 필드 제거)이 두 구간에서 같고, 비어 있지 않다", async () => {
     const r = await twoRounds();
     for (const a of r.living) {
@@ -165,10 +144,10 @@ describe("메타모픽 — 유령이 가만히 있을 때(A)와 걷고 입력하
       expect(stable(r.busy[i]!)).toBe(stable(r.quiet[i]!));
       expect(chatsOf(r.busy[i]!).length).toBe(2); // 산 사람 둘의 줄 — 대본이 실제로 돌았다
     }
-    // 구간 B 가 정말 활동이 있던 구간이다: 다른 유령 Y 는 X 의 걸음 셋·유령 채팅 한 줄·입력 중 켜짐을 받았다.
+    // 구간 B의 다른 유령 Y는 이동을 받지 않고 유령 채팅과 입력 신호를 받는다.
     const y = r.ghosts[1]!;
     const got = r.busy[r.g.actors.indexOf(y)]!;
-    expect(got.filter((m) => m.t === "world" && m.k === "move").length).toBe(3);
+    expect(got.filter((m) => m.t === "world" && m.k === "move")).toHaveLength(0);
     expect(chatsOf(got).filter((c) => c.ch === "ghost").length).toBe(1);
     expect(got.filter((m) => m.t === "typing").length).toBeGreaterThan(0);
   }, 40_000);

@@ -140,20 +140,18 @@ export function assignSlots(people: readonly { id: string; x: number; z: number 
   return out;
 }
 
-/** 모이는 단계만 배치 키를 가진다. 재즈 바는 역할 확인 전에 걸음을 마치고 같은 자리를 낮까지 쓴다. */
+/** 모이는 단계만 배치 키를 가진다. 재즈 바는 역할 확인 전에 걸음을 마치고 결과까지 같은 의자를 쓴다. */
 export function layoutKey(state: RoomState): string | null {
   const day = state.day ?? 0;
   const bar = (state.map ?? "bar") === "bar";
   const barDay = state.day ?? 1;
+  if (bar) {
+    if (state.phase === "lobby") return null;
+    return state.phase === "assigning" ? `${barDay}:bar-opening` : `${barDay}:bar-table`;
+  }
   switch (state.phase) {
-    case "assigning":
-      return bar ? `${barDay}:bar-opening` : null;
-    case "dayAnnounce":
-    case "discussion":
-    case "keyword":
-      return bar ? `${barDay}:bar-table` : null;
     case "roleReveal":
-      return bar ? `${barDay}:bar-table` : state.playtest === true ? `${day}:role` : null;
+      return state.playtest === true ? `${day}:role` : null;
     case "verdict":
       return firstPlaytestDay(state) ? `${day}:firstBallot` : null;
     case "nomination":
@@ -199,14 +197,13 @@ export function layoutFor(state: RoomState, w: WorldState, now: number): GatherL
   const defender = state.phase === "defense" || state.phase === "execution" ? state.verdict?.candidate : undefined;
   const runoffCand = state.phase === "runoff" ? state.runoff?.cand : undefined;
   const bar = (state.map ?? "bar") === "bar";
-  const adjustOpening = bar && (state.phase === "roleReveal" || state.phase === "keyword"
-    || (state.phase === "assigning" && w.lay?.key !== key));
+  const adjustOpening = bar && (state.phase !== "assigning" || w.lay?.key !== key);
   // 옛 저장에는 표가 없다. 탈락자와 연결이 끊긴 사람도 원래 명단에 남는다.
   const chairs = bar ? state.barChairs ?? barChairAssignment(state.players.filter((p) => p.sat !== true).map((p) => p.seat)) : undefined;
 
   const participants = [...state.players]
     .sort((a, b) => a.seat - b.seat)
-    .filter((p) => Object.prototype.hasOwnProperty.call(w.segs, p.id) && (isAlive(p) || (p.seat === defender && (!bar || state.phase === "execution"))));
+    .filter((p) => Object.prototype.hasOwnProperty.call(w.segs, p.id) && (bar ? p.sat !== true : isAlive(p) || p.seat === defender));
   const empty: GatherLayout = { key, slots: {}, moves: [] };
   const table = bar ? BAR_SEATS_FX : ringSlots(participants.length);
   if (table.length === 0) return empty;
@@ -241,12 +238,12 @@ export function layoutFor(state: RoomState, w: WorldState, now: number): GatherL
     const isDefender = p.seat === defender;
     let dest: { x: number; z: number } | null;
     const runoffAt = runoffCand === undefined ? -1 : runoffCand.indexOf(p.seat);
-    if (runoffAt === 0 || runoffAt === 1) {
-      const [x, z] = (bar ? BAR_RUNOFF_SPOTS : RUNOFF_SPOTS)[runoffAt];
+    if (!bar && (runoffAt === 0 || runoffAt === 1)) {
+      const [x, z] = RUNOFF_SPOTS[runoffAt];
       dest = { x, z };
     }
-    else if (isDefender && state.phase === "defense") dest = { x: STAGE_SPOT.x, z: STAGE_SPOT.z };
-    else if (isDefender && state.phase === "execution") dest = bar ? STAGE_SPOT : null; // 이미 무대라면 유지한다
+    else if (!bar && isDefender && state.phase === "defense") dest = { x: STAGE_SPOT.x, z: STAGE_SPOT.z };
+    else if (!bar && isDefender && state.phase === "execution") dest = null; // 이미 무대라면 유지한다
     else {
       const s = slots[p.id];
       dest = s === undefined ? null : { x: s[0], z: s[1] };

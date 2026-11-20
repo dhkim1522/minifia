@@ -19,7 +19,7 @@ export interface Genre {
 
 /**
  * 시험 스위치(23-01, D-29). false 면 beginGame 이 키워드를 고르지 않아 첫날 흐름이 옛 그대로(roleReveal → dayAnnounce)다.
- * 제품은 늘 true 이고, test/unit/setup.ts·test/worker/setup.ts 가 시험 동안 끈다(PLAYABLE_MAPS 잠금과 같은 성격 — 소켓·HTTP 로 바꿀 경로가 없다).
+ * 제품은 늘 true 이고, test/unit/setup.ts·test/worker/setup.ts 가 시험 동안 끈다. 소켓·HTTP 로 바꿀 경로는 없다.
  * 켜는 시험은 test/helpers/keyword.ts 의 openKeyword 를 쓴다.
  */
 export const KEYWORD_SWITCH: { on: boolean } = { on: true };
@@ -381,7 +381,7 @@ export const GENRES = [
   },
 ] as const satisfies readonly Genre[];
 
-/** 서버가 시작에 키워드를 고른다: 장르 randInt 한 번 → 단어 randInt 한 번(D-29, beginGame 이 decideMap 뒤에 부른다). */
+/** 서버가 역할을 배정한 뒤 키워드를 고른다: 장르 randInt 한 번 → 단어 randInt 한 번(D-29). */
 export function pickKeyword(randInt: (n: number) => number): { genre: string; word: string } {
   const genre = GENRES[randInt(GENRES.length)]!;
   const entry = genre.words[randInt(genre.words.length)]!;

@@ -150,8 +150,8 @@ describe("turnTopLine — 위 한 줄 (UI-SPEC A-5)", () => {
     expect(turnTopLine(view())).toBeNull();
     expect(turnTopLine(view({ turn: during(0) }))).toBeNull();
   });
-  it("모이는 중", () => {
-    expect(turnTopLine(view({ turn: { order: ORDER, i: -1 } }))).toBe("가운데로 모여요");
+  it("지목 준비 중", () => {
+    expect(turnTopLine(view({ turn: { order: ORDER, i: -1 } }))).toBe("지목을 준비해요");
   });
   it("확정된 지목: 그 좌석의 가리킴 줄", () => {
     const v = view({ turn: during(1, { doneAt: T0 + 1_000 }), points: [{ seat: 0, target: 2 }, { seat: 1, target: 3 }] });
