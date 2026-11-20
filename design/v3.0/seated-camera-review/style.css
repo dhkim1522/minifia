@@ -77,5 +77,5 @@ button:focus-visible, summary:focus-visible { outline: 2px solid var(--gold); ou
   .comparison-options { position: relative; z-index: 4; }
   .comparison-options .variants { position: absolute; width: min(304px, 70vw); padding: 8px; border: 1px solid var(--frame); border-radius: 8px; background: var(--dock); }
   .views { justify-self: end; width: min(100%, 390px); }
-  .comparison { grid-column: 1 / -1; width: 100%; margin-top: 0; }
+  .comparison { grid-column: 1 / -1; width: 100%; max-width: min(390px, calc(100svh + 50px)); margin-top: 0; }
 }
