@@ -226,7 +226,9 @@ async function main() {
   check("e", "첫 제출자부터 한 답만 공개됨", first?.order === 1 && first.seat === guests[0].seat && first.text === "나만아는말"
     && clients.every(c => same(turnOf(c), first) && lastView(c).day?.keyword?.answers === undefined && lastView(c).day?.keyword?.answer === undefined), JSON.stringify(first));
   await act(host, { t: "suspect", target: guests[0].seat });
-  check("e", "현재 발표자에게 의심딱지가 붙음", clients.every(c => lastView(c).day?.suspects?.some(note => note.to === guests[0].seat)), "");
+  const noteArrived = () => clients.every(c => lastView(c).day?.suspects?.some(note => note.to === guests[0].seat));
+  await waitUntil(noteArrived, SKIP_WAIT_MS, "발표자 의심딱지 방송");
+  check("e", "현재 발표자에게 의심딱지가 붙음", noteArrived(), "");
   const speakers = [first?.seat];
   for (let order = 2; order <= clients.length; order++) {
     await sleep(RATE_PAUSE_MS);

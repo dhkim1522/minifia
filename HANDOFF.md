@@ -6,7 +6,7 @@
 
 - **v3.0 시험판**(`v3`)은 [B안 달빛 누아르](docs/decisions/0093-v3-noir-visual-redesign.md)의 재즈 바와 공통 화면을 쓴다. **22** 낮은 토론 → 찬반 → 지목 → 유언 → 처형(결정 0090). **23** 첫날 라이어게임과 정답 공개, 조기 진행, D1 판 기록(결정 0091). **24-01~07** 구현 완료.
 - [동물 12종](docs/decisions/0102-animal-characters.md)은 3D 모델·초상·의상을 공유한다. [공용 화면](docs/decisions/0100-home-art-and-discussion-controls.md)의 채팅은 하단에 두고, [단계의 선택과 결과](docs/decisions/0103-phase-events.md)는 중앙에서 진행한다.
-- **공개 v3** `2026-11-20T08:29:10Z+cb3afb25`. [재즈 바만 사용하고 착석부터 결과까지 같은 눈높이](docs/decisions/0112-jazz-bar-fixed-view.md). 공개 320·390px 4·8인 착석 33/33, 결과 27/27, 다시 하기 19/19. [4~8인 봇](docs/decisions/0110-bot-test-play.md), [공용 에셋](docs/decisions/0109-shared-character-art.md), [테스트 방](https://minifia-v3.dhplay.workers.dev/?test=1).
+- **공개 v3** `2026-11-20T08:55:18Z+491cc91d`. [라이어 답 5초씩 시계방향 공개와 의심딱지](docs/decisions/0113-clockwise-first-day-answers.md). 공개 320·390px 착석·발표 E2E 56/56, 4인 소켓 UAT 42/42. [재즈 바 고정 시점](docs/decisions/0112-jazz-bar-fixed-view.md), [4~8인 봇](docs/decisions/0110-bot-test-play.md), [테스트 방](https://minifia-v3.dhplay.workers.dev/?test=1).
 - `keyword-sizes` 390px 가상 키보드 타이머 중앙 정렬 2건은 이전 공개판과 이번 로컬에서 동일하게 실패했다.
 - **v2.0 완료 처리(2026-11-07)**: 태그 `v2.0`, 문서는 `.planning/milestones/v2.0-*`. 열린 감사 항목 26개는 STATE.md 미룬 항목. main 은 v1.0 그대로, v3.0 실테스트 통과 뒤 반영.
 - **캐릭터·맵**의 B안 모델은 `src/world/character.ts`, `src/world/ghost3d.ts`, `src/world/maps/`에 있다. 시안은 `design/v3.0/redesign/b-noir.png`. 이미지 재생성은 [에셋 자동 검사](docs/screen-map.md#에셋-자동-검사) 참고.
