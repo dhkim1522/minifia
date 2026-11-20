@@ -1468,6 +1468,53 @@ async function botFillFlow(ctx) {
   }
 }
 
+/** 재즈 바는 역할 공개 전에 서버 자리 배치와 실제 눈높이 전환을 끝낸다. */
+async function seatedOpeningFlow(ctx) {
+  const id = "seated-opening";
+  const rec = recorder(ctx);
+  const { page, tracker } = await startHost(ctx, id);
+  const total = ctx.size.w <= 360 ? 4 : 8;
+  await pickMapViaUi(page, tracker, "bar");
+  await openTestSheet(page);
+  await setBots(page, tracker, total - 1);
+  await closeSheet(page);
+  await page.locator("[data-lobby-start]").click();
+  const assigning = await tracker.waitFor((v) => v.phase === "assigning", 5000, "착석 시작");
+  rec(`${id}/assigning`, "SO1", "착석 중에는 역할과 동료를 공개하지 않는다", assigning.me.role === undefined && assigning.me.allies === undefined);
+
+  const reveal = await tracker.waitFor((v) => v.phase === "roleReveal", 8000, "역할 확인 도착");
+  await page.locator(".mf-reveal__stage .mf-card").waitFor({ state: "visible", timeout: 8000 });
+  const roleStart = reveal.phaseEndsAt - reveal.phaseDurationMs;
+  const chairs = await page.evaluate(({ seats, at }) => seats.map(seat => window.__mfWorld?.sample(seat, at) ?? null), {
+    seats: reveal.players.map(p => p.seat), at: roleStart,
+  });
+  const chairCount = new Set(chairs.filter(Boolean).map(({ x, z }) => `${x.toFixed(2)}:${z.toFixed(2)}`)).size;
+  rec(`${id}/role`, "SO2", `역할 확인 시점에는 ${total}명이 서로 다른 테이블 의자에 있다`,
+    chairCount === total && chairs.every(p => p !== null && Math.abs(Math.hypot(p.x, p.z) - 2.04) < 0.03));
+  const eye = () => page.waitForFunction(() => window.__mfCamera?.projection === "eye", undefined, { timeout: 8000 });
+  await eye();
+  await page.evaluate(() => { window.__seatedOpeningCanvas = document.querySelector("[data-world-stage] canvas"); });
+  const roleFace = page.locator(".mf-reveal__stage .mf-card--front");
+  if (!(await roleFace.isVisible())) await page.locator(".mf-reveal__stage .mf-card").click();
+  await roleFace.waitFor({ state: "visible", timeout: 5000 });
+  rec(`${id}/role`, "SO3", "내 자리 눈높이에서 역할 카드를 열 수 있다", true);
+
+  const sameStage = () => page.evaluate(() => window.__seatedOpeningCanvas !== null
+    && window.__seatedOpeningCanvas === document.querySelector("[data-world-stage] canvas"));
+  await skipTo(page, tracker, "keyword");
+  await page.locator("[data-keyword-card]").waitFor({ state: "visible", timeout: 6000 });
+  await eye();
+  rec(`${id}/keyword`, "SO4", "라이어게임까지 역할 확인과 같은 눈높이 장면이 이어진다", await sameStage());
+
+  await skipTo(page, tracker, "discussion");
+  await untilGame(page, (v) => v.phase === "discussion", 6000, "첫 토론");
+  await eye();
+  const seated = await sampleWorld(page, reveal.me.seat);
+  const original = chairs[reveal.players.findIndex(p => p.seat === reveal.me.seat)];
+  rec(`${id}/discussion`, "SO5", "첫 토론에서 같은 좌석과 눈높이 장면을 이어 쓴다", !!seated && !!original
+    && Math.hypot(seated.x - original.x, seated.z - original.z) < 0.01 && await sameStage());
+}
+
 /** 모든 페이지가 같은 단계에 닿을 때까지 기다린다(손님·방장 화면이 그 단계 틀을 그린 뒤). */
 async function allAt(pages, phase, ms = 8000) {
   return Promise.all(pages.map((p) => untilGame(p, (g) => g.phase === phase, ms, `${phase} 도착`)));
@@ -3884,6 +3931,7 @@ export const FLOWS = [
   // lobby·world 는 LOBBY_SIZES 6개 크기로 돈다: 기본 크기 4개에 더해 390x844·402x874 (run.mjs 의 extraSizes)
   { id: "lobby", run: lobbyFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "bot-fill", run: botFillFlow },
+  { id: "seated-opening", run: seatedOpeningFlow },
   { id: "world", run: worldFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 로비 자유 채팅(07-13): 방장·손님 두 페이지로 한 줄이 오가는 트레이서
   { id: "chat-lobby", run: chatLobbyFlow, extraSizes: LOBBY_EXTRA_SIZES },

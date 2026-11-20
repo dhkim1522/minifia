@@ -66,7 +66,7 @@ interface RoomScreenProps {
 // 단계가 바뀔 때만 보이지 않는 aria-live 영역이 읽는 문구. 대기실은 읽을 것이 없다.
 const PHASE_ANNOUNCE: Record<PhaseId, (view: RoomView) => string> = {
   lobby: () => "",
-  assigning: () => "직업을 배정하고 있습니다",
+  assigning: (view) => view.map === "bar" ? "테이블로 모이고 있어요" : "직업을 배정하고 있습니다",
   roleReveal: () => "역할 확인",
   keyword: () => "라이어 게임",
   dayAnnounce: (view) => `${view.day?.n ?? 1}일차 낮이 되었습니다`,
@@ -128,7 +128,7 @@ function executionAnnounceOf(view: RoomView): string {
 // 장면 키: 낮 시작·토론·찬반·지목·유언·처형(8페이즈 지도 단계)은 같은 장면(GameMap)이라 같은 키를 쓴다 — 단계가 바뀌어도 맵(three 렌더러)을 다시 만들지 않는다(DAY-07).
 // 밤·아침(08-18 임시 틀, UI-SPEC A1)도 같은 맵이다. 옛 투표 세 단계는 08-19 에 화면을 지웠고 08-22 에 PhaseId 에서도 지웠다. 낮 시작 전용 화면은 없다(결정 0030).
 // 래퍼와 장면은 장면에 들어올 때만 mf-phase-enter 가 돈다. 그 밖은 단계 이름이 키다.
-function sceneKey(phase: PhaseId): string {
+function sceneKey(phase: PhaseId, map: RoomView["map"]): string {
   switch (phase) {
     case "dayAnnounce":
     case "discussion":
@@ -142,11 +142,11 @@ function sceneKey(phase: PhaseId): string {
     case "night":
     case "morning":
       return "gameMap";
-    // 역할 배정·역할 확인은 같은 3D 무대(PreGame)라 같은 키 — 두 단계 사이에 무대를 다시 만들지 않는다(feedback-3).
+    // 재즈 바는 착석부터 토론까지 같은 WebGL 무대를 쓴다.
     case "assigning":
     case "roleReveal":
-    case "keyword": // 첫날 키워드 카드도 같은 무대 — 역할 확인 → 키워드에서 3D 무대를 다시 만들지 않는다(23-01, P23-1)
-      return "preGame";
+    case "keyword":
+      return map === "bar" ? "gameMap" : "preGame";
     default:
       return phase;
   }
@@ -546,7 +546,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
     // 가림막 동안은 마지막 로비 view 와 로비 키를 그대로 써 Lobby·맵이 다시 마운트되지 않는다.
     const current = curtain ?? view;
     return (
-      <div key={sceneKey(current.phase)} className="mf-phase-enter">
+      <div key={sceneKey(current.phase, current.map)} className="mf-phase-enter">
         {renderPhase(current)}
       </div>
     );
@@ -562,6 +562,18 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   }
 
   function renderPhase(view: RoomView) {
+    const embedded = view.map === "bar";
+    const opening = view.phase === "assigning" ? (
+      <Assigning view={view} menuButton={menuAction} embedded={embedded} />
+    ) : view.phase === "keyword" ? (
+      <Keyword view={view} offset={connection.offset} epoch={connection.epoch} myRoleButton={withTest(menuAction)} send={connection.send} canSend={connection.canSend} onEvent={connection.onEvent} embedded={embedded} />
+    ) : view.phase === "roleReveal" ? (
+      <RoleReveal view={view} offset={connection.offset} epoch={connection.epoch} myRoleButton={withTest(menuAction)} onSeenFront={onSeenFront} send={connection.send} canSend={connection.canSend} embedded={embedded} />
+    ) : undefined;
+    if (opening !== undefined && !embedded) return (
+      <PreGame view={view} store={store} send={connection.send} canSend={connection.canSend} offset={connection.offset} onLeave={() => onExit("gaveUp")}>{opening}</PreGame>
+    );
+
     switch (view.phase) {
       case "lobby":
         return (
@@ -583,17 +595,6 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
       case "assigning":
       case "roleReveal":
       case "keyword":
-        return (
-          <PreGame view={view} store={store} send={connection.send} canSend={connection.canSend} offset={connection.offset} onLeave={() => onExit("gaveUp")}>
-            {view.phase === "assigning" ? (
-              <Assigning view={view} menuButton={menuAction} />
-            ) : view.phase === "keyword" ? (
-              <Keyword view={view} offset={connection.offset} epoch={connection.epoch} myRoleButton={withTest(menuAction)} send={connection.send} canSend={connection.canSend} onEvent={connection.onEvent} />
-            ) : (
-              <RoleReveal view={view} offset={connection.offset} epoch={connection.epoch} myRoleButton={withTest(menuAction)} onSeenFront={onSeenFront} send={connection.send} canSend={connection.canSend} />
-            )}
-          </PreGame>
-        );
       case "dayAnnounce":
       case "discussion":
       case "nomination":
@@ -614,6 +615,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
             store={store}
             chat={chat}
             headerAction={menuAction}
+            opening={opening}
             testButton={testButton}
             announce={announce}
             deny={deny}

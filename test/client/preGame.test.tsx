@@ -194,8 +194,45 @@ describe("RoomScreen: 배정 → 확인 사이에 무대가 다시 만들어지�
     expect(container.querySelectorAll("[data-role-chip]").length).toBe(0);
   });
 
-  it("장면 키 preGame 하나를 assigning·roleReveal·keyword 가 쓴다(23-01 — 첫날 키워드 카드도 같은 무대)", () => {
-    const src = readFileSync("src/screens/RoomScreen.tsx", "utf8");
-    expect(src).toMatch(/case "assigning":\s*case "roleReveal":\s*case "keyword":[^\n]*\n\s*return "preGame"/);
+  it("재즈 바는 배정부터 토론까지 같은 눈높이 무대를 사용한다", () => {
+    const renderRoom = () => <RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />;
+    const view = (phase: PhaseId): RoomView => ({ ...makeView(phase), map: "bar", me: { seat: 0, isHost: true, role: "mafia" } });
+    connectionMock.current = conn(view("assigning"));
+    const { container, rerender } = render(renderRoom());
+    const stage = container.querySelector("[data-world-stage-fake]");
+    expect(stage).not.toBeNull();
+    expect(container.querySelector(".mf-assign")?.textContent).toContain("테이블로 모이고 있어요");
+    for (const phase of ["assigning", "roleReveal", "keyword", "dayAnnounce", "discussion"] as const) {
+      connectionMock.current = conn(view(phase));
+      rerender(renderRoom());
+      expect(container.querySelector("[data-world-stage-fake]"), phase).toBe(stage);
+      expect(probe.mounts, phase).toBe(1);
+      const props = stageProps();
+      expect(props.scene?.table, phase).toEqual({ mode: "eye" });
+      expect(props.canWalk, phase).toBe(false);
+      if (phase === "assigning" || phase === "roleReveal" || phase === "keyword") {
+        expect(props.decorative, phase).toBe(true);
+        expect(props.canSend, phase).toBe(false);
+        expect(Object.values(props.scene!.seats).every(seat => seat.costume === undefined), phase).toBe(true);
+      } else {
+        expect(props.canSend, phase).toBe(true);
+        expect(props.scene?.seats[0]?.costume, phase).toBe("mafia");
+      }
+    }
+  });
+
+  it("광장은 배정·역할·키워드가 같은 기존 무대를 사용한다", () => {
+    const renderRoom = () => <RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />;
+    connectionMock.current = conn({ ...makeView("assigning"), map: "plaza" });
+    const { container, rerender } = render(renderRoom());
+    const stage = container.querySelector("[data-world-stage-fake]");
+    expect(stage).not.toBeNull();
+    for (const phase of ["roleReveal", "keyword"] as const) {
+      connectionMock.current = conn({ ...makeView(phase), map: "plaza" });
+      rerender(renderRoom());
+      expect(container.querySelector("[data-world-stage-fake]"), phase).toBe(stage);
+      expect(stageProps().scene, phase).toBeUndefined();
+    }
+    expect(probe.mounts).toBe(1);
   });
 });

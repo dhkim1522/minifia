@@ -4,8 +4,8 @@ import { env } from "cloudflare:workers";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { PhaseId, ServerMessage } from "../../shared/protocol";
-import { BAR_MAP, BAR_SEATS_FX, BAR_SPAWNS, UNIT, lineWalkable } from "../../shared/game/map";
-import { positionAt } from "../../shared/game/world";
+import { BAR_MAP, BAR_SEATS_FX, BAR_SPAWNS, UNIT, barChairAssignment, lineWalkable } from "../../shared/game/map";
+import { MOVE_V, forceSegment, positionAt, restSegment, segmentEndsAt } from "../../shared/game/world";
 import {
   advanceTo,
   chatSend,
@@ -310,15 +310,18 @@ describe("테스트 방 봇 수·시작·대기실 복귀 (MAP-01)", () => {
     expect(Object.keys((await worldOf(s.code))!.segs).length).toBe(2);
   });
 
-  it("게임 시작은 world 를 즉시 저장하고, 그 뒤로는 move 를 받아도 어느 소켓에도 world 프레임이 가지 않는다", async () => {
+  it("게임 시작은 착석 구간을 즉시 저장하고, 그 뒤로는 로비 move 를 방송하지 않는다", async () => {
     const s = await seat(3, 0);
     await flushWorld(s.code);
     send(s.guests[0]!.sock, { t: "move", x: 300, z: 100 });
     await nextFrame(s.host, isWalk(1));
     expect(hasEnd(await worldOf(s.code), "300,100")).toBe(false);
     send(s.host, { t: "start" });
-    await nextFrame(s.host, (m) => m.t === "state" && m.view.phase !== "lobby");
-    await until("시작 때 즉시 저장", async () => hasEnd(await worldOf(s.code), "300,100"));
+    await nextFrame(s.host, (m) => m.t === "state" && m.view.phase === "assigning");
+    await nextFrame(s.host, isSnap);
+    const chairs = barChairAssignment([0, 1, 2, 3]);
+    const destinations = [0, 1, 2, 3].map(s => `${s}:${BAR_SEATS_FX[chairs[s]!]!.join(",")}`);
+    await until("시작 때 착석 구간 즉시 저장", async () => (await segEndsBySeat(s.code, 1)).split("|").slice(1).join("|") === destinations.join("|"));
     const socks = [s.host, ...s.guests.map((g) => g.sock)];
     for (const sock of socks) await settle(sock, 0);
     const counts = socks.map(worldCount);
@@ -335,6 +338,7 @@ describe("테스트 방 봇 수·시작·대기실 복귀 (MAP-01)", () => {
     await nextFrame(s.host, isWalk(0));
     send(s.host, { t: "start" });
     await nextFrame(s.host, (m) => m.t === "state" && m.view.phase !== "lobby");
+    await nextFrame(s.host, isSnap);
     expect(lastViewOf(s.host).phase).not.toBe("lobby");
     const mk = mark(s.host);
     send(s.host, { t: "testReset" });
@@ -416,6 +420,7 @@ describe("봇 로비 배회 (결정 0024)", () => {
     const s = await botRoom(3);
     send(s.host, { t: "start" });
     await nextFrame(s.host, (m) => m.t === "state" && m.view.phase !== "lobby");
+    await nextFrame(s.host, isSnap);
     const mk = mark(s.host);
     await pullWanderDue(s.code);
     await runDurableObjectAlarm(env.ROOM.getByName(s.code));
@@ -498,20 +503,73 @@ describe("단계별 이동 — 산 사람은 막히고 유령은 걷는다 (MAP-
     expect(got.flat().filter((m) => m.t === "world" || m.t === "error")).toEqual([]);
   }, 30_000);
 
-  it("assigning·roleReveal 에서는 산 사람의 move 가 막힌다", async () => {
+  it("assigning 에서 4인 착석을 예약하고 이른 역할 확인과 이동 요청을 처리한다", async () => {
     const s = await seat(3, 0);
     const socks = [s.host, ...s.guests.map((gst) => gst.sock)];
+    const chairs = barChairAssignment([0, 1, 2, 3]);
     send(s.host, { t: "start" });
-    for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
+    for (const sock of socks) {
+      const start = await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
+      if (start.t !== "state") throw new Error("배정 상태가 없다");
+      expect(start.view.me.role).toBeUndefined();
+      const snap = await nextFrame(sock, isSnap) as SnapFrame;
+      expect(snap.ents).toHaveLength(4);
+      for (const e of snap.ents) {
+        expect(e.p.slice(-2)).toEqual(BAR_SEATS_FX[chairs[e.s]!]);
+        expect(segmentEndsAt(e)).toBeLessThan(start.view.phaseEndsAt!);
+      }
+    }
     let marks = socks.map((sock) => mark(sock));
     send(s.guests[0]!.sock, { t: "move", x: 300, z: 100 });
     let got = await settleAll(socks, marks, 1);
     expect(got.map((msgs) => msgs.filter((m) => m.t === "world").length).join(",")).toBe("0,0,0,0");
     await advanceTo(s.code, socks, "roleReveal");
+    const roleSnaps = await Promise.all(socks.map(sock => nextFrame(sock, isSnap) as Promise<SnapFrame>));
+    for (const snap of roleSnaps) {
+      for (const e of snap.ents) expect(e.p).toEqual(BAR_SEATS_FX[chairs[e.s]!]);
+    }
     marks = socks.map((sock) => mark(sock));
     send(s.guests[0]!.sock, { t: "move", x: 300, z: 100 });
     got = await settleAll(socks, marks, 1);
     expect(got.map((msgs) => msgs.filter((m) => m.t === "world").length).join(",")).toBe("0,0,0,0");
+  }, 30_000);
+
+  it("8인 배정 중 재접속하면 처음 정한 의자와 역할 공개 시각을 유지한다", async () => {
+    const s = await seat(7, 0);
+    // 6번 의자까지 경로가 가장 긴 로비 칸에서도 배정 중 실제로 걷는다.
+    const far = [-25, -425] as const;
+    await runInDurableObject(env.ROOM.getByName(s.code), async (instance) => {
+      const player = instance["room"]!.players.find(p => p.seat === 6)!;
+      instance["world"] = forceSegment(instance["world"], player.id, restSegment(...far, Date.now()));
+    });
+    send(s.host, { t: "start" });
+    const start = await nextFrame(s.host, (m) => m.t === "state" && m.view.phase === "assigning");
+    if (start.t !== "state") throw new Error("배정 상태가 없다");
+    const snap = await nextFrame(s.host, isSnap) as SnapFrame;
+    expect(snap.ents.map(e => e.p.slice(-2))).toEqual(BAR_SEATS_FX);
+    const longWalk = snap.ents.find(e => e.s === 6)!;
+    expect(longWalk.p.slice(0, 2)).toEqual(far);
+    expect(longWalk.v).toBeGreaterThan(MOVE_V);
+    expect(segmentEndsAt(longWalk)).toBeLessThan(start.view.phaseEndsAt!);
+    const replacement = await connect(s.code);
+    const resumed = await hello(replacement, s.guests[2]!.token);
+    expect(resumed.view.phase).toBe("assigning");
+    expect(resumed.view.phaseEndsAt).toBe(start.view.phaseEndsAt);
+    expect(resumed.view.me.role).toBeUndefined();
+    const positions = await nextFrame(replacement, isSnap) as SnapFrame;
+    expect(positions.ents.map(e => e.p.slice(-2))).toEqual(BAR_SEATS_FX);
+    expect(positions.ents.map(e => e.t0)).toEqual(snap.ents.map(e => e.t0));
+  }, 30_000);
+
+  it.each(["roleReveal", "keyword"] as const)("예전 %s 방에 재접속하면 로비 출발점 대신 의자 위치를 받는다", async phase => {
+    const s = await seat(3, 0);
+    await flushWorld(s.code);
+    await toPhase(s.code, phase, room => ({ ...room, map: "bar" }));
+    const replacement = await connect(s.code);
+    const resumed = await hello(replacement, s.hostToken);
+    expect(resumed.view.phase).toBe(phase);
+    const positions = await nextFrame(replacement, isSnap) as SnapFrame;
+    expect(positions.ents.map(e => e.p)).toEqual([BAR_SEATS_FX[0], BAR_SEATS_FX[2], BAR_SEATS_FX[4], BAR_SEATS_FX[5]]);
   }, 30_000);
 });
 

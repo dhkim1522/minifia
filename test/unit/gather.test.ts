@@ -12,7 +12,7 @@ import {
   layoutKey,
   ringSlots,
 } from "../../shared/game/gather";
-import { STAGE_SPOT, UNIT, lineWalkable } from "../../shared/game/map";
+import { BAR_SEATS_FX, STAGE_SPOT, UNIT, barChairAssignment, lineWalkable } from "../../shared/game/map";
 import { LEGACY_BAR_MAP as BAR_MAP, LEGACY_BAR_SPAWNS as BAR_SPAWNS } from "../helpers/legacyBarMap";
 import { PLAZA_MAP } from "../../shared/game/mapPlaza";
 import { PX_PER_UNIT, groundToScreen } from "../../src/world/camera";
@@ -248,6 +248,39 @@ describe("layoutKey", () => {
     expect(keys).toBe(
       "nomination:3:ring defense:3:stage verdict:null execution:3:exec discussion:null night:null dayAnnounce:null morning:null lobby:null assigning:null roleReveal:null ended:null",
     );
+  });
+});
+
+describe("재즈 바 첫 착석", () => {
+  it.each([4, 5, 6, 7, 8])("%i인 배정 중 자기 의자로 이동하고 역할 확인과 키워드에서 같은 첫날 배치를 쓴다", n => {
+    const state: RoomState = { ...lobbyOf(n), phase: "assigning", map: "bar" };
+    const w = worldOf(n);
+    const opening = layoutFor(state, w, 1_000)!;
+    const chairs = barChairAssignment(state.players.map(p => p.seat));
+    const expected = state.players.map(p => BAR_SEATS_FX[chairs[p.seat]!]!);
+    expect(opening.key).toBe("1:bar-opening");
+    expect(opening.moves.map(({ dest }) => [dest.x, dest.z])).toEqual(expected);
+
+    const arrived = { ...w, segs: Object.fromEntries(state.players.map((p, i) => {
+      const [x, z] = expected[i]!;
+      return [p.id, restSegment(x, z, 1_000)];
+    })) };
+    for (const phase of ["roleReveal", "keyword", "dayAnnounce", "discussion"] as const) {
+      const next = layoutFor({ ...state, phase }, arrived, 1_000)!;
+      expect(next.key).toBe("1:bar-table");
+      expect(next.slots).toEqual(opening.slots);
+      expect(next.moves).toEqual([]);
+    }
+  });
+
+  it("역할 확인을 앞당기면 목적지가 같은 진행 중 구간도 착석이 필요하다", () => {
+    const state: RoomState = { ...lobbyOf(4), phase: "roleReveal", map: "bar" };
+    const w = worldOf(4);
+    const p = state.players[0]!;
+    const seat = BAR_SEATS_FX[0];
+    const moving = forceSegment(w, p.id, { p: [125, 275, ...seat], t0: 1000, v: 180 });
+    expect(layoutFor(state, moving, 1001)!.moves[0]).toEqual({ playerId: p.id, dest: { x: seat[0], z: seat[1] } });
+    expect(layoutFor(state, moving, 3000)!.moves.some(({ playerId }) => playerId === p.id)).toBe(false);
   });
 });
 

@@ -129,6 +129,8 @@ interface GameMapProps {
   /** 헤더의 [역할 카드] 아이콘 버튼 재료: 안 읽은 일지가 있는가와 여는 동작 */
   roleCard?: { unread: boolean; onOpen: () => void };
   headerAction?: ReactNode;
+  /** 재즈 바의 착석·역할·라이어 화면을 같은 무대 위에 그린다. */
+  opening?: ReactNode;
   /** 헤더 시간대 글자(0083-1, "낮 · 토론"). 튜토리얼만 false — 17·18 레이아웃을 건드리지 않는다. 기본 true */
   tod?: boolean;
   /** 아래 패널을 그리지 않는 지도 장면(18-03) */
@@ -197,7 +199,7 @@ function TurnBlock({ view, offset, line, compact, reducedMotion }: { view: RoomV
 // 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내 + 시간 링 + [역할 카드]), [테스트], 결과 알림, 아래 패널을 얹는다.
 // 낮 시작·낮 토론·찬반·지목·유언·처형이 이 화면 하나를 같은 장면 키로 그려 단계가 바뀌어도 맵이 다시 만들어지지 않는다.
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)·알림 글자는 React 텍스트 노드로만 그린다.
-export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, headerAction, tod = true, panelless, camera, testButton, announce = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onLeave, bottomExtra = 0, timeless = false }: GameMapProps) {
+export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, headerAction, opening, tod = true, panelless, camera, testButton, announce = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onLeave, bottomExtra = 0, timeless = false }: GameMapProps) {
   const toast = useTopToast();
   const { show } = toast;
   // 스테이지 측정과 키보드 올림은 대기실과 같은 훅이다. 토론은 키보드가 열리면 기록 칸만 줄인다.
@@ -210,8 +212,11 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const [liveTableVoice, setLiveTableVoice] = useState<{ phase: string; epoch: number; seat: number; at: number }>();
   const me = view.players.find((p) => p.seat === view.me.seat);
   const meAlive = me === undefined || isAlive(me);
-  const tableOn = view.map === "bar" && meAlive && view.spectate === undefined && !camera && !timeless && !panelless
-    && (view.phase === "discussion" || view.phase === "nomination");
+  const inOpening = opening !== undefined;
+  const tableEligible = view.map === "bar" && meAlive && view.spectate === undefined && !camera && !timeless && !panelless;
+  const tableOn = tableEligible && (view.phase === "discussion" || view.phase === "nomination");
+  const firstDayAnnounce = view.phase === "dayAnnounce" && (view.day?.n ?? 1) === 1;
+  const tableCameraOn = tableEligible && (inOpening || firstDayAnnounce || tableOn);
   const tableMode = tableChoice?.key === tableKey ? tableChoice.mode : "eye";
   const rawTableFocus = tableChoice?.key === tableKey ? tableChoice.focus : undefined;
   const tableFocus = view.players.some((p) => p.seat === rawTableFocus && isAlive(p)) ? rawTableFocus : undefined;
@@ -219,7 +224,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const toastText = playtest && toast.props.visible ? toast.props.text : undefined;
   const playtestPanel = tableOn || toastText !== undefined || view.me.chat === "ghost" || view.phase === "discussion" || view.phase === "night" && view.spectate === undefined || view.phase === "verdict" || view.phase === "defense" && view.day?.candidate === view.me.seat;
   const noPanel = panelless === true || (playtest && !playtestPanel);
-  const { rootRef, headerRef, panelRef, inputRef, kbOpen: kbLifted, kbInSheet, turnCompact: compactTurn, stageInsets: measuredInsets } = useMapInsets(blockModeOf(view) !== null, noPanel);
+  const { rootRef, headerRef, panelRef, inputRef, kbOpen: kbLifted, kbInSheet, turnCompact: compactTurn, stageInsets: measuredInsets } = useMapInsets(blockModeOf(view) !== null, noPanel, !inOpening);
   // 튜토리얼(24 D-31): 아래 여백에 bottomExtra 를 더한다. 키보드 높이를 프레임마다 읽는 getter 는 그대로 살린다. 실제 판은 0 이라 측정값 그대로다.
   const stageInsets = useMemo(
     () =>
@@ -709,7 +714,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const scene = useMemo(() => {
     const look = sceneLook(view, { stageH, ...(fading ? { fading } : {}), ...(mine !== undefined ? { mine } : {}), ...(verdictZoom !== undefined ? { verdictZoom } : {}) });
     if (camera) look.camera = camera;
-    if (tableOn) look.table = {
+    if (tableCameraOn) look.table = {
       mode: tableMode,
       ...(tableFocus !== undefined ? { focus: tableFocus } : {}),
       ...(tableFocusAt !== undefined ? { focusAt: tableFocusAt } : {}),
@@ -726,12 +731,13 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     const ownSeat = look.seats[view.me.seat];
     const role = view.me.role;
     const ownRoleOutfit = role === "mafia" || (ownAnimalOf(view) !== undefined && (role === "police" || role === "doctor"));
-    if (ownSeat && meAlive && view.spectate === undefined && ownRoleOutfit) ownSeat.costume = jobOutfit(role);
+    if (!inOpening && ownSeat && meAlive && view.spectate === undefined && ownRoleOutfit) ownSeat.costume = jobOutfit(role);
     return look;
-  }, [view, stageH, fading, mine, verdictZoom, camera, meAlive, tableOn, tableMode, tableFocus, tableFocusAt, tableVoice]);
+  }, [view, stageH, fading, mine, verdictZoom, camera, meAlive, inOpening, tableCameraOn, tableOn, tableMode, tableFocus, tableFocusAt, tableVoice]);
 
   return (
-    <main ref={rootRef} className="mf-root mf-game" data-game-stage="" data-phase={view.phase} data-night-dark={nightDark ? "true" : undefined} data-ghost-view={ghost ? "true" : undefined} data-ghost-enter={ghost && entering ? "true" : undefined} data-kb-open={kbLifted ? "true" : undefined} data-suspect-mode={suspect.mode ? "on" : "off"} data-suspects={suspectsMirror}>
+    <main ref={rootRef} className={inOpening ? "mf-root mf-pregame mf-pregame--seated" : "mf-root mf-game"} data-game-stage={inOpening ? undefined : ""} data-phase={view.phase} data-night-dark={nightDark ? "true" : undefined} data-ghost-view={ghost ? "true" : undefined} data-ghost-enter={ghost && entering ? "true" : undefined} data-kb-open={kbLifted ? "true" : undefined} data-suspect-mode={inOpening ? undefined : suspect.mode ? "on" : "off"} data-suspects={suspectsMirror}>
+      {!inOpening ? <>
       {/* DOM 순서 = Tab 순서: 헤더 조작 → 맵 이름표 → 아래 패널 입력 */}
       <div className="mf-game__scrim" aria-hidden="true" />
       <header ref={headerRef} className="mf-game__header">
@@ -749,18 +755,21 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           )}
         />
       </header>
+      </> : null}
       <WorldStage
+        key="world"
         view={view}
         store={store}
         send={send}
-        canSend={canSend}
+        canSend={!inOpening && canSend}
+        decorative={inOpening}
         offset={offset}
         {...(stageInsets ? { stageInsets } : {})}
         typingSeats={typingSeats}
         scene={scene}
-        canWalk={canWalk}
+        canWalk={!inOpening && canWalk}
         underlay={
-          playtest ? null : nightDark ? (
+          inOpening || playtest ? null : nightDark ? (
             <TensionVignette reducedMotion={reducedMotion} onCue={onTensionCue} />
           ) : (
             // 지목 동안 화면을 살짝 어둡게(UI-SPEC A-1): 모이기·차례·확정에 켜고 끝 알림에 걷는다. 캔버스 위·이름표 층 아래라서 WorldStage 의 underlay 자리에 둔다
@@ -775,6 +784,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         onNotice={(text) => show(text)}
         onLeave={() => onLeave?.()}
       />
+      {inOpening ? <div className="mf-pregame__content">{opening}</div> : <>
       {!playtest ? <TopToast {...toast.props} /> : null}
       {/* 붙인 사람에게만 읽히는 한 줄(P24-8) — 서버 view(me.suspectTo)가 확인한 뒤에만 채워진다. 화면에는 안 보인다 */}
       {suspect.visible ? (
@@ -986,6 +996,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           )}
         </div>
       ) : null}
+      </>}
     </main>
   );
 }

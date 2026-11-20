@@ -1,6 +1,8 @@
 // 다시 하기 (11-08, D-12·D-15, REMATCH-01) — 끝난 판에서 모두 준비한 채 방장이 rematch 하면 같은 방이 round 2 의 assigning 으로 가고 이전 판 흔적이 없다 (누설 L39).
 import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
+import { BAR_SEATS_FX } from "../../shared/game/map";
+import { segmentEndsAt } from "../../shared/game/world";
 import {
   advanceTo,
   chatKeysOf,
@@ -61,6 +63,10 @@ describe("다시 하기 (D-12, D-15, L39)", () => {
       expect(view.players.every((p) => p.ready === undefined && p.sat === undefined)).toBe(true);
       expect(view.me.role).toBeUndefined(); // 역할 공개는 roleReveal 부터
       expect(view.phaseEndsAt).not.toBeNull();
+      const snap = await nextFrame(s, (m) => m.t === "world" && m.k === "snap");
+      if (snap.t !== "world" || snap.k !== "snap") throw new Error("배정 위치가 없다");
+      expect(snap.ents.map(e => e.p.slice(-2))).toEqual([BAR_SEATS_FX[0], BAR_SEATS_FX[2], BAR_SEATS_FX[4], BAR_SEATS_FX[5]]);
+      expect(snap.ents.every(e => segmentEndsAt(e) < view.phaseEndsAt!)).toBe(true);
     }
     const stored = await storedRoom(g.code);
     expect(stored.phase).toBe("assigning");

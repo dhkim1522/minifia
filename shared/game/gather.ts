@@ -9,7 +9,7 @@ import { isAlive } from "./alive";
 import { firstPlaytestDay } from "./playtest";
 import { BAR_SEATS_FX, STAGE_SPOT, barChairAssignment } from "./map";
 import type { RoomState } from "./room";
-import { positionAtFx } from "./world";
+import { positionAtFx, segmentEndsAt } from "./world";
 import type { LayoutMemo, WorldState } from "./world";
 
 /** 둘레 자리 반지름(고정소수점 2.65). 8곳이 서로 2.0(200) 이상 떨어지는 최소 근처 값이다(반지름 2.5 는 1.913 이라 모자라다, RESEARCH 패턴 4). */
@@ -140,15 +140,20 @@ export function assignSlots(people: readonly { id: string; x: number; z: number 
   return out;
 }
 
-/** 모이는 단계만 배치 키를 가진다. 역할 확인과 첫 투표 배치는 실험방에만 적용한다. */
+/** 모이는 단계만 배치 키를 가진다. 재즈 바는 역할 확인 전에 걸음을 마치고 같은 자리를 낮까지 쓴다. */
 export function layoutKey(state: RoomState): string | null {
   const day = state.day ?? 0;
+  const bar = (state.map ?? "bar") === "bar";
+  const barDay = state.day ?? 1;
   switch (state.phase) {
+    case "assigning":
+      return bar ? `${barDay}:bar-opening` : null;
     case "dayAnnounce":
     case "discussion":
-      return (state.map ?? "bar") === "bar" ? `${day}:bar-table` : null;
+    case "keyword":
+      return bar ? `${barDay}:bar-table` : null;
     case "roleReveal":
-      return state.playtest === true ? `${day}:role` : null;
+      return bar ? `${barDay}:bar-table` : state.playtest === true ? `${day}:role` : null;
     case "verdict":
       return firstPlaytestDay(state) ? `${day}:firstBallot` : null;
     case "nomination":
@@ -194,6 +199,7 @@ export function layoutFor(state: RoomState, w: WorldState, now: number): GatherL
   const defender = state.phase === "defense" || state.phase === "execution" ? state.verdict?.candidate : undefined;
   const runoffCand = state.phase === "runoff" ? state.runoff?.cand : undefined;
   const bar = (state.map ?? "bar") === "bar";
+  const settleOpening = bar && (state.phase === "roleReveal" || state.phase === "keyword");
   // 옛 저장에는 표가 없다. 탈락자와 연결이 끊긴 사람도 원래 명단에 남는다.
   const chairs = bar ? state.barChairs ?? barChairAssignment(state.players.filter((p) => p.sat !== true).map((p) => p.seat)) : undefined;
 
@@ -245,8 +251,9 @@ export function layoutFor(state: RoomState, w: WorldState, now: number): GatherL
       dest = s === undefined ? null : { x: s[0], z: s[1] };
     }
     if (dest === null) continue;
-    const p0 = w.segs[p.id]!.p;
-    if (p0[p0.length - 2] === dest.x && p0[p0.length - 1] === dest.z) continue;
+    const seg = w.segs[p.id]!;
+    const p0 = seg.p;
+    if (p0[p0.length - 2] === dest.x && p0[p0.length - 1] === dest.z && (!settleOpening || segmentEndsAt(seg) <= now)) continue;
     moves.push({ playerId: p.id, dest });
   }
   return { key, slots, moves };

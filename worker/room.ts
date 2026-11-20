@@ -59,7 +59,7 @@ import { layoutFor, layoutKey } from "../shared/game/gather";
 import { STAGE_SPOT } from "../shared/game/map";
 import type { MapDef } from "../shared/game/map";
 import { mapOf, pickMap, roomMapId } from "../shared/game/maps";
-import { WORLD_FLUSH_MS, captureHome, compactWorld, despawnPlayer, emptyWorld, forceSegment, moveFrame, nextWanderAt, planMoveSegment, planWander, positionAtFx, requestMove, respawnAll, restoreWorld, segmentEndsAt, snapFrame, spawnPlayer, teleportHome } from "../shared/game/world";
+import { WORLD_FLUSH_MS, captureHome, compactWorld, despawnPlayer, emptyWorld, forceSegment, moveFrame, nextWanderAt, planMoveSegment, planWander, positionAtFx, requestMove, respawnAll, restSegment, restoreWorld, segmentEndsAt, snapFrame, spawnPlayer, teleportHome } from "../shared/game/world";
 import type { Segment, WorldState } from "../shared/game/world";
 import { buildPreview, buildView } from "../shared/game/view";
 import { ClientMessageSchema } from "../shared/schemas";
@@ -96,6 +96,22 @@ const RATE_WINDOW_MS = 1000;
 const RATE_MAX_MESSAGES = 20;
 // DO storage.delete(keys[]) 의 한 번 최대 키 수.
 const CHAT_DELETE_MAX = 128;
+// 착석을 먼저 보여 주고 역할 화면으로 전환할 여유.
+const OPENING_SEAT_MARGIN_MS = 180;
+// 바의 가장 긴 착석 경로를 3초 안에 걷고 저장된 이동 구간으로도 복원 가능한 속도다.
+const OPENING_SEAT_MAX_V = 900;
+
+function openingSeatSegment(cur: Segment, dest: { x: number; z: number }, now: number, map: MapDef, deadline: number): Segment {
+  const available = deadline - now - OPENING_SEAT_MARGIN_MS;
+  if (available <= 0) return restSegment(dest.x, dest.z, now);
+  const seg = planMoveSegment(cur, dest, now, map);
+  if (seg.p.at(-2) !== dest.x || seg.p.at(-1) !== dest.z) return restSegment(dest.x, dest.z, now);
+  const duration = segmentEndsAt(seg) - now;
+  if (duration <= available) return seg;
+  const speed = Math.ceil(seg.v * duration / available);
+  // 오래된 접속이 배정 끝 무렵에 돌아오면 과속 대신 자기 자리에서 시작한다.
+  return speed <= OPENING_SEAT_MAX_V ? { ...seg, v: speed } : restSegment(dest.x, dest.z, now);
+}
 
 interface RateWindow {
   windowStart: number;
@@ -531,19 +547,17 @@ export class Room extends DurableObject<Env> {
     }
     // 판 id(D-16): 순수 beginGame 은 uuid 를 만들지 못해 워커가 붙인다. D1 games 의 id 이고 어떤 view·프레임에도 나가지 않는다.
     this.room = { ...result.state, gameId: crypto.randomUUID() };
-    // 광장이 정해진 시작(D-21)은 모두를 광장 입장 지점으로 옮기고 snap 을 보낸다 — 로비의 bar 위치가 광장 마스크에서 막힌 칸일 수 있다.
-    // bar 시작은 지금처럼 로비 위치를 그대로 쓴다. state 다음에 모든 소켓이 snap 을 받는다.
-    // emitWorld 는 쓰지 않는다: 시작 직후 assigning 은 지도 단계가 아니라 world 받는 사람 집합이 비어 아무에게도 가지 않는다.
-    // snapEachViewer 는 보는 사람 한 명씩 worldVisibleTo(assigning 은 방 전원)로 거른 snap 을 보낸다.
-    const moved = this.room.map !== undefined && this.room.map !== "bar";
-    if (moved) this.world = respawnAll(this.world, this.room.players, now, this.mapDef());
-    await this.persistAndBroadcast();
-    if (moved) {
+    // 재즈 바는 로비 위치에서 자기 의자로, 광장은 새 맵의 입장 지점으로 간다.
+    // 처음 위치는 보는 사람마다 assigning state 뒤에 snap 으로 보낸다.
+    if (this.mapDef().id === "bar") this.syncLayout(now, false);
+    else {
+      this.world = respawnAll(this.world, this.room.players, now, this.mapDef());
       this.markWorldDirty();
-      this.snapEachViewer(now);
     }
+    await this.persistAndBroadcast();
+    this.snapEachViewer(now);
     await this.reschedule();
-    // 로비를 떠나는 시작: 위치를 지금 저장하고 그대로 둔다(가정 A1). 이후 world 프레임은 나가지 않는다.
+    // 시작 위치와 착석 경로를 지금 저장한다(가정 A1).
     // 알람(단계 마감) 재설정이 먼저다 — 저장 쓰기 때문에 마감 알람이 늦어지지 않게.
     await this.flushWorld();
   }
@@ -731,8 +745,9 @@ export class Room extends DurableObject<Env> {
     this.dropChat();
     this.ghostSnapped.clear();
     this.writeAt.clear();
-    // 월드는 새 참가자 전원을 새 판 맵(decideMap 이 정한 room.map)의 입장 지점에 다시 세운다. 걷어 간 사람의 자리는 이때 함께 사라진다.
+    // 새 참가자만 새 맵에 세우고 재즈 바에서 첫 착석 경로를 만든다.
     this.world = respawnAll(this.world, this.room.players, now, this.mapDef());
+    if (this.mapDef().id === "bar") this.syncLayout(now, false);
     await this.persistAndBroadcast({ includeBench: true }); // 쉬는 사람도 이 한 번은 자기 전용 state 를 받는다
     this.markWorldDirty();
     this.snapEachViewer(now);
@@ -1398,7 +1413,12 @@ export class Room extends DurableObject<Env> {
   private async afterTransition(prev: RoomState, now: number): Promise<void> {
     if (this.captureHomeNow()) await this.flushWorld();
     this.fillChalk(prev);
+    // 넘기기로 역할 공개가 당겨졌으면 먼저 착석을 확정하고, 보정 스냅은 단계 상태 뒤에 보낸다.
+    const phase = this.room?.phase;
+    const settledOpening = (phase === "roleReveal" || phase === "keyword")
+      && this.mapDef().id === "bar" && this.syncLayout(now, false);
     await this.persistAndBroadcast();
+    if (settledOpening) this.snapEachViewer(now);
     await this.syncPositions(now);
     await this.emitDeathCards(prev, now);
     this.emitResultLog(prev);
@@ -1582,31 +1602,36 @@ export class Room extends DurableObject<Env> {
 
   // 지금 단계의 배치(지목 둘레 자리·변론 무대·부결 복귀)를 서버가 걷게 한다(DAY-04·05, 결정 0060-7).
   // 단계 전환 이벤트가 아니라 지금 단계의 배치를 맞춘다(알람 따라잡기·퇴거). 복원한 바의 첫 배치를 점검한 뒤 같은 키는 건너뛴다.
-  // 이동마다 지금 위치에서 경로를 만들고(planMoveSegment) 150ms 간격·lastMoveAt 을 건드리지 않는 forceSegment 로 적용한 뒤(Pitfall 5)
-  // 그 사람이 움직인 것으로 emitWorld 한다(산 사람의 이동은 방 전원에게, A2). 배치 기억 lay 는 world 저장에 실려 퇴거 뒤에도 자리가 뒤섞이지 않는다.
+  // 일반 배치는 forceSegment 로 적용하고 위치 구간을 중계한다. 역할 확인 전의 착석은 보는 사람마다 snap 으로 보낸다.
+  // 배치 기억 lay 는 world 저장에 실려 퇴거 뒤에도 자리가 뒤섞이지 않는다.
   // 밤·아침은 layoutKey 가 null 이고 syncHome 이 맞춘다(결정 0061-3·4).
-  // 돌려주는 값(20페이즈 D-14): 새로 만든 구간들 가운데 산 사람이 문을 지나는 가장 이른 시각(없으면 null). 전환 경로(afterTransition)는 뒤따르는 reschedule 이 알람에 넣는다.
-  private syncLayout(now: number): void {
+  private syncLayout(now: number, broadcast = true): boolean {
     const room = this.room;
-    if (!room) return;
+    if (!room) return false;
     const key = layoutKey(room);
-    if (key === null) return;
-    if (key === this.world.lay?.key && !this.restoredBarLayout) return;
+    if (key === null) return false;
+    if (key === this.world.lay?.key && !this.restoredBarLayout) return false;
     this.restoredBarLayout = false;
     const layout = layoutFor(room, this.world, now);
-    if (layout === null || (layout.moves.length === 0 && key === this.world.lay?.key)) return;
+    if (layout === null || (layout.moves.length === 0 && key === this.world.lay?.key)) return false;
     const map = this.mapDef();
+    const assigning = map.id === "bar" && room.phase === "assigning";
+    const settling = map.id === "bar" && (room.phase === "roleReveal" || room.phase === "keyword");
     for (const m of layout.moves) {
       const me = room.players.find((p) => p.id === m.playerId);
       const cur = Object.prototype.hasOwnProperty.call(this.world.segs, m.playerId) ? this.world.segs[m.playerId] : undefined;
       if (!me || !cur) continue;
-      const seg = planMoveSegment(cur, m.dest, now, map);
+      // 넘기기나 예전 방 복원으로 역할 화면에 먼저 도달했으면 남은 걸음을 마친 자리를 사용한다.
+      const seg = assigning ? openingSeatSegment(cur, m.dest, now, map, room.phaseEndsAt ?? now)
+        : settling ? restSegment(m.dest.x, m.dest.z, now)
+        : planMoveSegment(cur, m.dest, now, map);
       this.world = forceSegment(this.world, m.playerId, seg);
-      this.emitWorld(moveFrame(me.seat, seg), me.id);
+      if (broadcast && !assigning && !settling) this.emitWorld(moveFrame(me.seat, seg), me.id);
     }
     this.world = { ...this.world, lay: { key: layout.key, slots: layout.slots } };
-    if (room.phase === "roleReveal" && layout.moves.length > 0) this.snapEachViewer(now);
+    if (broadcast && layout.moves.length > 0 && (assigning || settling || room.phase === "roleReveal")) this.snapEachViewer(now);
     this.markWorldDirty();
+    return layout.moves.length > 0;
   }
 
   // 방금 탈락한 사람(처형·아침)에게만 모두의 위치 snap 을 보낸다 — 그 전까지 받지 못한 다른 유령의 위치를 맞춘다(GHOST-01).

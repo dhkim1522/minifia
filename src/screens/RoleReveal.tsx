@@ -24,6 +24,7 @@ export interface RoleRevealProps {
   onSeenFront: () => void;
   send?: (msg: ClientMessage) => boolean | void;
   canSend?: boolean;
+  embedded?: boolean;
 }
 
 // S-05 역할 확인(15초). 테이블은 그리지 않는다(D-13 개정). 뒤 3D 무대는 PreGame 이 깐다. 카드 면은 cardFace 가 정하고,
@@ -34,14 +35,15 @@ export function RoleReveal(props: RoleRevealProps) {
   return props.view.playtest === true ? <PlaytestRoleReveal {...props} /> : <FlippingRoleReveal {...props} />;
 }
 
-function PlaytestRoleReveal({ view, offset, epoch = 0, myRoleButton, onSeenFront, send, canSend }: RoleRevealProps) {
+function PlaytestRoleReveal({ view, offset, epoch = 0, myRoleButton, onSeenFront, send, canSend, embedded = false }: RoleRevealProps) {
+  const Frame = embedded ? "section" : "main";
   const role = view.me.role ?? null;
   const ready = view.me.roleReady === true;
   useEffect(() => {
     if (role !== null) onSeenFront();
   }, [role, onSeenFront]);
   return (
-    <main className="mf-root mf-reveal" data-playtest-role="">
+    <Frame className="mf-root mf-reveal" data-playtest-role="">
       <div className="mf-reveal__dim" aria-hidden="true" />
       <header className="mf-reveal__header">
         <GamePhaseHeader title="내 역할" view={view} offset={offset} epoch={epoch} extra={myRoleButton} />
@@ -63,11 +65,12 @@ function PlaytestRoleReveal({ view, offset, epoch = 0, myRoleButton, onSeenFront
           )}
         />
       </section>
-    </main>
+    </Frame>
   );
 }
 
-function FlippingRoleReveal({ view, offset, epoch = 0, myRoleButton, onSeenFront }: RoleRevealProps) {
+function FlippingRoleReveal({ view, offset, epoch = 0, myRoleButton, onSeenFront, embedded = false }: RoleRevealProps) {
+  const Frame = embedded ? "section" : "main";
   const role = view.me.role ?? null;
   const hasRole = role !== null;
   const endsAt = view.phaseEndsAt;
@@ -112,7 +115,7 @@ function FlippingRoleReveal({ view, offset, epoch = 0, myRoleButton, onSeenFront
   const callCard = callTarget?.kind === "tool" && callTarget.tool === "card";
 
   return (
-    <main className="mf-root mf-reveal">
+    <Frame className="mf-root mf-reveal">
       <div className="mf-reveal__dim" aria-hidden="true" />
       <header className="mf-reveal__header">
         <GamePhaseHeader title="역할 확인" view={view} offset={offset} epoch={epoch} extra={myRoleButton} />
@@ -121,6 +124,6 @@ function FlippingRoleReveal({ view, offset, epoch = 0, myRoleButton, onSeenFront
         <RoleCard role={role} animal={ownAnimalOf(view)} face={card.face} allies={allies} call={callCard} onFlip={() => setCard((s) => onTap(s, hasRole))} />
       </section>
       <div className="mf-reveal__hints" />
-    </main>
+    </Frame>
   );
 }

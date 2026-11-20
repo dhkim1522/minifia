@@ -70,6 +70,8 @@
 /* 역할 배정·확인이 함께 쓰는 3D 무대 틀(PreGame, feedback-3): 남는 높이를 채우고 무대는 맨 아래 층, 내용(.mf-reveal·.mf-assign)이 그 위. */
 .mf-pregame { position: relative; flex: 1 1 0; min-height: 0; height: auto; overflow: hidden; isolation: isolate; background: var(--night-950); }
 .mf-pregame__stage { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.mf-pregame--seated > .mf-world { z-index: 0; }
+.mf-pregame--seated .mf-world__input { pointer-events: none; }
 .mf-pregame__content { position: relative; z-index: 1; height: 100%; }
 /* 역할 배정·확인 무대는 꾸밈이라 3D 이름표 층을 보이지 않게 한다 — 제목·띠·소리 단추·카드와 겹쳤다(18.1 P181-1). DOM 은 남겨 런타임 측정·AP7 이 그대로 돈다 */
 .mf-pregame .mf-world__tags { visibility: hidden; }
@@ -165,6 +167,10 @@
 .mf-assign__ring:nth-child(3) { animation-delay: 0.66s; }
 @keyframes mf-assign-ring { from { transform: scale(0.6); opacity: 0.6; } to { transform: scale(1.6); opacity: 0; } }
 .mf-assign__core { position: relative; width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--night-800); border: 1px solid var(--gray-700); color: var(--gray-50); }
+.mf-assign--seating .mf-assign__panel { height: calc(80px + env(safe-area-inset-bottom)); }
+.mf-assign--seating .mf-assign__veil { background: linear-gradient(var(--night-950), transparent 26%); opacity: 0.6; animation: none; }
+.mf-assign--seating .mf-assign__center { justify-content: end; padding-bottom: calc(24px + env(safe-area-inset-bottom)); pointer-events: none; }
+.mf-assign--seating .mf-assign__center .mf-t-heading { margin: 0; }
 
 .mf-phasebar__text, .mf-lobby__bar-center { position: relative; isolation: isolate; }
 .mf-phasebar__text::before, .mf-lobby__bar-center::before { content: ""; position: absolute; z-index: -1; inset: -10px -22px -10px -18px; border-radius: 24px; pointer-events: none; background: rgba(14, 19, 38, 0.55); filter: blur(8px); }

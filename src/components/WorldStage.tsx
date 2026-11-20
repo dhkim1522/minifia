@@ -89,6 +89,7 @@ export interface WorldStageProps {
   store: WorldStore;
   send(msg: ClientMessage): boolean | void;
   canSend: boolean;
+  decorative?: boolean;
   /** 서버시각 − 로컬시각(ms) */
   offset: number;
   /** 스테이지 사각형의 위 끝(헤더 블록 아래, 안전 영역 포함)과 아래 패널 높이 — 06-15 의 Lobby 가 재서 넘긴다. 없으면 HEADER_BOTTOM 62 / PANEL_HEIGHT 250(로비 패널 기본값, LOG_H + 154) */
@@ -364,7 +365,7 @@ export function WorldStage(props: WorldStageProps) {
   const stateClass = exiting ? "is-exiting" : mapStatus.status === "ready" ? "is-open" : mapStatus.status === "lost" || mapStatus.status === "recreating" ? "is-redrawing" : "";
 
   return (
-    <div ref={rootRef} className={stateClass ? `mf-world ${stateClass}` : "mf-world"} data-world-stage data-table-camera={scene?.table?.mode}>
+    <div ref={rootRef} className={stateClass ? `mf-world ${stateClass}` : "mf-world"} data-world-stage data-table-camera={scene?.table?.mode} aria-hidden={props.decorative || undefined}>
       <div ref={hostRef} className="mf-world__canvas" role="img" aria-label={scene?.table ? "재즈 바 테이블" : SCENE_LABEL} />
       <div
         className="mf-world__input"

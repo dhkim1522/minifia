@@ -62,8 +62,9 @@ function writeVar(el: HTMLElement | null, name: string, px: number | null): void
  * turnActive: 지금 지목 또는 결선 단계이고 알약 부품(`[data-turn-block]`)이 그려진다(blockModeOf !== null)
  * panelless: 아래 패널이 없는 장면(16-08)이다. 패널 없이도 위 끝은 지금처럼 재고 아래 끝은 0 으로 알린다. 재는 효과가 패널 요소를 시작 때 한 번 쥐므로
  *   단계가 바뀌어 패널이 생기거나 사라지면 이 값이 바뀌어 다시 쥔다(안 그러면 떼어진 옛 패널을 재다가 위·아래 안전선이 옛 값에 멈춘다, 16-07).
+ * active: 게임 헤더와 아래 조작을 마운트했을 때만 측정한다. 라이어게임 입력은 자체 키보드 높이를 읽는다.
  */
-export function useMapInsets(turnActive = false, panelless = false): MapInsets {
+export function useMapInsets(turnActive = false, panelless = false, active = true): MapInsets {
   const rootRef = useRef<HTMLElement>(null);
   const roomRef = useRef<HTMLElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -73,7 +74,7 @@ export function useMapInsets(turnActive = false, panelless = false): MapInsets {
   useLayoutEffect(() => {
     roomRef.current = rootRef.current?.closest<HTMLElement>(".mf-room") ?? rootRef.current;
   }, []);
-  const { open: kbOpen, lift, inSheet: kbInSheet } = useKeyboardLift({ inputRef, target: roomRef });
+  const { open: kbOpen, lift, inSheet: kbInSheet } = useKeyboardLift({ inputRef, target: roomRef, enabled: active });
 
   const [insets, setInsets] = useState<{ top: number; bottom: number } | undefined>(undefined);
   // 압축형 판정은 8페이즈 기준 높이(창 높이 − 패널 − 62)라서 알약 위치와 순환하지 않는다. 패널·창이 바뀌면 다시 정한다.
@@ -84,6 +85,7 @@ export function useMapInsets(turnActive = false, panelless = false): MapInsets {
   // 마지막으로 잰 막대 아랫변(압축 여부별). 막대가 없는 단계(모이는 중·끝 알림)에도 스테이지가 움직이지 않게 한다.
   const lastBar = useRef<{ compact: boolean; bottom: number } | null>(null);
   useLayoutEffect(() => {
+    if (!active) return;
     const header = headerRef.current;
     const panel = panelRef.current;
     if (header === null || (panel === null && !panelless)) return;
@@ -128,7 +130,7 @@ export function useMapInsets(turnActive = false, panelless = false): MapInsets {
       window.removeEventListener("resize", measure);
       ro.disconnect();
     };
-  }, [turnActive, compact, panelless]);
+  }, [turnActive, compact, panelless, active]);
 
   // 키보드 높이는 프레임마다 바뀌어도 다시 그리지 않는다: 아래 끝을 getter 로 넘겨 WorldStage 가 프레임마다 읽는 순간의 lift 를 더하게 한다(열림·닫힘만 다시 그린다).
   const stageInsets = useMemo(
