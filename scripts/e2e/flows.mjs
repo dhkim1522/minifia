@@ -1427,6 +1427,47 @@ async function closeGame(game) {
   await game.host.context.close().catch(() => {});
 }
 
+/** 총인원 버튼은 한 번에 봇 수를 바꾸며 함께 들어온 사람의 좌석을 유지한다. */
+async function botFillFlow(ctx) {
+  const id = "bot-fill";
+  const rec = recorder(ctx);
+  const { page, tracker } = await startHost(ctx, id);
+  const openBots = () => page.locator('[data-host-rail-btn="bots"]').click();
+  const targetButtons = (label) => page.getByRole("dialog", { name: label, exact: true });
+  const fill = async (label, total, humans) => {
+    await targetButtons(label).getByRole("button", { name: `${total}명 채우기`, exact: true }).click();
+    await tracker.waitFor((v) => v.players.length === total && v.me.testBots === total - humans, 5000, `총 ${total}명`);
+  };
+
+  await openBots();
+  await settle(page);
+  const buttons = await targetButtons("봇").getByRole("button", { name: /^[4-8]명 채우기$/ }).evaluateAll(elements => elements.map(el => {
+    const { x, y, width, height } = el.getBoundingClientRect();
+    return { x, y, width, height };
+  }));
+  rec(`${id}/solo`, "BF1", "총 4~8명 단추 다섯 개가 각각 44×44 이상이고 화면 안에 있다",
+    buttons.length === 5 && buttons.every(({ x, y, width, height }) => width >= 44 && height >= 44 && x >= -0.5 && y >= -0.5 && x + width <= ctx.size.w + 0.5 && y + height <= ctx.size.h + 0.5));
+  for (const total of [8, 4, 5, 6, 7, 4]) await fill("봇", total, 1);
+  rec(`${id}/solo`, "BF2", "혼자 모든 인원으로 바로 채우거나 줄인다", true);
+  await closeSheet(page, "봇");
+
+  const { guest, seat } = await openGuest(ctx, "채우기친구");
+  try {
+    await tracker.waitFor((v) => v.players.length === 5 && v.players.some((p) => p.seat === seat), 5000, "친구와 봇이 함께 입장");
+    await openTestSheet(page);
+    await fill("테스트 도구", 8, 2);
+    await guest.tracker.waitFor((v) => v.players.length === 8, 5000, "친구 화면의 8명");
+    await fill("테스트 도구", 4, 2);
+    const shrunk = await guest.tracker.waitFor((v) => v.players.length === 4, 5000, "친구 화면의 4명");
+    rec(`${id}/mixed`, "BF3", "테스트 도구에서도 친구를 유지하며 봇만 채우고 줄인다", shrunk.me.seat === seat && shrunk.players.some(p => p.seat === seat));
+    await fill("테스트 도구", 8, 2);
+    await startGame(page, tracker);
+    rec(`${id}/mixed`, "BF4", "친구 둘과 봇 여섯이 역할 확인까지 들어간다", tracker.last().players.length === 8);
+  } finally {
+    await guest.context.close().catch(() => {});
+  }
+}
+
 /** 모든 페이지가 같은 단계에 닿을 때까지 기다린다(손님·방장 화면이 그 단계 틀을 그린 뒤). */
 async function allAt(pages, phase, ms = 8000) {
   return Promise.all(pages.map((p) => untilGame(p, (g) => g.phase === phase, ms, `${phase} 도착`)));
@@ -3842,6 +3883,7 @@ const { polishRevealFlow } = makePolishFlows({ recorder, attempt, openGame, clos
 export const FLOWS = [
   // lobby·world 는 LOBBY_SIZES 6개 크기로 돈다: 기본 크기 4개에 더해 390x844·402x874 (run.mjs 의 extraSizes)
   { id: "lobby", run: lobbyFlow, extraSizes: LOBBY_EXTRA_SIZES },
+  { id: "bot-fill", run: botFillFlow },
   { id: "world", run: worldFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 로비 자유 채팅(07-13): 방장·손님 두 페이지로 한 줄이 오가는 트레이서
   { id: "chat-lobby", run: chatLobbyFlow, extraSizes: LOBBY_EXTRA_SIZES },

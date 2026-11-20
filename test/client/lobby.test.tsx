@@ -221,6 +221,17 @@ describe("Lobby — 방장 줄 [맵]·[봇] (19-04, D-13 → 22-07 에서 [판 �
     expect(modeMarks(container)).toBe("0,0,0,0");
   });
 
+  it("첫날 실험방 방장이 [봇] 시트에서 원하는 총인원을 한 번에 요청한다", () => {
+    const send = vi.fn();
+    const view = makeView([player(0, "민수")], 0, { playtest: true, me: { seat: 0, isHost: true, testBots: 0 } });
+    render(lobby(view, { send }));
+    fireEvent.click(screen.getByRole("button", { name: "봇" }));
+    const sheet = within(screen.getByRole("dialog", { name: "봇" }));
+    fireEvent.click(sheet.getByRole("button", { name: "4명 채우기" }));
+    fireEvent.click(sheet.getByRole("button", { name: "8명 채우기" }));
+    expect(send.mock.calls).toEqual([[{ t: "testBots", count: 3 }], [{ t: "testBots", count: 7 }]]);
+  });
+
   it("봇 도구가 없는 방장의 줄은 [맵]뿐이고, 허용 맵이 하나뿐이면 줄 자체가 없다(칸으로 세지 않는다)", () => {
     const { container } = render(lobby(makeView(four(), 0)));
     expect(railIds(container)).toBe(PLAYABLE_MAPS.length > 1 ? "map" : "");

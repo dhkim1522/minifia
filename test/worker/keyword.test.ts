@@ -118,6 +118,9 @@ async function inKeyword(options: { bots?: number } = {}): Promise<{ room: Seate
   if (options.bots) {
     send(room.host, { t: "testBots", count: options.bots });
     await settle(room.host, mark(room.host));
+    // 답 없음 정렬 재현에는 기존 고정 봇 모드를 쓴다.
+    send(room.host, { t: "testBotVote", exec: "no", pick: "random" });
+    await nextFrame(room.host, (m) => m.t === "state" && m.view.me.testBotVote?.exec === "no");
   }
   send(room.host, { t: "start" });
   for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");

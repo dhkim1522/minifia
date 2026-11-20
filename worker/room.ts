@@ -845,7 +845,7 @@ export class Room extends DurableObject<Env> {
   // 다른 점 셋: ① 간격 키를 초안(answerD)·확정(answerF)으로 나눈다 — 입력 직후 [보내기]가 초안 간격에 막혀 사라지지 않게(Pitfall 6). 간격 안의 요청은 오류 없이 버린다.
   // ② 간격은 수락·거절 모두 기록한다(T-23-22) — 마피아의 떠보기가 400ms 당 1회로 묶인다. ③ 거절에 state(keywordProbed)가 딸려 오면 저장 한 번 한 뒤 오류를 돌려준다 —
   // handleAnswer 의 sendRejection 이 시민의 거절과 같은 두 프레임(오류 + 본인 state)으로 응답하므로 응답에서는 저장 여부를 알 수 없다(T-23-18).
-  private async applyAnswer(playerId: string, text: string, final: boolean, now: number): Promise<WsErrorCode | null> {
+  private async applyAnswer(playerId: string, text: string, final: boolean, now: number, source: "player" | "bot" = "player"): Promise<WsErrorCode | null> {
     if (!this.room) return "BAD_MESSAGE";
     const readUntil = keywordReadUntil(this.room);
     if (readUntil !== undefined && now < readUntil) return "WRONG_PHASE";
@@ -853,7 +853,7 @@ export class Room extends DurableObject<Env> {
     const last = this.writeAt.get(key);
     if (last !== undefined && now - last < ANSWER_MIN_GAP_MS) return null;
     this.writeAt.set(key, now);
-    const result = submitAnswer(this.room, playerId, text, final);
+    const result = submitAnswer(this.room, playerId, text, final, source);
     if (!result.ok) {
       if (result.state !== undefined) {
         this.room = result.state;
@@ -909,7 +909,7 @@ export class Room extends DurableObject<Env> {
   }
 
   // 규칙 함수(stickNote)가 검사하고 서버 전용 RoomState.notes 에 보관한다. 종이는 공개 값이라 받아들이면 모든 소켓이 각자 view 를 받는다(persistAndBroadcast, applyPoint 선례).
-  // 같은 대상을 다시 누르면 같은 state 객체라 저장·방송이 없다. 마감이 바뀌지 않으므로 reschedule 이 필요 없다. 봇 행동(BotAct)에는 붙이지 않는다(D-05).
+  // 같은 대상을 다시 누르면 같은 state 객체라 저장·방송이 없다. 마감이 바뀌지 않으므로 reschedule 이 필요 없다.
   private async applySuspect(playerId: string, target: number, now: number): Promise<WsErrorCode | null> {
     if (!this.room) return "BAD_MESSAGE";
     // 옮기기는 횟수 제한이 없어 받아들일 때마다 저장 1회 + 전원 방송이다(결정 0076 쓰기 예산) — 한 사람의 요청 간격(SUSPECT_MIN_GAP_MS) 안은 오류 없이 버린다.
@@ -924,7 +924,7 @@ export class Room extends DurableObject<Env> {
     this.room = result.state;
     await this.persistAndBroadcast();
     const note = result.state.notes?.at(-1);
-    if (result.state.playtest === true && note !== undefined) {
+    if (result.state.playtest === true && (result.state.map ?? "bar") === "plaza" && note !== undefined) {
       this.broadcastEmote(result.state, "all", note.from, "point", note.to);
     }
     return null;
@@ -1124,11 +1124,15 @@ export class Room extends DurableObject<Env> {
   // 거부(RATE_LIMITED 포함)는 버린다 — 알릴 소켓이 없을 뿐 사람 메시지가 거부된 것과 같다.
   private async runDueBots(now: number): Promise<void> {
     if (!this.room) return;
+    const current = phaseKey(this.room);
     const { state, due } = takeDueBotSteps(this.room, now);
     if (due.length === 0) return;
     this.room = state;
     await this.ctx.storage.put("room", this.room);
-    for (const step of due) await this.actAsBot(step);
+    for (const step of due) {
+      if (!this.room || phaseKey(this.room) !== current) break;
+      await this.actAsBot(step);
+    }
   }
 
   private async actAsBot(step: BotStep): Promise<void> {
@@ -1168,6 +1172,12 @@ export class Room extends DurableObject<Env> {
         return;
       case "firstBallot":
         await this.applyFirstBallot(step.botId, act.target);
+        return;
+      case "answer":
+        await this.applyAnswer(step.botId, act.text, true, Date.now(), "bot");
+        return;
+      case "suspect":
+        await this.applySuspect(step.botId, act.target, Date.now());
         return;
       default: {
         // 새 봇 행동을 BotAct 에 더하고 여기를 빠뜨리면 컴파일이 실패한다(Pitfall 15).
@@ -1619,7 +1629,7 @@ export class Room extends DurableObject<Env> {
   // 봇이 없는 방은 syncBotPlan 이 같은 객체를 돌려주고 botWakeAt 이 null 이라 알람이 예전과 같다.
   private async reschedule(): Promise<void> {
     if (!this.room) return;
-    // 지목 차례 중이면 봇 계획의 now 는 그 차례가 시작된 시각이다(결정 0063-1) — 봇은 차례가 시작되면 곧바로 지목한다.
+    // 지목 차례의 봇 지연 시간은 서버의 차례 시작 시각에서 잰다.
     const synced = syncBotPlan(this.room, turnStartOf(this.room) ?? Date.now(), cryptoRandInt);
     if (synced !== this.room) {
       this.room = synced;
@@ -1696,7 +1706,7 @@ export class Room extends DurableObject<Env> {
     // 입장하는 소켓에는 보정 이동 방송 대신 아래 순서대로 state → snap 을 보낸다.
     if (this.mapDef().id === "bar") this.syncLayout(Date.now());
 
-    // 연결된 사람이 아무도 없던 방에 처음 사람이 들어오면 봇 배회 알람이 이제 필요하다(아래).
+    // 연결된 사람이 돌아오면 배회와 현재 단계 행동의 알람을 다시 건다.
     const wasIdle = !room.players.some((p) => !isBot(p) && p.connected);
     const connId = crypto.randomUUID();
     // 같은 사람의 이전 소켓은 새 연결이 대체한다. 낡은 소켓의 닫힘은 connId 가 달라 새 연결을 덮지 않는다.
@@ -1727,7 +1737,7 @@ export class Room extends DurableObject<Env> {
     // 결과 단계에서만 같은 결과 공개를 이 소켓에 다시 보낸다(D-10, L36). 판 중에는 어떤 순간의 hello 에도 보내지 않는다(L35).
     if (this.room.phase === "ended") for (const frame of buildResultLog(this.room, this.chatLog)) this.sendTo(ws, frame);
     // 첫 접속이면 만료가 늘었으니 알람도 따라 옮긴다.
-    if (this.room.expiresAt !== room.expiresAt || this.room.hostId !== room.hostId || (wasIdle && this.wanderBots().length > 0)) await this.reschedule();
+    if (this.room.expiresAt !== room.expiresAt || this.room.hostId !== room.hostId || (wasIdle && this.room.players.some(isBot))) await this.reschedule();
   }
 
   // 쉬는 사람의 hello(11-08, 결정 D-13, 누설 L38): bench 행에 붙이고 저장하되 방송하지 않는다(다른 사람의 view 는 바뀌지 않는다).

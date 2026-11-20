@@ -7,6 +7,7 @@ import { countGraphemes, nicknameKey, validateNickname } from "../../shared/nick
 import {
   BOT_CHAT_LINES,
   BOT_DEFENSE_LINES,
+  BOT_KEYWORD_CLUES,
   BOT_NAMES,
   BOT_NIGHT_LINES,
   BOT_TYPING_LEAD_MS,
@@ -34,7 +35,9 @@ import { saveWill } from "../../shared/game/will";
 import type { ChatSenderRate } from "../../shared/game/chatRules";
 import { pickTarget } from "../../shared/game/night";
 import { WILL_MAX_GRAPHEMES } from "../../shared/game/will";
-import { PHASE_DEFS } from "../../shared/game/phases";
+import { KEYWORD_READ_MS, PHASE_DEFS } from "../../shared/game/phases";
+import { GENRES } from "../../shared/game/keywords";
+import { violatesKeyword } from "../../shared/game/keywordGuard";
 import { rolesInPlay } from "../../shared/game/roles";
 import {
   attachConnection,
@@ -506,9 +509,23 @@ describe("마피아 봇 협응(결정 0061-18)", () => {
   };
   const bot = (s: RoomState, seat: number): Player => s.players.find((p) => p.seat === seat)!;
 
-  it("아무도 안 골랐으면 가장 낮은 산 비마피아다(마피아 둘 seat 2·4)", () => {
+  it("아무도 고르지 않으면 일반 봇 둘은 같은 대상을 고르고 일차가 바뀌면 다른 좌석도 고른다", () => {
+    const original = arranged({ 2: "mafia", 4: "mafia" });
+    const picks = new Set<number>();
+    for (let day = 1; day <= 12; day += 1) {
+      const state = { ...original, day };
+      const target = botMafiaTarget(state, bot(state, 2));
+      expect(target).toBe(botMafiaTarget(state, bot(state, 4)));
+      expect([0, 1, 3, 5]).toContain(target);
+      picks.add(target!);
+    }
+    expect(picks.size).toBeGreaterThan(1);
+  });
+
+  it("고정 봇 투표가 설정되면 재현용 최저 좌석을 유지한다", () => {
     const s = arranged({ 2: "mafia", 4: "mafia" });
-    expect(`${botMafiaTarget(s, bot(s, 2))}/${botMafiaTarget(s, bot(s, 4))}`).toBe("0/0");
+    const replay = { ...s, testBotVote: { exec: "yes" as const } };
+    expect(`${botMafiaTarget(replay, bot(s, 2))}/${botMafiaTarget(replay, bot(s, 4))}`).toBe("0/0");
   });
 
   it("동료가 고른 산 비마피아가 있으면 그것을 따라간다", () => {
@@ -521,14 +538,15 @@ describe("마피아 봇 협응(결정 0061-18)", () => {
     expect(String(botMafiaTarget(s, bot(s, 2)))).toBe("1");
   });
 
-  it("동료가 고른 대상이 이미 탈락이면 무시하고 가장 낮은 산 비마피아다", () => {
+  it("동료가 고른 대상이 이미 탈락이면 살아 있는 다른 대상을 고른다", () => {
     const s = arranged({ 2: "mafia", 4: "mafia" }, { 4: { nightPick: 3 }, 3: { alive: false } });
-    expect(String(botMafiaTarget(s, bot(s, 2)))).toBe("0");
+    expect([0, 1, 5]).toContain(botMafiaTarget(s, bot(s, 2)));
   });
 
   it("탈락한 동료의 선택은 따라가지 않는다", () => {
     const s = arranged({ 2: "mafia", 4: "mafia" }, { 4: { nightPick: 3, alive: false } });
-    expect(String(botMafiaTarget(s, bot(s, 2)))).toBe("0");
+    const baseline = arranged({ 2: "mafia", 4: "mafia" }, { 4: { alive: false } });
+    expect(botMafiaTarget(s, bot(s, 2))).toBe(botMafiaTarget(baseline, bot(baseline, 2)));
   });
 
   it("시민·경찰·탈락한 마피아·후보 없음은 undefined 다", () => {
@@ -544,7 +562,7 @@ describe("마피아 봇 협응(결정 0061-18)", () => {
     const base = { 2: "mafia", 3: "police", 4: "doctor" } as const;
     const a = arranged(base, { 3: { nightPick: 0 }, 4: { nightPick: 1 } });
     const b = arranged(base, { 3: { nightPick: 5 }, 4: { nightPick: 5 } });
-    expect(`${botMafiaTarget(a, bot(a, 2))}/${botMafiaTarget(b, bot(b, 2))}`).toBe("0/0");
+    expect(botMafiaTarget(a, bot(a, 2))).toBe(botMafiaTarget(b, bot(b, 2)));
   });
 
   it("botNightTarget 마피아 분기는 난수를 부르지 않고 경찰 분기는 randInt(후보 수) 한 번이다", () => {
@@ -563,7 +581,8 @@ describe("마피아 봇 협응(결정 0061-18)", () => {
     const picks = planBotSteps(s, nowOf(s), seededRandInt(9))
       .filter((st) => st.act.t === "pick" && (st.botId === bot(s, 2).id || st.botId === bot(s, 4).id)) // 마피아 봇 둘만 본다(시민 봇도 고른다, D-05)
       .map((st) => (st.act.t === "pick" ? `${st.botId === bot(s, 2).id ? 2 : 4}:${st.act.target}` : ""));
-    expect(picks.sort().join(",")).toBe("2:0,4:0");
+    const target = botMafiaTarget(s, bot(s, 2));
+    expect(picks.sort().join(",")).toBe(`2:${target},4:${target}`);
   });
 });
 
@@ -626,7 +645,10 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
       for (const bot of botsOf(state)) {
         const mine = chats.filter((s) => s.botId === bot.id);
         expect(`${seed}:${bot.seat}:${mine.length}`).toBe(`${seed}:${bot.seat}:${bot.alive === false ? 0 : 2}`);
-        if (mine.length === 2) expect(mine[1]!.at - mine[0]!.at >= 8000).toBe(true);
+        if (mine.length === 2) {
+          expect(mine[1]!.at - mine[0]!.at).toBeGreaterThanOrEqual(8000);
+          if (mine[0]!.act.t === "chat" && mine[1]!.act.t === "chat") expect(mine[1]!.act.text).not.toBe(mine[0]!.act.text);
+        }
       }
       expect(steps.every((s) => s.at < state.phaseEndsAt! - 500 && s.at > nowOf(state))).toBe(true);
       expect(chats.every((s) => s.act.t === "chat" && BOT_CHAT_LINES.includes(s.act.text))).toBe(true);
@@ -769,6 +791,62 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
     expect(ats.join(",")).toBe([...ats].sort((a, b) => a - b).join(","));
   });
 
+});
+
+describe("일반 봇의 키워드 답과 의심딱지", () => {
+  it("모든 장르의 답 문구가 그 장르의 키워드 검사와 길이를 통과한다", () => {
+    const overlaps: string[] = [];
+    for (const genre of GENRES) {
+      const lines = BOT_KEYWORD_CLUES[genre.id]!;
+      expect(lines.length).toBeGreaterThanOrEqual(7);
+      expect(new Set(lines).size).toBe(lines.length);
+      for (const text of lines) {
+        expect(countGraphemes(text)).toBeLessThanOrEqual(20);
+        for (const word of genre.words) if (violatesKeyword(text, word)) overlaps.push(`${genre.id} / ${text} / ${word.word}`);
+      }
+    }
+    expect(overlaps).toEqual([]);
+  });
+
+  it("공개 장르만 사용해 서로 다른 답을 읽기 직후에 내고 고정 봇 투표에서는 답 계획을 만들지 않는다", () => {
+    const first = stateAt(1, 7, 3, "discussion");
+    const state = { ...first, phase: "keyword" as const, phaseEndsAt: 13_000, keyword: { genre: "movie", word: "해리포터" } };
+    const plans = (s: RoomState) => planBotSteps(s, 0, seededRandInt(3));
+    const answers = plans(state);
+    expect(answers).toHaveLength(7);
+    expect(new Set(answers.flatMap(({ act }) => act.t === "answer" ? [act.text] : [])).size).toBe(7);
+    expect(answers.every(({ at }) => at > KEYWORD_READ_MS && at < KEYWORD_READ_MS + 1_500)).toBe(true);
+    const swapped = { ...state, keyword: { genre: "movie", word: "타이타닉" }, players: state.players.map((p) => ({ ...p, role: "mafia" as const })) };
+    expect(plans(swapped)).toEqual(answers);
+    expect(plans({ ...state, testBotVote: { exec: "no" } })).toEqual([]);
+  });
+
+  it("둘째 날 재즈 바에서 일부 살아 있는 봇만 다른 살아 있는 좌석에 딱지를 붙인다", () => {
+    const state = { ...markDead(stateAt(1, 7, 3, "discussion"), 2), day: 2, map: "bar" as const };
+    const notes = (s: RoomState) => planBotSteps(s, nowOf(s), seededRandInt(3)).filter((step) => step.act.t === "suspect");
+    const planned = notes(state);
+    expect(planned.length).toBeGreaterThan(0);
+    expect(planned.length).toBeLessThan(6);
+    expect(new Set(planned.map((step) => step.botId)).size).toBe(planned.length);
+    for (const step of planned) {
+      const actor = state.players.find((p) => p.id === step.botId)!;
+      expect(actor.alive).not.toBe(false);
+      if (step.act.t !== "suspect") throw new Error("suspect 계획만 검증한다");
+      expect(step.act.target).not.toBe(actor.seat);
+      expect(step.act.target).not.toBe(2);
+    }
+    expect(notes({ ...state, map: "plaza" })).toEqual([]);
+    expect(notes({ ...state, day: 1, playtest: true })).toEqual([]);
+  });
+
+  it("마지막 사람이 끊기면 저장된 계획, 실행, 봇 전용 깨우기를 모두 멈춘다", () => {
+    const active = stateAt(1, 3, 2, "discussion");
+    const synced = syncBotPlan(active, nowOf(active), seededRandInt(4));
+    const idle = { ...synced, players: synced.players.map((p) => isBot(p) ? p : { ...p, connected: false }) };
+    expect(botWakeAt(idle)).toBeNull();
+    expect(takeDueBotSteps(idle, idle.phaseEndsAt!).due).toEqual([]);
+    expect(syncBotPlan(idle, nowOf(idle), THROWING).botPlan).toBeUndefined();
+  });
 });
 
 describe("takeDueBotSteps·botWakeAt", () => {
@@ -919,19 +997,15 @@ describe("봇 투표·변론 계획: 회귀", () => {
     }
   });
 
-  it("discussion·night 계획 고정값 (15-03 재고정: night 554531902 → 553784266, 시민 봇도 밤에 고른다; 09-02 재고정: night 962657041 → 554531902, 마피아 대상 난수 없음; 08-11: 흐름 전환으로 둘 다 다시 고정 — 08-07 값 856098986·997718148; 07-11 이전 622180622·76649671, 07-08 이전 289874952·760964938)", () => {
+  it("고정 봇 투표가 설정된 판의 discussion·night 계획 스냅샷을 유지한다", () => {
     const digest = (text: string): number => [...text].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 1_000_000_007, 7);
     const got = (["discussion", "night"] as const).map((phase) => {
-      const state = stateAt(1, 5, 8, phase);
+      const state = { ...stateAt(1, 5, 8, phase), testBotVote: { exec: "yes" as const } };
       // 09-12: will(09-24: typing 도)는 난수 없는 덧붙임 행동이다 — 걸러내면 기존 시드 고정 값이 그대로여야 한다(난수 호출 순서 불변 증명).
       const steps = planBotSteps(state, nowOf(state), seededRandInt(42)).filter((st) => st.act.t !== "will" && st.act.t !== "typing");
       return digest(canon(steps));
     });
-    // 08-11: 토론이 90초가 되고 밤이 지목 마감 뒤에 닿아 두 계획의 시각(at)이 모두 달라졌다 — 새 흐름 값으로 다시 고정한다.
-    // 09.1-04: 지목이 순차(전원 기권 기준 모이기 + 인원 × 8.9초 + 끝 알림)가 되어 밤 시작 시각이 달라졌다 — night 값만 다시 고정한다(discussion 은 그대로).
-    // 13-02(결정 0072): 기본판 투표는 15초 동시 투표(순차 아님)라 밤 시작 시각이 되돌아가 night 값을 다시 고정한다(125073089 → 554531902, discussion 은 그대로).
-    // 15-03(D-05): 시민 봇도 밤에 randInt(후보 수) → randInt(pick 지연 폭) 을 부르고 마피아 접근 걷기(난수 없음)가 없어져 night 값을 다시 고정한다(554531902 → 553784266, discussion 은 그대로).
-    expect(got.join(",")).toBe("34804349,715181244"); // 22-09 재고정: 낮 순서가 토론 → 찬반(부결) → 밤이라 밤 시작 시각이 바뀌었다 — night 553784266 → 715181244, discussion 은 그대로(난수 호출 수·순서 불변 증명)
+    expect(got.join(",")).toBe("34804349,715181244");
   });
 
   it("discussion 계획의 난수 호출 수는 claim 제거 뒤에도 그대로다 (07-08, 리서치 Pitfall 13)", () => {
@@ -1001,8 +1075,8 @@ describe("봇 투표 고정 설정: botPointTarget", () => {
 });
 
 describe("BOT_*_LINES: 고정 문구 (07-11, 가정 A2)", () => {
-  it("낮 8개·밤 3개·변론 3개이고 서로 겹치지 않는 문구다", () => {
-    expect(`${BOT_CHAT_LINES.length}/${BOT_NIGHT_LINES.length}/${BOT_DEFENSE_LINES.length}`).toBe("8/3/3");
+  it("낮 16개·밤 3개·유언 3개이고 같은 목록에서 문구가 겹치지 않는다", () => {
+    expect(`${BOT_CHAT_LINES.length}/${BOT_NIGHT_LINES.length}/${BOT_DEFENSE_LINES.length}`).toBe("16/3/3");
     for (const lines of [BOT_CHAT_LINES, BOT_NIGHT_LINES, BOT_DEFENSE_LINES]) expect(new Set(lines).size).toBe(lines.length);
   });
 
@@ -1057,11 +1131,11 @@ describe("봇 계획: 토론 끝내기 (DAY-03)", () => {
     expect(`${got.join(",")} 봇=${botsOf(base).length} 제품 길이=${PHASE_DEFS.discussion.durationMs! - 500 > 59_999}`).toBe("0,4,4,4 봇=4 제품 길이=true");
   });
 
-  it("난수 호출 순서는 봇마다 [10000, 8, 18000, 8, 30000](채팅 → 채팅 → 끝내기 간격)이다", () => {
+  it("일반 봇의 둘째 발언은 첫 발언을 제외한 문구 중에서 뽑는다", () => {
     const { state, now } = wideDiscussion(5);
     const rec = recording(7);
     planBotSteps(state, now, rec.randInt);
-    const per = [10000, 8, 18000, 8, 30000];
+    const per = [10000, BOT_CHAT_LINES.length, 18000, BOT_CHAT_LINES.length - 1, 30000];
     expect(rec.calls.join(",")).toBe(Array(botsOf(state).length).fill(per).flat().join(","));
   });
 });
@@ -1095,7 +1169,7 @@ describe("봇 차례 지목 (결정 0063-1)", () => {
     expect(`${a.length}|${first.calls.length}|${b.length}|${second.calls.length}`).toBe("0|0|0|0");
   });
 
-  it("봇 seat1 차례에는 그 봇 point 한 개가 now 에 서고 castTurnPoint 를 통과하며 난수는 [후보 수] 한 번뿐이다", () => {
+  it("봇 seat1 차례의 지목이 0.6~1.8초 뒤에 실행되고 대상 난수는 한 번뿐이다", () => {
     for (let seed = 1; seed <= 10; seed += 1) {
       const state = botOneTurn(seed);
       const now = state.phaseEndsAt! - 8000;
@@ -1105,13 +1179,15 @@ describe("봇 차례 지목 (결정 0063-1)", () => {
       const bot = state.players.find((p) => p.seat === 1)!;
       expect(`${seed}:${state.pickTurn?.i}:${points.length}:${steps.length}`).toBe(`${seed}:1:1:1`);
       const step = points[0]!;
-      expect(`${step.botId === bot.id}:${step.at === now}`).toBe("true:true");
+      expect(step.botId).toBe(bot.id);
+      expect(step.at - now).toBeGreaterThanOrEqual(600);
+      expect(step.at - now).toBeLessThan(1800);
       expect(rec.calls.join(",")).toBe("4");
       const target = step.act.t === "point" ? step.act.target : -1;
       expect(`${target !== 1 && state.players.find((p) => p.seat === target)?.alive !== false}`).toBe("true");
       const r = castTurnPoint(state, step.botId, target, step.at);
       expect(`${seed}:${r.ok ? "ok" : r.error}`).toBe(`${seed}:ok`);
-      expect(r.ok ? String(r.state.pickTurn?.doneAt) : "-").toBe(String(now));
+      expect(r.ok ? r.state.pickTurn?.doneAt : undefined).toBe(step.at);
     }
   });
 
@@ -1120,6 +1196,7 @@ describe("봇 차례 지목 (결정 0063-1)", () => {
     const now = state.phaseEndsAt! - 8000;
     const host = recording(7);
     const hostSteps = planBotSteps({ ...state, testBotVote: { pick: "host" } }, now, host.randInt);
+    expect(hostSteps[0]?.at).toBe(now);
     expect(`${hostSteps.map((x) => (x.act.t === "point" ? x.act.target : -1)).join(",")}|${host.calls.length}`).toBe("0|0");
     const other = recording(7);
     const otherSteps = planBotSteps({ ...state, testBotVote: { pick: "other" } }, now, other.randInt);

@@ -7,6 +7,7 @@ import { BOT_CHAT_LINES, BOT_DEFENSE_LINES, BOT_WILL_LINES } from "../../shared/
 import { LAST_WORD_CHIPS } from "../../shared/game/showdown";
 import { PHASE_DEFS, PICK_TURN_MS } from "../../shared/game/phases";
 import { RULES } from "../../shared/game/ruleset";
+import { openKeyword } from "../helpers/keyword";
 import type { PhaseId, RoomView, ServerMessage } from "../../shared/protocol";
 import {
   advanceTo,
@@ -145,13 +146,45 @@ async function walkToBotPoint(code: string): Promise<number> {
 /** 조건이 참이 될 때까지 알람을 거듭 돌린다(봇 차례 시작 → 계획 저장 → 계획 실행이 알람 사슬이다). 알람이 없으면 false 를 돌려줄 뿐이다. */
 async function chaseAlarms(code: string, label: string, ready: () => Promise<boolean>): Promise<void> {
   const stub = env.ROOM.getByName(code);
-  for (let i = 0; i < 40; i += 1) {
+  for (let i = 0; i < 100; i += 1) {
     if (await ready()) return;
     await runDurableObjectAlarm(stub);
     await sleep(25);
   }
   if (!(await ready())) throw new Error(`chaseAlarms: ${label} 이(가) 이뤄지지 않았다`);
 }
+
+describe("1명과 무작위 봇 7명의 첫날", () => {
+  it("역할만 고른 테스트 방에서 봇 7명은 답을 따로 내고, 낮 공개 전에는 방장에게도 답을 보내지 않는다", async () => {
+    const restore = openKeyword();
+    try {
+      const room = await seatQuiet(0, { testMode: true });
+      send(room.host, { t: "testBots", count: 7 });
+      await nextFrame(room.host, lobbyOf(8));
+      await sendAndSettle(room.host, { t: "testRole", role: "mafia" });
+      await start(room);
+      await skipUntil(room, "keyword");
+      await waitForPlan(room.code);
+      const from = mark(room.host);
+      await forceBotsDue(room.code);
+      const state = await stored(room.code);
+      expect(state.keywordProbed).toBeUndefined();
+      expect((state.answerSubmits as unknown[]).length).toBe(7);
+      expect(summary(await settle(room.host, from))).toBe("[]");
+      expect(lastView(room.host).me.keyword).toBeUndefined();
+      expect(lastView(room.host).day?.keyword?.answers).toBeUndefined();
+
+      await sendAndSettle(room.host, { t: "answer", final: true, text: "가" });
+      await skipUntil(room, "discussion");
+      const rows = lastView(room.host).day?.keyword?.answers ?? [];
+      expect(rows).toHaveLength(8);
+      expect(new Set(rows.map(({ text }) => text)).size).toBe(8);
+      expect(rows.at(-1)).toMatchObject({ seat: 0, text: "가" });
+    } finally {
+      restore();
+    }
+  }, 40_000);
+});
 
 async function waitForPlan(code: string): Promise<void> {
   for (let i = 0; i < 60; i += 1) {

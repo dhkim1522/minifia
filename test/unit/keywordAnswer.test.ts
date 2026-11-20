@@ -45,6 +45,18 @@ describe("submitAnswer 검사 순서 (D-07)", () => {
     expect(submitAnswer(dead, idOf(dead, 1), "안경", true)).toEqual({ ok: false, error: "BAD_MESSAGE" });
   });
 
+  it("서버 봇 경로는 산 봇의 확정만 받으며 금지어 충돌을 마피아 떠보기로 기록하지 않는다", () => {
+    const base = keywordState();
+    const state = { ...base, players: base.players.map((p) => p.seat === 4 ? { ...p, role: "mafia" as const } : p) };
+    const botId = idOf(state, 4);
+    expect(submitAnswer(state, idOf(state, 1), "안경", true, "bot")).toEqual({ ok: false, error: "BAD_MESSAGE" });
+    expect(submitAnswer(state, botId, "안경", false, "bot")).toEqual({ ok: false, error: "BAD_MESSAGE" });
+    expect(submitAnswer(state, botId, WORD, true, "bot")).toEqual({ ok: false, error: "BAD_MESSAGE" });
+    const answer = must(submitAnswer(state, botId, "안경", true, "bot")).state;
+    expect(answer.keywordProbed).toBeUndefined();
+    expect(answer.answerSubmits).toEqual([{ seat: 4, text: "안경" }]);
+  });
+
   it("이미 확정한 사람의 다음 요청은 같은 객체로 조용히 무변화", () => {
     const s = keywordState();
     const first = must(submitAnswer(s, idOf(s, 1), "안경", true));

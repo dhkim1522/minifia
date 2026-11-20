@@ -11,6 +11,7 @@ export interface ButtonProps {
   disabled?: boolean;
   onClick?: () => void;
   "aria-label"?: string;
+  "aria-pressed"?: boolean;
   className?: string;
   /** 첫 포커스·측정용(React 19: 함수 부품도 ref 를 prop 으로 받는다) */
   ref?: Ref<HTMLButtonElement>;
@@ -27,6 +28,7 @@ export function Button({
   disabled,
   onClick,
   "aria-label": ariaLabel,
+  "aria-pressed": ariaPressed,
   className,
   ref,
   children,
@@ -44,7 +46,7 @@ export function Button({
         }
       : onClick;
   return (
-    <button {...data} ref={ref} type={type} className={classes} disabled={disabled} onClick={handleClick} aria-label={ariaLabel}>
+    <button {...data} ref={ref} type={type} className={classes} disabled={disabled} onClick={handleClick} aria-label={ariaLabel} aria-pressed={ariaPressed}>
       {icon}
       {children}
     </button>

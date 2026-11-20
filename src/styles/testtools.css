@@ -23,11 +23,15 @@
 .mf-tt-sheet__bots { display: flex; flex-direction: column; gap: var(--space-sm); }
 /* 봇 투표 선택(P-13): 봇 줄 아래 두 칩 그룹, 내 직업 칸과 같은 세로 간격. */
 .mf-tt-sheet__botvote { display: flex; flex-direction: column; gap: var(--space-sm); }
-/* 봇 줄(결정 0024): [−] N명 [+] 와 [5명 채우기] 가 360px 폭에서 한 줄에 든다. 아이콘 버튼은 정사각 탭 대상(--tap-min). */
+/* 봇은 한 명씩 조절하고, 전체 인원은 아래에서 선택한다. */
 .mf-tt-sheet__stepper { display: flex; align-items: center; gap: var(--space-sm); }
 .mf-tt-sheet__step { flex: none; min-width: var(--tap-min); min-height: var(--tap-min); padding: 0; }
 .mf-tt-sheet__count { flex: none; min-width: 40px; text-align: center; font: 700 16px/1.5 var(--font-ui); color: var(--gray-100); font-variant-numeric: tabular-nums; }
-.mf-tt-sheet__stepper .mf-btn:not(.mf-tt-sheet__step) { margin-left: auto; flex: none; white-space: nowrap; }
+.mf-tt-sheet__fill-label { display: flex; align-items: center; justify-content: space-between; }
+.mf-tt-sheet__player-total { color: var(--noir-silver); font: var(--type-label); white-space: nowrap; }
+.mf-tt-sheet__fill-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(var(--tap-min), 1fr)); gap: var(--space-sm); }
+.mf-tt-sheet__fill { padding: 0; font: var(--type-label-strong); white-space: nowrap; }
+.mf-tt-sheet__fill[aria-pressed="true"] { opacity: 1; color: var(--noir-paper); background: var(--noir-control-on); border-color: var(--noir-paper); }
 .mf-tt-sheet__label { margin: 0; font-size: 14px; line-height: 20px; font-weight: 700; color: var(--gray-100); }
 .mf-tt-sheet__list { display: flex; flex-direction: column; gap: var(--space-sm); }
 .mf-tt-sheet__list .mf-btn { justify-content: space-between; width: 100%; min-height: var(--control-button); padding: 0 var(--space-md); }

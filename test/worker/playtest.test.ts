@@ -114,9 +114,11 @@ describe("첫날 실험방 HTTP·소켓", () => {
       send(sockets[2]!, { t: "suspect", target: farSeat });
       await nextFrame(sockets[2]!, (m) => m.t === "error" && m.code === "BAD_MESSAGE");
       expect((await settle(host, noPoint)).some((f) => f.t === "emote")).toBe(false);
+      const beforeNote = sockets.map(mark);
       send(host, { t: "suspect", target: nearSeat });
-      for (const sock of sockets) {
-        await nextFrame(sock, (f) => f.t === "emote" && f.id === "point" && f.seat === hostSeat && f.target === nearSeat);
+      await settleAll(sockets);
+      for (const [i, sock] of sockets.entries()) {
+        expect(framesOf(sock).slice(beforeNote[i]).some((f) => f.t === "emote" && f.id === "point")).toBe(false);
         expect(lastViewOf(sock).day?.suspectLog).toEqual([{ n: 1, from: hostSeat, to: nearSeat }]);
       }
 

@@ -582,13 +582,18 @@ describe("skipPhase: 밤을 넘길 때 마피아 봇은 같은 대상으로 모�
     }
   });
 
-  it("마피아 봇 둘만 있고 아무도 안 골랐으면 둘 다 가장 낮은 산 비마피아를 고른다", () => {
+  it("밤을 넘겨도 마피아 봇 둘이 같은 산 비마피아를 고르고 일차에 따라 대상이 달라진다", () => {
+    const targets = new Set<string>();
     for (let seed = 1; seed <= 20; seed += 1) {
-      const state = arrangedNight({ 2: "mafia", 4: "mafia", 3: "police", 5: "doctor" });
+      const state = { ...arrangedNight({ 2: "mafia", 4: "mafia", 3: "police", 5: "doctor" }), day: seed };
       const r = skipPhase(state, state.hostId, START_AT, seededRandInt(seed));
       if (!r.ok) throw new Error(r.error);
-      expect(`${seed}:${teamTargets(r.state)}`).toBe(`${seed}:0,0`);
+      const [a, b] = teamTargets(r.state).split(",");
+      expect(["0", "1", "3", "5"]).toContain(a);
+      expect(b).toBe(a);
+      targets.add(a!);
     }
+    expect(targets.size).toBeGreaterThan(1);
   });
 
   it("시민·경찰·의사 봇이 randInt(후보 수) 를 seat 오름차순으로 한 번씩 부르고 마피아 봇은 난수를 부르지 않는다 (15-03: 시민 봇도 고른다)", () => {

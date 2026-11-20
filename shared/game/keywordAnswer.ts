@@ -37,11 +37,11 @@ export type AnswerError = "WRONG_PHASE" | "BAD_MESSAGE";
 
 /**
  * 키워드 답 제출(D-07·D-09, SC2). 검사 순서가 계약이다:
- * 1 단계(keyword 아니면 WRONG_PHASE) → 2 행위자(방에 있고 산 사람이며 봇이 아님, 아니면 BAD_MESSAGE) → 3 이미 확정했으면 같은 객체(조용히 무변화)
+ * 1 단계(keyword 아니면 WRONG_PHASE) → 2 행위자(방에 있고 살아 있으며 호출 경로가 사람·서버 봇 종류와 일치, 아니면 BAD_MESSAGE) → 3 이미 확정했으면 같은 객체(조용히 무변화)
  * → 4 본문 정리(sanitizeChatText 뒤 20자소 이하, 실패면 BAD_MESSAGE) → 5 초안(final:false)은 저장(공백뿐이면 키째 삭제, 같은 값이면 같은 객체, 금지어 검사 없음)
  * → 6 확정(final:true)인데 빈 글이면 BAD_MESSAGE → 7 확정에 금지어가 있으면 BAD_MESSAGE
  * → 8 통과: answerSubmits 끝에 { seat, text } 를 더하고(낸 순서가 곧 배열 순서) 그 사람의 초안을 지운다.
- * 7 의 거절은 시민과 마피아가 똑같은 반환(ok:false, BAD_MESSAGE)이다 — 다른 점은 보낸 사람이 마피아이고 keywordProbed 가 아직 없을 때만 state 에 { keywordProbed: true } 를 싣는 것뿐이고,
+ * 7 의 거절은 시민과 마피아가 똑같은 반환(ok:false, BAD_MESSAGE)이다 — 사람이 마피아이고 keywordProbed 가 아직 없을 때만 state 에 { keywordProbed: true } 를 싣고, 서버 봇의 금지어 충돌은 기록하지 않는다.
  * 방 DO 는 그 state 를 저장한 뒤 시민의 거절과 같은 두 프레임(오류 + 본인 state)을 보낸다. 응답에서는 저장 여부를 알 수 없다(T-23-18).
  */
 export function submitAnswer(
@@ -49,10 +49,12 @@ export function submitAnswer(
   actorId: string,
   text: string,
   final: boolean,
+  source: "player" | "bot" = "player",
 ): { ok: true; state: RoomState } | { ok: false; error: AnswerError; state?: RoomState } {
   if (state.phase !== "keyword") return { ok: false, error: "WRONG_PHASE" };
   const actor = state.players.find((p) => p.id === actorId);
-  if (actor === undefined || !isAlive(actor) || isBot(actor)) return { ok: false, error: "BAD_MESSAGE" };
+  const automatic = source === "bot";
+  if (actor === undefined || !isAlive(actor) || isBot(actor) !== automatic || (automatic && !final)) return { ok: false, error: "BAD_MESSAGE" };
   if ((state.answerSubmits ?? []).some((s) => s.seat === actor.seat)) return { ok: true, state };
   const blank = text.trim().length === 0;
   let clean = "";
@@ -84,7 +86,7 @@ export function submitAnswer(
   if (blank) return { ok: false, error: "BAD_MESSAGE" };
   const forms = formsOf(state);
   if (forms !== undefined && violatesKeyword(clean, forms)) {
-    if (actor.role === "mafia" && state.keywordProbed !== true) return { ok: false, error: "BAD_MESSAGE", state: { ...state, keywordProbed: true } };
+    if (!automatic && actor.role === "mafia" && state.keywordProbed !== true) return { ok: false, error: "BAD_MESSAGE", state: { ...state, keywordProbed: true } };
     return { ok: false, error: "BAD_MESSAGE" };
   }
   return {
@@ -103,7 +105,7 @@ export function submitAnswer(
 
 /**
  * keyword 마감 훅(D-03·D-07·D-24). 공개 목록 keywordAnswers 를 확정한다:
- * ① 확정 제출을 낸 순서 → ② 마감에 쓰던 글(초안, 금지어 없음)로 나간 산 사람(좌석 순) → ③ 답 없음(text:null, 좌석 순, 봇은 늘 여기).
+ * ① 확정 제출을 낸 순서 → ② 마감에 쓰던 글(초안, 금지어 없음)로 나간 산 사람(좌석 순) → ③ 답 없음(text:null, 좌석 순).
  * 서버 전용 answerSubmits 와 모든 answerDraft 는 키째 지우고, 죽은 사람은 목록에 없다. 단계는 표의 기본 다음(dayAnnounce)으로 간다.
  */
 export function closeKeyword(state: RoomState): DeadlineResult {

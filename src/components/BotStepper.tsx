@@ -1,27 +1,25 @@
 import type { ReactElement } from "react";
-import { MAX_TEST_BOTS } from "../../shared/protocol";
+import { MAX_PLAYERS, MAX_TEST_BOTS, MIN_PLAYERS } from "../../shared/protocol";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { Button } from "./Button";
 import { Icon } from "./Icon";
 import "../styles/testtools.css";
 
-// 봇 수 조절 줄(결정 0024·0075): [−] N명 [+] [5명 채우기]. 테스트 도구 시트와 일반 방 [봇] 시트가 같이 쓴다.
-// 숫자는 서버 view 의 me.testBots 를 따른다(낙관적 값 없음 — count 가 절대값이라 연타해도 같은 요청이다). 판단은 서버가 한다(결정 0002).
-
-/** 채우기 버튼이 맞추는 총 인원 — 5명이면 네 직업이 모두 나온다(rolesInPlay). */
-export const FILL_TO_PLAYERS = 5;
+// 테스트 도구 시트와 대기실 봇 시트가 서버의 현재 봇 수와 전체 인원을 공유한다.
+const PLAYER_TOTALS = Array.from({ length: MAX_PLAYERS - MIN_PLAYERS + 1 }, (_, index) => MIN_PLAYERS + index);
 
 export function BotStepper({ view, canSend, send }: { view: RoomView; canSend: boolean; send: (msg: ClientMessage) => boolean | void }): ReactElement {
   const bots = view.me.testBots ?? 0;
-  const humans = view.players.length - bots;
-  const maxBots = Math.min(MAX_TEST_BOTS, view.maxPlayers - humans);
+  const total = view.players.length;
+  const humans = total - bots;
+  const maxBots = Math.max(0, Math.min(MAX_TEST_BOTS, view.maxPlayers - humans));
   const setBots = (count: number) => {
     if (canSend) send({ t: "testBots", count });
   };
   return (
     <section className="mf-tt-sheet__bots">
-      <p className="mf-tt-sheet__label">봇</p>
-      <div className="mf-tt-sheet__stepper">
+      <div className="mf-tt-sheet__stepper" role="group" aria-label="봇 수">
+        <p className="mf-tt-sheet__label">봇 수</p>
         <Button
           variant="secondary"
           compact
@@ -41,9 +39,31 @@ export function BotStepper({ view, canSend, send }: { view: RoomView; canSend: b
           disabled={!canSend || bots >= maxBots}
           onClick={() => setBots(bots + 1)}
         />
-        <Button variant="secondary" compact disabled={!canSend || view.players.length >= FILL_TO_PLAYERS} onClick={() => setBots(FILL_TO_PLAYERS - humans)}>
-          5명 채우기
-        </Button>
+      </div>
+      <div className="mf-tt-sheet__fill-label">
+        <p className="mf-tt-sheet__label">전체 인원</p>
+        <span className="mf-tt-sheet__player-total" aria-live="polite">{`${total}/${view.maxPlayers}명`}</span>
+      </div>
+      <div className="mf-tt-sheet__fill-grid" role="group" aria-label="전체 인원 맞추기">
+        {PLAYER_TOTALS.map((target) => {
+          const count = target - humans;
+          const current = target === total;
+          const unavailable = target < view.minPlayers || count < 0 || count > maxBots;
+          return (
+            <Button
+              key={target}
+              variant="secondary"
+              compact
+              className="mf-tt-sheet__fill"
+              aria-label={`${target}명 채우기`}
+              aria-pressed={current}
+              disabled={!canSend || current || unavailable}
+              onClick={() => setBots(count)}
+            >
+              {`${target}명`}
+            </Button>
+          );
+        })}
       </div>
     </section>
   );

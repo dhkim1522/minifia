@@ -312,21 +312,22 @@ describe("대기실: 시트의 봇 줄 (U-10)", () => {
   const sent = (c: RoomConnection): string => JSON.stringify((c.send as ReturnType<typeof vi.fn>).mock.calls);
   const dec = () => within(sheet()).getByRole("button", { name: "봇 줄이기" }) as HTMLButtonElement;
   const inc = () => within(sheet()).getByRole("button", { name: "봇 늘리기" }) as HTMLButtonElement;
-  const fill = () => within(sheet()).getByRole("button", { name: "5명 채우기" }) as HTMLButtonElement;
+  const fill = (total = 5) => within(sheet()).getByRole<HTMLButtonElement>("button", { name: `${total}명 채우기` });
 
-  it("사람 혼자·봇 0 이면 '봇' 제목과 '0명'이 있고 줄이기는 꺼져 있으며 늘리기는 count 1 을 보낸다", () => {
+  it("사람 혼자·봇 0 이면 봇 수와 전체 인원을 구분하고 늘리기는 count 1 을 보낸다", () => {
     const { conn: c } = openSheet({ players: 1, testBots: 0 });
-    expect(within(sheet()).getByText("봇").textContent).toBe("봇");
+    expect(within(sheet()).getByText("봇 수").textContent).toBe("봇 수");
+    expect(within(sheet()).getByText("전체 인원").textContent).toBe("전체 인원");
     expect(within(sheet()).getByText("0명").textContent).toBe("0명");
     expect(String(dec().disabled)).toBe("true");
     fireEvent.click(inc());
     expect(sent(c)).toBe('[[{"t":"testBots","count":1}]]');
   });
 
-  it("[5명 채우기] 는 사람 혼자일 때 count 4 를 보낸다", () => {
+  it("4~8명 모두 방장 혼자일 때 총인원에서 한 명을 뺀 봇 수를 요청한다", () => {
     const { conn: c } = openSheet({ players: 1, testBots: 0 });
-    fireEvent.click(fill());
-    expect(sent(c)).toBe('[[{"t":"testBots","count":4}]]');
+    for (const total of [4, 5, 6, 7, 8]) fireEvent.click(fill(total));
+    expect(sent(c)).toBe(JSON.stringify([3, 4, 5, 6, 7].map(count => [{ t: "testBots", count }])));
   });
 
   it("인원 4·봇 3 이면 '3명'이고 줄이기는 count 2, 늘리기는 count 4, 채우기는 count 4 를 보낸다", () => {
@@ -351,12 +352,17 @@ describe("대기실: 시트의 봇 줄 (U-10)", () => {
     expect(String(inc().disabled)).toBe("true");
   });
 
-  it("인원이 5명 이상이면 [5명 채우기] 가 꺼져 있고 4명이면 켜져 있다", () => {
-    openSheet({ players: 5, testBots: 2 });
-    expect(String(fill().disabled)).toBe("true");
-    cleanup();
-    openSheet({ players: 4, testBots: 3 });
-    expect(String(fill().disabled)).toBe("false");
+  it("현재 총인원은 구분해 표시하고 실제 참가자보다 작은 인원은 선택할 수 없다", () => {
+    const { conn: c } = openSheet({ players: 8, testBots: 2 });
+    expect(within(sheet()).getByText("8/8명").textContent).toBe("8/8명");
+    expect(fill(8).getAttribute("aria-pressed")).toBe("true");
+    expect(fill(8).disabled).toBe(true);
+    expect(fill(5).disabled).toBe(true);
+    expect(fill(7).getAttribute("aria-pressed")).toBe("false");
+    expect(fill(7).disabled).toBe(false);
+    fireEvent.click(fill(7));
+    fireEvent.click(fill(6));
+    expect(sent(c)).toBe('[[{"t":"testBots","count":1}],[{"t":"testBots","count":0}]]');
   });
 
   it("me.testBots 가 없는 view 는 '0명' 으로 보인다", () => {
@@ -364,9 +370,9 @@ describe("대기실: 시트의 봇 줄 (U-10)", () => {
     expect(within(sheet()).getByText("0명").textContent).toBe("0명");
   });
 
-  it("canSend 가 false 면 세 버튼 모두 꺼져 있다", () => {
+  it("canSend 가 false 면 봇 조절 버튼이 모두 꺼져 있다", () => {
     openSheet({ players: 4, testBots: 2 }, { canSend: false });
-    expect([dec(), inc(), fill()].map((b) => b.disabled).join(",")).toBe("true,true,true");
+    expect([dec(), inc(), ...[4, 5, 6, 7, 8].map(fill)].every(button => button.disabled)).toBe(true);
   });
 
   it("discussion 단계 시트에는 봇 줄이 없다", () => {
