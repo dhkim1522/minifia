@@ -3420,10 +3420,9 @@ async function resultRematchFlow(ctx) {
     // 새 판: 참가자는 round + 1 의 assigning, C 는 BenchView (RM6·RM7)
     await Promise.all([ht, A.tracker, B.tracker].map((t) => t.waitFor((v) => (v.round ?? 1) === round1 + 1 && v.phase !== "ended", 10000, "새 판 도착")));
     await C.tracker.waitFor((v) => v.resting === true && (v.round ?? 1) === round1 + 1, 10000, "쉬는 사람 state");
-    await C.page.waitForSelector("[data-bench-view]", { timeout: 6000 });
-    await sleep(250);
     const phases = [ht, A.tracker, B.tracker].map((t) => t.last().phase);
     const round = { before: round1, after: Math.min(...[ht, A.tracker, B.tracker].map((t) => t.last().round ?? 1)), phases };
+    await C.page.waitForSelector("[data-bench-view] .mf-bench__text", { timeout: 6000 });
     const bench = await readBenchView(C.page);
     if (C.tracker.last()?.players?.length !== 1) rec(`${id}/bench`, "RM-LEAK", "쉬는 사람이 받은 players 는 자기 한 줄뿐", false, `players ${C.tracker.last()?.players?.length}`);
     else rec(`${id}/bench`, "RM-LEAK", "쉬는 사람이 받은 players 는 자기 한 줄뿐", true);

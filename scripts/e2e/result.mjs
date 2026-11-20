@@ -481,8 +481,8 @@ export function readBenchView(page) {
       timers: document.querySelectorAll(".mf-timer, [data-timer], [data-host-time]").length,
       chatInputs: document.querySelectorAll("[data-chat-input]").length,
       floats: document.querySelectorAll("[data-float], [data-float-stack]").length,
-      text: text(root.querySelector("p")),
-      buttons: [...root.querySelectorAll("button")].map((b) => text(b)).filter(Boolean),
+      text: text(root.querySelector(".mf-bench__text")),
+      buttons: [...root.querySelectorAll(".mf-bench__panel button")].map((b) => text(b)).filter(Boolean),
     };
   });
 }
