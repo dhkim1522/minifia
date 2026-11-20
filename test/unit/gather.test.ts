@@ -282,6 +282,18 @@ describe("재즈 바 첫 착석", () => {
     expect(layoutFor(state, moving, 1001)!.moves[0]).toEqual({ playerId: p.id, dest: { x: seat[0], z: seat[1] } });
     expect(layoutFor(state, moving, 3000)!.moves.some(({ playerId }) => playerId === p.id)).toBe(false);
   });
+
+  it("시작 전부터 같은 의자를 향한 구간도 배정에서 한 번 다시 계산한다", () => {
+    const state: RoomState = { ...lobbyOf(4), phase: "assigning", map: "bar" };
+    const w = worldOf(4);
+    const p = state.players[0]!;
+    const dest = BAR_SEATS_FX[0];
+    const moving = forceSegment(w, p.id, { p: [-425, -425, ...dest], t0: 1_000, v: 180 });
+    const layout = layoutFor(state, moving, 1_001)!;
+    expect(layout.moves.some(m => m.playerId === p.id)).toBe(true);
+    const assigned = { ...moving, lay: { key: layout.key, slots: layout.slots } };
+    expect(layoutFor(state, assigned, 1_002)!.moves.some(m => m.playerId === p.id)).toBe(false);
+  });
 });
 
 describe("layoutFor — 지목: 산 사람이 둘레 자리로 (DAY-04, E8 #31)", () => {

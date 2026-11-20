@@ -176,7 +176,7 @@ export interface GatherLayout {
   key: string;
   /** 참가자(산 사람 + 재판 단계의 변론자)마다 기억해 둘 둘레 자리. 변론자가 무대에서 돌아올 자리도 여기 있다. */
   slots: Record<string, Slot>;
-  /** 아직 목적지에 없는 사람의 이동(좌석 오름차순). 이미 그 목적지에 선(또는 걷는 중인) 사람은 없다. */
+  /** 좌석 오름차순 이동 목록. 첫 착석은 이미 의자로 향하는 구간도 배정 시간에 맞춘다. */
   moves: { playerId: string; dest: { x: number; z: number } }[];
 }
 
@@ -199,7 +199,8 @@ export function layoutFor(state: RoomState, w: WorldState, now: number): GatherL
   const defender = state.phase === "defense" || state.phase === "execution" ? state.verdict?.candidate : undefined;
   const runoffCand = state.phase === "runoff" ? state.runoff?.cand : undefined;
   const bar = (state.map ?? "bar") === "bar";
-  const settleOpening = bar && (state.phase === "roleReveal" || state.phase === "keyword");
+  const adjustOpening = bar && (state.phase === "roleReveal" || state.phase === "keyword"
+    || (state.phase === "assigning" && w.lay?.key !== key));
   // 옛 저장에는 표가 없다. 탈락자와 연결이 끊긴 사람도 원래 명단에 남는다.
   const chairs = bar ? state.barChairs ?? barChairAssignment(state.players.filter((p) => p.sat !== true).map((p) => p.seat)) : undefined;
 
@@ -253,7 +254,7 @@ export function layoutFor(state: RoomState, w: WorldState, now: number): GatherL
     if (dest === null) continue;
     const seg = w.segs[p.id]!;
     const p0 = seg.p;
-    if (p0[p0.length - 2] === dest.x && p0[p0.length - 1] === dest.z && (!settleOpening || segmentEndsAt(seg) <= now)) continue;
+    if (p0[p0.length - 2] === dest.x && p0[p0.length - 1] === dest.z && (!adjustOpening || segmentEndsAt(seg) <= now)) continue;
     moves.push({ playerId: p.id, dest });
   }
   return { key, slots, moves };
