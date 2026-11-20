@@ -1417,6 +1417,7 @@ export class Room extends DurableObject<Env> {
     const phase = this.room?.phase;
     const settledOpening = (phase === "roleReveal" || phase === "keyword")
       && this.mapDef().id === "bar" && this.syncLayout(now, false);
+    if (settledOpening) await this.flushWorld();
     await this.persistAndBroadcast();
     if (settledOpening) this.snapEachViewer(now);
     await this.syncPositions(now);
@@ -1630,7 +1631,8 @@ export class Room extends DurableObject<Env> {
     }
     this.world = { ...this.world, lay: { key: layout.key, slots: layout.slots } };
     if (broadcast && layout.moves.length > 0 && (assigning || settling || room.phase === "roleReveal")) this.snapEachViewer(now);
-    this.markWorldDirty();
+    // 방송을 미룬 호출자는 바뀐 위치를 즉시 저장한다.
+    if (broadcast) this.markWorldDirty();
     return layout.moves.length > 0;
   }
 
