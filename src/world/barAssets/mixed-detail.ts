@@ -1,5 +1,5 @@
-import { Color, Group, MathUtils, Vector3 } from "three";
-import { bell, eyes, face, oval, stroke, surface, type Point } from "./head-sculpt";
+import { Color, type Group, MathUtils, Vector3 } from "three";
+import { bell, eyes, face, markExpressionPart, oval, sculptRoot, stroke, surface, type HeadDensity, type Point } from "./head-sculpt";
 
 const { smoothstep } = MathUtils;
 
@@ -18,11 +18,11 @@ function tracedMouth(
     const y = middleY + lift * t * t;
     curve.push([x, y, front(x, y) + 0.003]);
   }
-  stroke(head, color, curve, width, 0.30);
+  markExpressionPart(stroke(head, color, curve, width, 0.30), "mouth", [0, middleY, 0]);
 }
 
-export function makePenguinDetail(): Group {
-  const head = new Group();
+export function makePenguinDetail(density: HeadDensity = "close"): Group {
+  const head = sculptRoot(density);
   const blue = new Color("#3a435a");
   const crown = new Color("#626f8c");
   const ivory = new Color("#f3eadb");
@@ -57,8 +57,8 @@ export function makePenguinDetail(): Group {
   return head;
 }
 
-export function makeFrogDetail(): Group {
-  const head = new Group();
+export function makeFrogDetail(density: HeadDensity = "close"): Group {
+  const head = sculptRoot(density);
   const green = new Color("#aabd53");
   const moss = new Color("#7c943c");
   const throat = new Color("#d6da87");
@@ -106,8 +106,8 @@ export function makeFrogDetail(): Group {
   return head;
 }
 
-export function makeHedgehogDetail(): Group {
-  const head = new Group();
+export function makeHedgehogDetail(density: HeadDensity = "close"): Group {
+  const head = sculptRoot(density);
   const bark = new Color("#765342");
   const tips = new Color("#a37a5c");
   const roots = new Color("#583e34");
@@ -154,8 +154,8 @@ export function makeHedgehogDetail(): Group {
   return head;
 }
 
-export function makeParrotDetail(): Group {
-  const head = new Group();
+export function makeParrotDetail(density: HeadDensity = "close"): Group {
+  const head = sculptRoot(density);
   const cherry = new Color("#cc555b");
   const feathers = new Color("#a43d51");
   const scarlet = new Color("#e08372");
@@ -199,8 +199,8 @@ export function makeParrotDetail(): Group {
   return head;
 }
 
-export function makeCrocodileDetail(): Group {
-  const head = new Group();
+export function makeCrocodileDetail(density: HeadDensity = "close"): Group {
+  const head = sculptRoot(density);
   const green = new Color("#458b77");
   const deep = new Color("#2c6258");
   const sage = new Color("#82a470");

@@ -119,6 +119,7 @@
 
 /* Figure: 세트 C 인물 그림(논리 크기 72×96). 끊김은 그림 파일이 아니라 흑백 + 60% 로 나타낸다. */
 .mf-figure { display: block; width: 72px; height: 96px; object-fit: contain; -webkit-user-drag: none; user-select: none; }
+.mf-figure--ghost { opacity: 0.6; }
 .mf-figure--disconnected { filter: grayscale(1); opacity: 0.6; }
 
 /* 이름표: 반투명 --night-900 알약. 자리 크기와 관계없이 14px/700, 한 줄 말줄임. 장면 위 절대 위치 변형은 테이블 부품이 더한다. */

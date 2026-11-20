@@ -2,6 +2,7 @@
 // three 본체를 끌고 오지 않는다. three 를 값으로 쓰는 모듈은 threeRenderer.ts·threeCamera.ts·maps/ 이고 06-13 이 import() 로만 연다.
 import type { Object3D } from "three";
 import type { AnimalId } from "../../shared/game/animals";
+import type { HeadDensity } from "./barAssets/head-sculpt";
 
 /** nightCitizen은 내 캐릭터에 약한 빛을 더한다. 살아 있는 참가자에게 보이는 인원은 서버가 정한다. */
 export type LightingPhase = "talk" | "vote" | "trial" | "night" | "nightCitizen" | "nightGhost" | "morning";
@@ -42,6 +43,7 @@ export interface CharacterHandle {
   /** 유령 그림 켜기/끄기(0083-2) — opts 는 불투명도·밝기 배율. 시험 가짜 객체 호환을 위해 optional (08-10) */
   setGhost?(on: boolean, opts?: { opacity?: number; tint?: number; animalForm?: boolean }): void;
   setSeated?(on: boolean, firstPerson: boolean): void;
+  setHeadDensity?(density: HeadDensity): void;
   setGaze?(yaw: number, pitch: number, pointYaw?: number): void;
   /** 의상 바꾸기 — 고른 의상·결과 화면 직업 의상. 시험 가짜 호환을 위해 optional */
   applyOutfit?(id: string): void;

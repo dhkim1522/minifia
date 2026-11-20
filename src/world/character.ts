@@ -32,12 +32,13 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { ANIMALS, type AnimalId } from "../../shared/game/animals";
 import { animalHatFit, animalLayout, animalSkin, buildAnimalBody, buildAnimalHead } from "./animalGeometry";
 import { animalMaterial, FINISH, type Finish } from "./animalFinish";
-import { seatedAnimalHead } from "./barAssets/animal-detail";
+import { applyDetailedFace, detailedAnimalHead } from "./barAssets/animal-detail";
+import type { HeadDensity } from "./barAssets/head-sculpt";
 import { MOVE_SPEED } from "../../shared/game/world";
 import { buildGhost3d, type Ghost3d } from "./ghost3d";
 import { createNoteRig, type NoteRig, noteKit } from "./postit";
 import { emoteCycles, REDUCED_Y_SCALE } from "./emoteCap";
-import { EMOTE_KEYS, EMOTES, EYE, type EmoteId, FACE_IDS, type FaceId, type Fig, FIGS, GHOST_SCALE, MAFIA_FIG_INDEX, MOUTH, type Outfit, OUTFITS, type OutfitId, type PoseKey, SKIN } from "./characterData";
+import { EMOTE_KEYS, EMOTES, EYE, type EmoteId, FACE_IDS, type FaceId, type Fig, FIGS, GHOST_SCALE, type KnownFaceId, MAFIA_FIG_INDEX, MOUTH, type Outfit, OUTFITS, type OutfitId, type PoseKey, SKIN } from "./characterData";
 
 /** 맵 위 크기 — 원래 키 약 2.1 단위를 약 1.7 로 줄여 쓴다 */
 export const CHAR_SCALE = 0.83;
@@ -1017,6 +1018,8 @@ export interface WorldCharacter {
    * 그림(setGhostArt)이 아직 없거나 불러오지 못했으면 스프라이트 없이 예전 반투명 몸(불투명도 0.6, 발광 없음)으로 대신하고, 그림이 오면 다음 update 부터 그림으로 바뀐다.
    */
   setGhost(on: boolean, opts?: GhostOpts & { animalForm?: boolean }): void;
+  setDetailedHead(on: boolean): void;
+  setHeadDensity(density: HeadDensity): void;
   setSeated(on: boolean, firstPerson: boolean): void;
   setGaze(yaw: number, pitch: number, pointYaw?: number): void;
   /** 유령일 때만 유령 그림(또는 대체 몸)의 불투명도를 바꾼다(유령이 아니면 무시) */
@@ -1136,6 +1139,7 @@ export function createCharacter(
   outfit: OutfitId = "coat",
   portraitColors?: Partial<Pick<Outfit, "coat" | "shirt" | "tie" | "pants" | "shoe">>,
   animal?: AnimalId,
+  { detailedHead = true, headDensity = "close" }: { detailedHead?: boolean; headDensity?: HeadDensity } = {},
 ): WorldCharacter {
   let outfitId: OutfitId = Object.hasOwn(OUTFITS, outfit) ? outfit : "coat";
   const figureForOutfit = (id: OutfitId) => id === "mafia" ? MAFIA_FIG_INDEX : figIndex;
@@ -1147,7 +1151,7 @@ export function createCharacter(
   const initialOutfit = outfitId;
   // 에셋 렌더에서만 카드 팔레트를 덮는다. 공개 의상 표와 지오메트리 캐시는 공유 상태를 바꾸지 않는다.
   const portraitOutfit = portraitColors === undefined ? undefined : { ...OUTFITS[initialOutfit], ...portraitColors };
-  let face = "base";
+  let face: KnownFaceId = "base";
   let lastPoseFace = "base";
   let dim = false;
   let disposed = false;
@@ -1214,14 +1218,14 @@ export function createCharacter(
   const cache = new Map<string, Merged>();
   const owned = new Set<BufferGeometry>();
   function merged(j: JointName, faceId: string = face): Merged {
-    const detailed = j === "head" && species !== undefined && (seated || (ghostOn && animalGhost)) && faceId === "base";
-    const key = j === "head" ? `${appearanceKey()}|${j}|${faceId}${detailed ? "|detail" : ""}` : `${appearanceKey()}|${j}`;
+    const detailed = j === "head" && species !== undefined && detailedHead;
+    const key = j === "head" ? `${appearanceKey()}|${j}|${detailed ? headDensity : faceId}` : `${appearanceKey()}|${j}`;
     let m = cache.get(key);
     if (!m) {
       const colors = (outfitId === initialOutfit ? portraitOutfit : undefined) ?? OUTFITS[outfitId];
       const { fig, parts } = model();
       m = mergeJoint(parts[j], colors, fig, faceId, species === undefined ? SKIN : animalSkin(species),
-        detailed ? seatedAnimalHead(species!) : undefined);
+        detailed ? detailedAnimalHead(species!, headDensity) : undefined);
       owned.add(m.geo);
       if (dim) paint(m, true);
       cache.set(key, m);
@@ -1270,12 +1274,20 @@ export function createCharacter(
   }
   refreshGlass();
 
+  function detailExpression(): void {
+    const geo = meshes.head.geometry;
+    if (species === undefined || !detailedHead || (geo.userData.face ?? "base") === face) return;
+    applyDetailedFace(geo, species, headDensity, face);
+    geo.userData.face = face;
+  }
+
   function refresh(js: readonly JointName[]): void {
     for (const j of js) {
       meshes[j].geometry = merged(j).geo;
       const shell = pickShells.get(j);
       if (shell) shell.geometry = meshes[j].geometry;
     }
+    if (js.includes("head")) detailExpression();
     refreshGlass();
   }
   /**
@@ -1306,10 +1318,11 @@ export function createCharacter(
     }
   }
   function showFace(id: string): void {
-    const f = (FACE_IDS as readonly string[]).includes(id) ? id : "base";
+    const f = (FACE_IDS as readonly string[]).includes(id) ? id as KnownFaceId : "base";
     if (f === face) return;
     face = f;
-    refresh(["head"]);
+    if (species !== undefined && detailedHead) detailExpression();
+    else refresh(["head"]);
   }
 
   /** 지금 화면에 올린 유령 모습이 그림인가(그림이 나중에 오거나 사라지면 update 가 다시 맞춘다) */
@@ -1463,18 +1476,25 @@ export function createCharacter(
         pickAge += dt;
         if (ring) ring.scale.setScalar(pickAnimate ? pickRingScale(pickAge, t) : 1);
       }
-      const headTop = (seated || animalGhost) && meshes.head.geometry.boundingBox ? 1 + meshes.head.geometry.boundingBox.max.y : GHOST_ART_H;
+      const headTop = detailedHead && species !== undefined && meshes.head.geometry.boundingBox ? 1 + meshes.head.geometry.boundingBox.max.y : GHOST_ART_H;
       return { headY: (headTop + (ghostOn ? 0 : pose.y)) * CHAR_SCALE };
     },
     setYaw(yaw) {
       root.rotation.y = yaw;
     },
+    setDetailedHead(on) {
+      if (disposed || detailedHead === on) return;
+      detailedHead = on;
+      if (species !== undefined) refresh(["head"]);
+    },
+    setHeadDensity(density) {
+      if (disposed || headDensity === density) return;
+      headDensity = density;
+      if (species !== undefined && detailedHead) refresh(["head"]);
+    },
     setSeated(on, ownEye) {
       if (disposed) return;
-      if (seated !== on) {
-        seated = on;
-        refresh(["head"]);
-      }
+      seated = on;
       if (firstPerson !== ownEye) {
         firstPerson = ownEye;
         for (const child of body.children) child.visible = !ownEye || child === groups.armA || child === groups.armB;
@@ -1515,7 +1535,7 @@ export function createCharacter(
       emote = { id, t: 0, stopT: null, reduced: opts?.reduced === true };
     },
     prewarm(faceId) {
-      if (disposed) return;
+      if (disposed || (species !== undefined && detailedHead)) return;
       for (const f of PREWARM_FACES) if (faceId === undefined || faceId === f) merged("head", f);
     },
     ownedGeometryCount() {
@@ -1529,14 +1549,12 @@ export function createCharacter(
     },
     setGhost(on, opts) {
       if (disposed) return;
-      const hadAnimalForm = ghostOn && animalGhost;
       if (!on) {
         if (!ghostOn) return;
         ghostOn = false;
         animalGhost = false;
         hopAge = null;
         if (sprite) sprite.root.position.y = 0;
-        if (hadAnimalForm && !seated && species !== undefined && face === "base") refresh(["head"]);
         applyGhost();
         return;
       }
@@ -1555,7 +1573,6 @@ export function createCharacter(
       }
       if (opts?.opacity !== undefined) ghostAlpha = clamp01(opts.opacity);
       if (opts?.tint !== undefined) ghostTint = clamp01(opts.tint);
-      if (hadAnimalForm !== animalGhost && !seated && species !== undefined && face === "base") refresh(["head"]);
       applyGhost();
     },
     holdPose(id) {
@@ -1699,6 +1716,7 @@ export const characterKit = {
   /** 유령 그림 텍스처가 준비됐나 — 런타임이 E2E 훅 window.__mfGhosts 의 ready 로 알린다 */
   ghostReady: ghostArtReady,
   create(figIndex: number, outfitId: string, animal?: AnimalId): WorldCharacter {
-    return createCharacter(figIndex, Object.hasOwn(OUTFITS, outfitId) ? (outfitId as OutfitId) : "coat", undefined, animal);
+    return createCharacter(figIndex, Object.hasOwn(OUTFITS, outfitId) ? (outfitId as OutfitId) : "coat",
+      undefined, animal, { headDensity: "world" });
   },
 };

@@ -2,7 +2,7 @@ import {
   CatmullRomCurve3, Color, Float32BufferAttribute, Group, MathUtils, Mesh,
   MeshStandardMaterial, TubeGeometry, Vector3,
 } from "three";
-import { bell, eyes, face, oval, stroke, surface, type Point } from "./head-sculpt";
+import { bell, eyes, face, markExpressionPart, oval, sculptRoot, sculptSegments, stroke, surface, type HeadDensity, type Point } from "./head-sculpt";
 
 type Front = (x: number, y: number) => number;
 type Pair = readonly [number, number];
@@ -16,13 +16,15 @@ function place(front: Front, x: number, y: number, lift = 0): Point {
   return [x, y, front(x, y) + lift];
 }
 
-function line(head: Group, front: Front, points: readonly Pair[], tint: string, width = 0.008): void {
-  stroke(head, tint, points.map(([x, y]) => place(front, x, y, width * 0.38)), width, 0.25);
+function line(head: Group, front: Front, points: readonly Pair[], tint: string, width = 0.008): Mesh {
+  return stroke(head, tint, points.map(([x, y]) => place(front, x, y, width * 0.38)), width, 0.25);
 }
 
 function smallSmile(head: Group, front: Front, center: number, tint: string): void {
+  const lips = markExpressionPart(new Group(), "mouth", [0, center, 0]);
+  head.add(lips);
   for (const side of sides) {
-    line(head, front, [[0, center], [side * 0.045, center - 0.023],
+    line(lips, front, [[0, center], [side * 0.045, center - 0.023],
       [side * 0.084, center - 0.021], [side * 0.113, center + 0.007]], tint);
   }
 }
@@ -66,8 +68,8 @@ function ears(head: Group, spec: EarProfile): void {
 const rabbitBlush = new Color("#e3a1a9");
 const rabbitLid = "#cbb7c6";
 
-export function makeRabbitDetail(): Group {
-  const head = new Group();
+export function makeRabbitDetail(density: HeadDensity = "close"): Group {
+  const head = sculptRoot(density);
   head.name = "rabbit-detail";
   ears(head, {
     root: [0.163, 0.261, -0.02], tip: [0.319, 0.954, -0.066],
@@ -102,8 +104,8 @@ function snoutHoles(x: number, y: number): number {
   return Math.exp(-(fromCenter ** 1.36));
 }
 
-export function makePigDetail(): Group {
-  const head = new Group();
+export function makePigDetail(density: HeadDensity = "close"): Group {
+  const head = sculptRoot(density);
   head.name = "pig-detail";
   ears(head, {
     root: [0.255, 0.287, 0.025], tip: [0.570, 0.203, 0.116],
@@ -123,7 +125,8 @@ export function makePigDetail(): Group {
         .lerp(pigNostril, front * ramp(snoutHoles(p.x, p.y), 0.13, 0.71));
     });
   eyes(head, place(front, 0.221, 0.035), "#d98d9e", 0.07, [0.046, 0.069]);
-  line(head, front, [[-0.131, -0.215], [-0.071, -0.248], [0, -0.259], [0.071, -0.248], [0.131, -0.215]], "#976471");
+  markExpressionPart(line(head, front, [[-0.131, -0.215], [-0.071, -0.248], [0, -0.259], [0.071, -0.248], [0.131, -0.215]], "#976471"),
+    "mouth", [0, -0.235, 0]);
   return head;
 }
 
@@ -150,8 +153,8 @@ function mane(head: Group): void {
   }, 58, 34);
 }
 
-export function makeLionDetail(): Group {
-  const head = new Group();
+export function makeLionDetail(density: HeadDensity = "close"): Group {
+  const head = sculptRoot(density);
   head.name = "lion-detail";
   mane(head);
   ears(head, {
@@ -198,8 +201,8 @@ function horn(head: Group, side: number): void {
     );
   });
   const path = new CatmullRomCurve3(knots);
-  const segments = 64;
-  const around = 14;
+  const segments = sculptSegments(head, 64, 30);
+  const around = sculptSegments(head, 14, 8);
   const geometry = new TubeGeometry(path, segments, 0.138, around, false);
   const vertices = geometry.attributes.position!;
   const vertex = new Vector3();
@@ -237,8 +240,8 @@ function woolTufts(x: number, y: number): number {
   );
 }
 
-export function makeRamDetail(): Group {
-  const head = new Group();
+export function makeRamDetail(density: HeadDensity = "close"): Group {
+  const head = sculptRoot(density);
   head.name = "ram-detail";
   const front = face(head, [0.445, 0.476, 0.445],
     (x, y) => {
@@ -281,8 +284,8 @@ function batFang(head: Group, front: Front, side: number): void {
   }, (_u, _p, out) => out.copy(ivory), 18, 12, 0.55);
 }
 
-export function makeBatDetail(): Group {
-  const head = new Group();
+export function makeBatDetail(density: HeadDensity = "close"): Group {
+  const head = sculptRoot(density);
   head.name = "bat-detail";
   ears(head, {
     root: [0.265, 0.111, -0.019], tip: [0.660, 0.506, 0.022],
@@ -303,7 +306,8 @@ export function makeBatDetail(): Group {
         .lerp(batBlush, 0.67 * cheek * front);
     });
   eyes(head, place(front, 0.184, 0.029), "#84709b", 0.06, [0.05, 0.070]);
-  line(head, front, [[-0.12, -0.152], [-0.057, -0.181], [0, -0.186], [0.057, -0.181], [0.12, -0.152]], ink);
+  markExpressionPart(line(head, front, [[-0.12, -0.152], [-0.057, -0.181], [0, -0.186], [0.057, -0.181], [0.12, -0.152]], ink),
+    "mouth", [0, -0.167, 0]);
   for (const side of sides) batFang(head, front, side);
   return head;
 }

@@ -3,6 +3,7 @@ import {
   LinearMipmapLinearFilter, MathUtils, Mesh, MeshStandardMaterial, RepeatWrapping,
   RGBAFormat, SphereGeometry, TubeGeometry, Vector3,
 } from "three";
+import { markExpressionPart, sculptRoot, sculptSegments, type HeadDensity } from "./head-sculpt";
 
 function feltTexture(): DataTexture {
   const size = 96;
@@ -110,7 +111,9 @@ function earColor(unit: Vector3, _position: Vector3, out: Color): void {
 }
 
 /** A single sculpted surface, with numerical smooth normals across the sphere seam. */
-function sculpt(surface: Surface, paint: (unit: Vector3, position: Vector3, color: Color) => void, width: number, height: number): SphereGeometry {
+function sculpt(group: Group, surface: Surface, paint: (unit: Vector3, position: Vector3, color: Color) => void, width: number, height: number): SphereGeometry {
+  width = sculptSegments(group, width, 20);
+  height = sculptSegments(group, height, 12);
   const geometry = new SphereGeometry(1, width, height);
   const positions = geometry.attributes.position!;
   const normals = geometry.attributes.normal!;
@@ -147,7 +150,7 @@ function sculpt(surface: Surface, paint: (unit: Vector3, position: Vector3, colo
 }
 
 function insetSphere(group: Group, x: number, y: number, size: readonly [number, number, number], material: MeshStandardMaterial, offset = 0): Mesh {
-  const mesh = new Mesh(new SphereGeometry(1, 20, 14), material);
+  const mesh = new Mesh(new SphereGeometry(1, sculptSegments(group, 20, 12), sculptSegments(group, 14, 8)), material);
   mesh.scale.set(...size);
   mesh.position.set(x, y, frontZ(x, y) + offset);
   const dx = (frontZ(x + 0.003, y) - frontZ(x - 0.003, y)) / 0.006;
@@ -159,8 +162,8 @@ function insetSphere(group: Group, x: number, y: number, size: readonly [number,
 
 function expression(group: Group, points: readonly (readonly [number, number])[], radius: number, material: MeshStandardMaterial): void {
   const path = new CatmullRomCurve3(points.map(([x, y]) => new Vector3(x, y, frontZ(x, y) + radius * 0.15)));
-  const segments = 16;
-  const sides = 6;
+  const segments = sculptSegments(group, 16, 10);
+  const sides = sculptSegments(group, 6, 5);
   const geometry = new TubeGeometry(path, segments, radius, sides, false);
   const positions = geometry.attributes.position!;
   const center = new Vector3();
@@ -179,21 +182,23 @@ function expression(group: Group, points: readonly (readonly [number, number])[]
 }
 
 /** Origin is the head center, with +Z facing the table. */
-export function makeFoxDetail(): Group {
-  const group = new Group();
+export function makeFoxDetail(density: HeadDensity = "close"): Group {
+  const group = sculptRoot(density);
   group.name = "fox-detail";
-  group.add(new Mesh(sculpt(faceSurface, faceColor, 84, 56), felt));
+  group.add(new Mesh(sculpt(group, faceSurface, faceColor, 84, 56), felt));
+  const lips = markExpressionPart(new Group(), "mouth", [0, -0.161, 0]);
+  group.add(lips);
   for (const side of [-1, 1]) {
-    group.add(new Mesh(sculpt(earSurface(side), earColor, 42, 34), felt));
+    group.add(new Mesh(sculpt(group, earSurface(side), earColor, 42, 34), felt));
     const x = side * 0.194;
     const y = 0.017;
-    const eye = insetSphere(group, x, y, [0.055, 0.079, 0.034], eyes, 0.005);
-    const highlight = new Mesh(new SphereGeometry(1, 10, 7), glint);
+    const eye = markExpressionPart(insetSphere(group, x, y, [0.055, 0.079, 0.034], eyes, 0.005), "eye");
+    const highlight = new Mesh(new SphereGeometry(1, sculptSegments(group, 10, 8), sculptSegments(group, 7, 5)), glint);
     highlight.scale.set(0.081, 0.057, 0.027);
     highlight.position.set(-0.29, 0.29, 0.91);
     eye.add(highlight);
     expression(group, [[x - 0.061, y + 0.027], [x - 0.036, y + 0.071], [x, y + 0.084], [x + 0.035, y + 0.066], [x + 0.058, y + 0.022]], 0.005, lids);
-    expression(group, [[0, -0.153], [side * 0.027, -0.178], [side * 0.069, -0.181], [side * 0.109, -0.154]], 0.007, mouth);
+    expression(lips, [[0, -0.153], [side * 0.027, -0.178], [side * 0.069, -0.181], [side * 0.109, -0.154]], 0.007, mouth);
   }
   insetSphere(group, 0, -0.099, [0.073, 0.044, 0.037], nose, 0.01);
   expression(group, [[0, -0.119], [0, -0.140], [0, -0.153]], 0.006, mouth);

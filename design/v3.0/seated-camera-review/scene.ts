@@ -10,10 +10,6 @@ import { buildBarScene, Bundle, tf, under } from "../../../src/world/maps/bar";
 import { LADDER } from "../../../src/world/renderer";
 import { addFinishedRoom } from "./finish";
 import { addDetailedTable } from "../../../src/world/barAssets/table-detail";
-import { makeElephantDetail } from "../../../src/world/barAssets/elephant-detail";
-import { makeFoxDetail } from "../../../src/world/barAssets/fox-detail";
-import { makeBatDetail, makeLionDetail, makePigDetail, makeRabbitDetail, makeRamDetail } from "../../../src/world/barAssets/mammal-detail";
-import { makeCrocodileDetail, makeFrogDetail, makeHedgehogDetail, makeParrotDetail, makePenguinDetail } from "../../../src/world/barAssets/mixed-detail";
 import { addChairParts, addSeatedRoomShell } from "../../../src/world/barAssets/seated-bar";
 import { occupiedSlots } from "./table-layout";
 import type { TableCount } from "./table-layout";
@@ -55,23 +51,7 @@ export function seatedPeople(count: TableCount, animal?: AnimalId): readonly Rev
   });
 }
 
-const detailedHeads: Record<AnimalId, () => Object3D> = {
-  rabbit: makeRabbitDetail, elephant: makeElephantDetail, crocodile: makeCrocodileDetail,
-  penguin: makePenguinDetail, fox: makeFoxDetail, pig: makePigDetail,
-  lion: makeLionDetail, ram: makeRamDetail, frog: makeFrogDetail,
-  parrot: makeParrotDetail, hedgehog: makeHedgehogDetail, bat: makeBatDetail,
-};
-const headCache = new Map<AnimalId, Object3D>();
 const HEAD_CENTER_Y = 0.431; // 현재 동물 목 리그의 머리 중심
-
-function copyDetailedHead(animal: AnimalId): Object3D {
-  let master = headCache.get(animal);
-  if (!master) {
-    master = detailedHeads[animal]();
-    headCache.set(animal, master);
-  }
-  return master.clone();
-}
 
 const oppositeSlot = 2;
 const ringAngles = [0, -0.83, 3.09, 0.87, -1.64, 1.66, -2.39, 2.41];
@@ -212,7 +192,8 @@ export async function mountScene(
   const previewSeat = previewSeatOf(people);
   const actors = people.map((person, i) => {
     const { slot } = person;
-    const character = createCharacter(slot, "coat", { coat: coatColors[slot]!, tie: slot === oppositeSlot ? "#c88844" : "#a2a0b7" }, person.animal);
+    const character = createCharacter(slot, "coat", { coat: coatColors[slot]!, tie: slot === oppositeSlot ? "#c88844" : "#a2a0b7" },
+      person.animal, { detailedHead: detailed });
     const model = character.root;
     const pos = places[slot]!;
     model.position.set(pos.x, chairY - 0.30, pos.z);
@@ -220,12 +201,6 @@ export async function mountScene(
     character.setYaw(facing);
     const body = model.getObjectByName("body")!;
     const head = model.getObjectByName("neck")!;
-    const detail = detailed ? copyDetailedHead(person.animal) : undefined;
-    if (detail) {
-      for (const part of head.children) part.visible = false;
-      detail.position.y = HEAD_CENTER_Y;
-      head.add(detail);
-    }
     const left = model.getObjectByName("armA")!;
     const right = model.getObjectByName("armB")!;
     for (const name of ["legA", "legB"]) model.getObjectByName(name)!.rotation.x = -1.33;
@@ -238,9 +213,8 @@ export async function mountScene(
     if (i === 0 && mode === "shoulder") head.visible = false;
     root.add(model);
     model.updateWorldMatrix(true, true);
-    const headTop = new Box3().setFromObject(detail ?? head).max.y;
+    const headTop = new Box3().setFromObject(head).max.y;
     const pickMeshes = character.bodyMeshes().filter(mesh => mesh.visible);
-    detail?.traverse(part => { if (part instanceof Mesh) pickMeshes.push(part); });
     const headCenter = head.localToWorld(new Vector3(0, HEAD_CENTER_Y, 0));
     let restYaw = slot === oppositeSlot ? -0.095 : 0;
     if (preview && i === previewSeat) restYaw = MathUtils.clamp(headAim(headCenter, viewer, facing).yaw, -0.54, 0.54);

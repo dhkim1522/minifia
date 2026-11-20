@@ -22,7 +22,6 @@ import {
   animalRoleArtSrc,
   faceSrc,
   figureSrc,
-  ghostSrc,
   journalArt,
   mapCardSrc,
   outfitCardSrc,
@@ -198,14 +197,13 @@ describe("미리 받기 목록", () => {
     expect(hrefs).toHaveLength(2);
   });
 
-  it("역할 화면 목록: 직업 그림 4종 전부와 아침·낮·밤 배경, 유령 그림(역할과 무관하게 같은 목록)", () => {
+  it("역할 화면 목록: 직업 그림 4종 전부와 아침·낮·밤 배경(역할과 무관하게 같은 목록)", () => {
     const hrefs = rolePreloadList().map((item) => item.href);
     for (const role of ROLE_IDS) expect(hrefs).toContain(roleArtSrc(role).src);
     expect(hrefs).toContain(`/backgrounds/bg_game_morning.webp?v=${ASSET_VERSION}`);
     expect(hrefs).toContain(`/backgrounds/bg_game_day.webp?v=${ASSET_VERSION}`);
     expect(hrefs).toContain(`/backgrounds/bg_game_night.webp?v=${ASSET_VERSION}`);
-    expect(hrefs).toContain(ghostSrc().src);
-    expect(hrefs).toHaveLength(20);
+    expect(hrefs).toHaveLength(19);
     expect(rolePreloadList()).toEqual(rolePreloadList());
   });
 
@@ -250,7 +248,7 @@ describe("미리 받기 목록", () => {
       }
       vi.mocked(preload).mockClear();
       preloadRoleAssets();
-      expect(preload).toHaveBeenCalledTimes(20);
+      expect(preload).toHaveBeenCalledTimes(rolePreloadList().length);
       vi.mocked(preload).mockClear();
       preloadDuskAssets();
       expect(preload).toHaveBeenCalledTimes(1);

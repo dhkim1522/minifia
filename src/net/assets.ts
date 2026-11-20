@@ -29,9 +29,9 @@ export type PreloadItem = { href: string; imageSrcSet?: string };
  * 정적 그림 주소 끝에 붙이는 값. 파일 이름이 같아도 그림을 바꾼 배포가 바로 보이게 한다
  * (정적 그림 캐시가 max-age 1일이라 같은 주소는 하루 동안 옛 그림이 나온다). 그림을 바꾸면 값을 바꾼다.
  */
-export const ASSET_VERSION = "noir-12";
+export const ASSET_VERSION = "noir-13";
 /** 입장 배경은 캐릭터·맵 그림과 별도로 갱신한다. */
-export const ENTRY_ART_VERSION = "home-table-2";
+export const ENTRY_ART_VERSION = "home-table-3";
 export const STATIONERY_VERSION = "stationery-1";
 
 type StationeryAsset = "paper" | "will-paper" | "seal" | "role-front" | "role-back" | "note" | `journal-${JournalRole}`;
@@ -41,7 +41,7 @@ export function stationeryArt(asset: StationeryAsset): string {
 }
 
 // 파일 이름의 @ 는 URL 에서 %40 으로 쓴다.
-function png(dir: "table" | "roles" | "ghost", id: string, scale: 2 | 4): string {
+function png(dir: "table" | "roles", id: string, scale: 2 | 4): string {
   return `/characters/${dir}/${id}_default%40${scale}x.png?v=${ASSET_VERSION}`;
 }
 
@@ -87,16 +87,6 @@ export function seatColorVar(seat: number): string {
   return `var(--seat-${(((seat % 8) + 8) % 8) + 1})`;
 }
 
-// 탈락한 사람의 자리에 인물 대신 쓰는 유령 그림(ASSET_SPEC §6, 결정 0021). 좌석별 유형 없음. 72px 표시 기준 밀도.
-export function ghostSrc(): { src: string; srcSet: string } {
-  return { src: png("ghost", "ghost", 2), srcSet: `${png("ghost", "ghost", 2)} 2x, ${png("ghost", "ghost", 4)} 4x` };
-}
-
-// 3D 장면의 유령 그림 스프라이트 텍스처 주소(0083-2). 4x 한 장을 모든 탈락자가 함께 쓴다. 입장 때 미리 받는 목록(ghostSrc)과 같은 파일이다.
-export function ghostSpriteSrc(): string {
-  return png("ghost", "ghost", 4);
-}
-
 /** 옷장 카드에는 지금 동물의 의상을 보여 준다. 기본 코트는 전신 그림을 공유한다. */
 export function outfitCardSrc(id: OutfitId, animal?: AnimalId): string {
   if (animal !== undefined) return animalImageSrc(animal, `${id === "coat" ? "figure" : id}-sm.png`);
@@ -140,7 +130,7 @@ export function entryPreloadList(): PreloadItem[] {
 }
 
 /**
- * 대기실·배정 동안 직업 그림 4종, 아침·낮·밤 배경, 유령 그림과 종이 소품을 미리 받는다.
+ * 대기실·배정 동안 직업 그림 4종, 아침·낮·밤 배경과 종이 소품을 미리 받는다.
  * 해질녘 배경은 낮 토론 진입 때 따로 받는다(duskPreloadList).
  * 어떤 역할이든 같은 목록 — 요청 패턴으로 역할이 드러나지 않는다(Pitfall 20).
  */
@@ -149,7 +139,6 @@ export function rolePreloadList(animal?: AnimalId): PreloadItem[] {
     const { src, srcSet } = roleArtSrc(role, animal);
     return { href: src, imageSrcSet: srcSet };
   });
-  const ghost = ghostSrc();
   // 일지 표지와 아이콘도 역할과 무관하게 모두 받는다(T-03.1-18).
   const journals = JOURNAL_ROLES.flatMap((role) => [
     { href: journalArt(role, "cover").src },
@@ -162,7 +151,6 @@ export function rolePreloadList(animal?: AnimalId): PreloadItem[] {
     { href: backdropUrl("game", "morning") },
     { href: backdropUrl("game", "day") },
     { href: backdropUrl("game", "night") },
-    { href: ghost.src, imageSrcSet: ghost.srcSet },
     ...journals,
     ...stationery,
   ];

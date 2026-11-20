@@ -2,8 +2,29 @@ import {
   CatmullRomCurve3, Color, Float32BufferAttribute, Group, MathUtils, Mesh,
   MeshStandardMaterial, SphereGeometry, TubeGeometry, Vector3,
 } from "three";
+import type { Object3D } from "three";
 
 export type Point = readonly [x: number, y: number, z: number];
+export type ExpressionKind = "eye" | "mouth";
+export type HeadDensity = "close" | "world";
+
+export function sculptRoot(density: HeadDensity): Group {
+  const root = new Group();
+  root.userData.headDensity = density;
+  return root;
+}
+
+export function sculptSegments(parent: Object3D, count: number, minimum: number): number {
+  let node: Object3D | null = parent;
+  while (node && node.userData.headDensity === undefined) node = node.parent;
+  return node?.userData.headDensity === "world" ? Math.max(minimum, Math.round(count * 0.56)) : count;
+}
+
+export function markExpressionPart<T extends Object3D>(part: T, kind: ExpressionKind, pivot?: Point): T {
+  part.userData.expressionKind = kind;
+  if (pivot) part.userData.expressionPivot = pivot;
+  return part;
+}
 type Outline = (unit: Vector3, out: Vector3) => void;
 type Shade = (unit: Vector3, position: Vector3, out: Color) => void;
 
@@ -14,6 +35,8 @@ export function bell(value: number, radius: number): number {
 export function surface(
   parent: Group, map: Outline, shade: Shade, slices = 52, rings = 34, roughness = 0.91,
 ): Mesh {
+  slices = sculptSegments(parent, slices, 12);
+  rings = sculptSegments(parent, rings, 8);
   const geometry = new SphereGeometry(1, slices, rings);
   const positions = geometry.getAttribute("position");
   const colors = new Float32Array(positions.count * 3);
@@ -66,11 +89,13 @@ export function face(
 }
 
 const ovalShape = new SphereGeometry(1, 24, 16);
+const worldOvalShape = new SphereGeometry(1, 14, 9);
 
 export function oval(
   parent: Group, color: string, at: Point, radii: Point, tilt = 0, roughness = 0.88,
 ): Mesh {
-  const mesh = new Mesh(ovalShape, new MeshStandardMaterial({ color, roughness }));
+  const shape = sculptSegments(parent, 24, 14) === 24 ? ovalShape : worldOvalShape;
+  const mesh = new Mesh(shape, new MeshStandardMaterial({ color, roughness }));
   mesh.position.set(...at);
   mesh.scale.set(...radii);
   mesh.rotation.z = tilt;
@@ -82,22 +107,22 @@ export function eyes(
   parent: Group, [x, y, z]: Point, lidTint: string, tilt = 0, [rx, ry]: readonly [number, number] = [0.052, 0.068],
 ): void {
   for (const side of [-1, 1]) {
-    const eye = new Group();
+    const eye = markExpressionPart(new Group(), "eye");
     eye.position.set(side * x, y, z);
     eye.rotation.set(-0.05, side * 0.31, side * tilt);
+    parent.add(eye);
     oval(eye, lidTint, [0, 0.004, -0.017], [rx * 1.27, ry * 1.19, 0.040]);
     oval(eye, "#241c25", [0, 0, 0.004], [rx, ry, 0.035], 0, 0.27);
     oval(eye, "#f8dec3", [-rx * 0.26, ry * 0.30, 0.034], [0.011, 0.014, 0.006], 0, 0.31);
-    parent.add(eye);
   }
 }
 
 export function stroke(
   parent: Group, color: string, points: readonly Point[], width: number, taper = 0.28,
-): void {
+): Mesh {
   const path = new CatmullRomCurve3(points.map(point => new Vector3(...point)));
-  const steps = 24;
-  const sides = 6;
+  const steps = sculptSegments(parent, 24, 10);
+  const sides = sculptSegments(parent, 6, 5);
   const geometry = new TubeGeometry(path, steps, width, sides, false);
   const positions = geometry.getAttribute("position");
   const center = new Vector3();
@@ -113,5 +138,7 @@ export function stroke(
     }
   }
   geometry.computeVertexNormals();
-  parent.add(new Mesh(geometry, new MeshStandardMaterial({ color, roughness: 0.86 })));
+  const mesh = new Mesh(geometry, new MeshStandardMaterial({ color, roughness: 0.86 }));
+  parent.add(mesh);
+  return mesh;
 }

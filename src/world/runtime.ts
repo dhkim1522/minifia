@@ -1322,7 +1322,9 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         }
       }
       a.pos = { x: at.x, z: at.z };
-      a.handle.setSeated?.(posed, posed && localTable !== null && table?.mode === "eye" && a.seat === mySeat);
+      const eyeView = table?.mode === "eye" && localTable !== null;
+      a.handle.setHeadDensity?.(posed && eyeView ? "close" : "world");
+      a.handle.setSeated?.(posed, posed && eyeView && a.seat === mySeat);
       const picked = aim === undefined ? null : tablePosition(aim, sNow);
       let headTarget: V3 | null = null;
       if (posed && tableFurnished) {

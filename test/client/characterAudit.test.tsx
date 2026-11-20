@@ -45,7 +45,7 @@ vi.mock("../../src/world/runtime", async (importOriginal) => {
 });
 const { RoomScreen } = await import("../../src/screens/RoomScreen");
 const { JoinByLink } = await import("../../src/screens/JoinByLink");
-const { figureSrc, ghostSrc } = await import("../../src/net/assets");
+const { figureSrc } = await import("../../src/net/assets");
 
 const NOW = 1_700_000_000_000;
 /** 5글자 닉네임 여덟 */

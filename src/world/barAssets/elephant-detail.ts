@@ -12,6 +12,7 @@ import {
   Vector3,
 } from "three";
 import { MarchingCubes } from "three/addons/objects/MarchingCubes.js";
+import { markExpressionPart, sculptRoot, sculptSegments, type HeadDensity } from "./head-sculpt";
 
 type Point = readonly [number, number, number];
 const blue = new Color("#90b6df");
@@ -95,8 +96,7 @@ function faceField(x: number, y: number, z: number): number {
   return d;
 }
 
-function sculptFace(): BufferGeometry {
-  const resolution = 72;
+function sculptFace(resolution: number): BufferGeometry {
   const half = resolution / 2;
   const size = 0.88;
   const offsetZ = 0.15;
@@ -148,8 +148,8 @@ function sculptFace(): BufferGeometry {
   return geometry;
 }
 
-function sculptEar(side: number): SphereGeometry {
-  const geometry = new SphereGeometry(1, 36, 26);
+function sculptEar(head: Group, side: number): SphereGeometry {
+  const geometry = new SphereGeometry(1, sculptSegments(head, 36, 20), sculptSegments(head, 26, 16));
   const position = geometry.getAttribute("position");
   const colors = new Float32Array(position.count * 3);
   const lining = new Color("#748aae");
@@ -177,7 +177,11 @@ function sculptEar(side: number): SphereGeometry {
 }
 
 function volume(parent: Group, color: string, at: Point, scale: Point, roughness = 0.79): Mesh {
-  const mesh = new Mesh(new SphereGeometry(1, 24, 16), new MeshStandardMaterial({ color, roughness }));
+  const highlight = Math.max(...scale) < 0.02;
+  const width = sculptSegments(parent, 24, 12);
+  const height = sculptSegments(parent, 16, 8);
+  const shape = width !== 24 && highlight ? new SphereGeometry(1, 8, 5) : new SphereGeometry(1, width, height);
+  const mesh = new Mesh(shape, new MeshStandardMaterial({ color, roughness }));
   mesh.position.set(...at);
   mesh.scale.set(...scale);
   parent.add(mesh);
@@ -186,26 +190,29 @@ function volume(parent: Group, color: string, at: Point, scale: Point, roughness
 
 function crease(parent: Group, color: string, points: readonly Point[], radius: number): void {
   const path = new CatmullRomCurve3(points.map((point) => new Vector3(...point)));
-  parent.add(new Mesh(new TubeGeometry(path, 16, radius, 8), new MeshStandardMaterial({ color, roughness: 0.91 })));
+  const shape = new TubeGeometry(path, sculptSegments(parent, 16, 10), radius, sculptSegments(parent, 8, 5));
+  parent.add(new Mesh(shape, new MeshStandardMaterial({ color, roughness: 0.91 })));
 }
 
 const skin = new MeshPhysicalMaterial({ vertexColors: true, roughness: 0.82, sheen: 0.23, sheenColor: new Color("#7e9aba"), sheenRoughness: 0.84 });
-let faceGeometry: BufferGeometry | undefined;
-let earGeometries: [SphereGeometry, SphereGeometry] | undefined;
+const shapes = new Map<HeadDensity, { face: BufferGeometry; ears: SphereGeometry[] }>();
 
 /** 목 관절에 기존 머리 중심 좌표로 부착한다. */
-export function makeElephantDetail(): Group {
-  const head = new Group();
+export function makeElephantDetail(density: HeadDensity = "close"): Group {
+  const head = sculptRoot(density);
   head.name = "elephant-detail";
-  faceGeometry ??= sculptFace();
-  earGeometries ??= [sculptEar(-1), sculptEar(1)];
-  const face = new Mesh(faceGeometry, skin);
+  let shape = shapes.get(density);
+  if (!shape) {
+    shape = { face: sculptFace(density === "world" ? 32 : 72), ears: [sculptEar(head, -1), sculptEar(head, 1)] };
+    shapes.set(density, shape);
+  }
+  const face = new Mesh(shape.face, skin);
   face.name = "elephant-face-and-trunk";
   head.add(face);
-  for (const ear of earGeometries) head.add(new Mesh(ear, skin));
+  for (const ear of shape.ears) head.add(new Mesh(ear, skin));
 
   for (const side of [-1, 1]) {
-    const socket = new Group();
+    const socket = markExpressionPart(new Group(), "eye");
     socket.position.set(side * 0.203, 0.063, 0.438);
     socket.rotation.y = side * 0.38;
     head.add(socket);

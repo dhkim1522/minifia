@@ -3,10 +3,11 @@
 import { readFileSync } from "node:fs";
 import { Box3, type BufferGeometry, Color, type Mesh, type Object3D, Triangle, Vector3 } from "three";
 import { describe, expect, it, vi } from "vitest";
-import { ANIMAL_IDS } from "../../shared/game/animals";
+import { ANIMAL_IDS, type AnimalId } from "../../shared/game/animals";
 import { EMOTE_MS } from "../../shared/game/emote";
 import { EMOTE_IDS, MAX_PLAYERS } from "../../shared/protocol";
-import { createCharacter } from "../../src/world/character";
+import { characterKit, createCharacter } from "../../src/world/character";
+import { detailedAnimalHead } from "../../src/world/barAssets/animal-detail";
 import { EMOTE_KEYS, EMOTES, type EmoteId, FACE_IDS, FIGS, OUTFITS, type OutfitId } from "../../src/world/characterData";
 
 const OUTFIT_IDS = Object.keys(OUTFITS) as OutfitId[];
@@ -141,7 +142,7 @@ describe("동물 캐릭터의 외형과 렌더링 예산", () => {
   it("동물 12종과 의상 모두 관절 여섯 개와 기존 삼각형 예산을 지킨다", () => {
     for (const animal of ANIMAL_IDS) {
       for (const outfit of OUTFIT_IDS) {
-        const c = createCharacter(0, outfit, undefined, animal);
+        const c = characterKit.create(0, outfit, animal);
         const ms = meshesOf(c.root);
         const size = new Box3().setFromObject(c.root).getSize(new Vector3());
         const label = `${animal}/${outfit}`;
@@ -154,6 +155,16 @@ describe("동물 캐릭터의 외형과 렌더링 예산", () => {
         expect(c.ownedGeometryCount(), label).toBeLessThanOrEqual(MAX_OWNED_GEOMETRIES);
         c.dispose();
       }
+    }
+  });
+
+  it("월드 거리에서 같은 12종 머리 실루엣을 낮은 밀도로 그린다", () => {
+    for (const animal of ANIMAL_IDS) {
+      const close = detailedAnimalHead(animal);
+      const world = detailedAnimalHead(animal, "world");
+      expect(triangles(world), animal).toBeLessThan(triangles(close));
+      expect(world.boundingBox!.min.distanceTo(close.boundingBox!.min), animal).toBeLessThan(0.045);
+      expect(world.boundingBox!.max.distanceTo(close.boundingBox!.max), animal).toBeLessThan(0.045);
     }
   });
 
@@ -209,6 +220,13 @@ describe("동물 캐릭터의 외형과 렌더링 예산", () => {
     const c = createCharacter(0, "coat", undefined, "rabbit");
     const head = c.root.getObjectByName("neck")!.children[0] as Mesh;
     const torso = c.root.getObjectByName("body")!.children.find((obj) => (obj as Mesh).isMesh)! as Mesh;
+    const hasSculpt = (animal: AnimalId): boolean => {
+      const sculpt = detailedAnimalHead(animal);
+      const positions = head.geometry.getAttribute("position").array;
+      const colors = head.geometry.getAttribute("color").array;
+      return sculpt.getAttribute("position").array.every((value, i) => positions[i] === value) &&
+        sculpt.getAttribute("color").array.every((value, i) => colors[i] === value);
+    };
     const hasColor = (mesh: Mesh, hex: string): boolean => {
       const rgb = new Color(hex);
       const attr = mesh.geometry.getAttribute("color");
@@ -224,19 +242,19 @@ describe("동물 캐릭터의 외형과 렌더링 예산", () => {
     const disposed = vi.fn();
     before.addEventListener("dispose", disposed);
     c.applyOutfit("mafia");
-    expect(hasColor(head, "#f6f0ea")).toBe(true); // 토끼 머리
+    expect(hasSculpt("rabbit")).toBe(true);
     expect(hasColor(head, "#14161c")).toBe(true); // 선글라스
     expect(hasColor(head, "#8e0b21")).toBe(true); // 붉은 모자띠
     expect(disposed).toHaveBeenCalledOnce();
     c.applyAnimal("elephant");
-    expect(hasColor(head, "#90b6df")).toBe(true);
+    expect(hasSculpt("elephant")).toBe(true);
     expect(hasColor(head, "#14161c")).toBe(true);
     c.applyOutfit("police");
-    expect(hasColor(head, "#90b6df")).toBe(true);
+    expect(hasSculpt("elephant")).toBe(true);
     expect(hasColor(head, "#2a4372")).toBe(true);
     expect(hasColor(torso, "#c9d3ea")).toBe(true);
     c.applyOutfit("doctor");
-    expect(hasColor(head, "#90b6df")).toBe(true);
+    expect(hasSculpt("elephant")).toBe(true);
     expect(hasColor(torso, "#2FA4A0")).toBe(true);
     expect(c.root.position.toArray()).toEqual([2, 0, -2]);
     expect(c.root.rotation.y).toBe(0.7);

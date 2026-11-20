@@ -8,7 +8,7 @@ import { emoteDurationMs } from "../../src/world/emoteCap";
 import { CHAR_SCALE, characterKit, createCharacter, figForSeat, POSE_BLEND_MS, setGhostArt, WALK_PHASE_RATE, type WorldCharacter } from "../../src/world/character";
 import { EMOTE_KEYS, EMOTES, type EmoteId, FACE_IDS, FIGS, OUTFITS, SKIN, type OutfitId } from "../../src/world/characterData";
 import { noteKit } from "../../src/world/postit";
-import { seatedAnimalHead } from "../../src/world/barAssets/animal-detail";
+import { detailedAnimalHead } from "../../src/world/barAssets/animal-detail";
 
 function meshes(root: Object3D, visibleOnly = true): Mesh[] {
   const out: Mesh[] = [];
@@ -28,17 +28,25 @@ function joint(root: Object3D, name: string): Object3D {
 }
 
 describe("착석 동물 리그", () => {
-  it("승인된 12종 머리를 기존 관절에 병합하고 착석 상태를 되돌릴 수 있다", () => {
+  it("12종이 자세와 표정을 바꿔도 같은 정교 머리를 쓴다", () => {
     for (const animal of ANIMAL_IDS) {
       const character = createCharacter(0, "coat", undefined, animal);
       const neck = joint(character.root, "neck");
       const head = neck.children[0] as Mesh;
       const standing = head.geometry;
+      const neutral = standing.getAttribute("position").array.slice();
+      expect(standing.getAttribute("position").count).toBe(detailedAnimalHead(animal).getAttribute("position").count);
+      for (const face of FACE_IDS.filter((id) => id !== "base")) {
+        character.setFace(face);
+        expect(head.geometry).toBe(standing);
+        expect(standing.getAttribute("position").array.some((value, i) => value !== neutral[i]), `${animal}/${face}`).toBe(true);
+      }
+      character.setFace("base");
+      expect(standing.getAttribute("position").array.every((value, i) => value === neutral[i]), animal).toBe(true);
       character.setSeated(true, true);
       character.setGaze(0.6, 0, 0.2);
       character.update(0.016, 0, false);
-      expect(head.geometry).not.toBe(standing);
-      expect(head.geometry.getAttribute("position").count).toBeGreaterThan(standing.getAttribute("position").count);
+      expect(head.geometry).toBe(standing);
       expect(neck.children).toHaveLength(1);
       expect(neck.visible).toBe(false);
       expect(neck.rotation.y).toBeCloseTo(0.6);
@@ -58,7 +66,7 @@ describe("착석 동물 리그", () => {
     const standing = head.geometry;
     character.setSeated(true, false);
     const detail = head.geometry;
-    expect(detail.getAttribute("position").count).toBeGreaterThan(seatedAnimalHead("fox").getAttribute("position").count);
+    expect(detail.getAttribute("position").count).toBeGreaterThan(detailedAnimalHead("fox").getAttribute("position").count);
     character.setSeated(false, false);
     character.setGhost(true, { animalForm: true, opacity: 0.5 });
     expect(character.root.getObjectByName("ghost-3d")).toBeUndefined();

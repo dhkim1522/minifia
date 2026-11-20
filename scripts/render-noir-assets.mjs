@@ -3,11 +3,12 @@
 // 얼굴과 전신만 다시 만들 때는 --seat-portraits-only.
 // 역할 카드만 다시 만들 때는 --role-portraits-only.
 // 동물 얼굴·전신·역할·옷장 그림만 다시 만들 때는 --animal-portraits-only.
-// 재즈 바 배경과 동물·유령 그림을 다시 만들 때는 --3d-art-refresh.
+// 개선된 3D 에셋의 초상·맵·홈·초대 그림을 한 번에 갱신할 때는 --3d-art-refresh.
 // 재즈 바 카드와 배경만 다시 만들 때는 --bar-art-only.
 // 채팅과 기록의 정사각형 초상화만 다시 만들 때는 --faces-only.
 import { existsSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 import sharp from "sharp";
@@ -18,13 +19,21 @@ const root = (path) => fileURLToPath(new URL(`../${path}`, import.meta.url));
 const origin = new URL(process.argv[2] ?? "http://127.0.0.1:5173");
 if (!["localhost", "127.0.0.1"].includes(origin.hostname)) throw new Error("에셋 렌더는 로컬 개발 서버만 사용한다.");
 
+const backdropsOnly = process.argv.includes("--backdrops-only");
+const refreshArt = !backdropsOnly && process.argv.includes("--3d-art-refresh");
 const browser = await chromium.launch({ executablePath: findChrome(process.platform, process.env, existsSync), headless: true });
+let renderEntry = false;
 
 /** 생산 에셋의 URL, 밀도, 크기는 기존 화면 계약과 같다. */
 async function savePng(data, path, width, height) {
   const input = Buffer.from(data.split(",")[1], "base64");
   const png = await sharp(input).resize(width, height, { fit: "fill" }).png({ palette: true, quality: 95 }).toBuffer();
-  await writeFile(root(path), png);
+  const destination = root(path);
+  const previous = await readFile(destination).catch(error => {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  });
+  if (!previous?.equals(png)) await writeFile(destination, png);
 }
 
 try {
@@ -36,7 +45,6 @@ try {
   const { figures, outfits, animals } = await page.evaluate(async () => {
     const THREE = await import("/node_modules/three/build/three.module.js");
     const model = await import("/src/world/character.ts");
-    const { buildGhost3d } = await import("/src/world/ghost3d.ts");
     const { FIGURE_IDS } = await import("/src/net/assets.ts");
     const { OUTFIT_IDS } = await import("/shared/protocol.ts");
     const { ANIMAL_IDS } = await import("/shared/game/animals.ts");
@@ -53,11 +61,11 @@ try {
     rim.position.set(3, 4, -3);
     studio.add(key, rim);
 
-    window.noirPortrait = ({ seat, outfit, colors, head, ghost, animal, ratio }) => {
-      const character = ghost ? buildGhost3d() : model.createCharacter(model.figForSeat(seat), outfit, colors, animal);
+    window.noirPortrait = ({ seat, outfit, colors, head, animal, ratio }) => {
+      const character = model.createCharacter(model.figForSeat(seat), outfit, colors, animal);
       const subject = character.root;
       // 실제 램프의 발밑 그림자와 선택 표시가 투명 PNG의 알파에 들어가지 않게 한다.
-      if (!ghost) for (const part of subject.children) if (part.isMesh) part.visible = false;
+      for (const part of subject.children) if (part.isMesh) part.visible = false;
       subject.rotation.y = head ? (animal === "crocodile" || animal === "parrot" ? -0.42 : -0.07) : -0.16;
       studio.add(subject);
       const boundBy = head ? subject.getObjectByName("neck") : subject;
@@ -88,6 +96,7 @@ try {
       world.setView({ x, z }, offset);
       world.setZoom(zoom);
       world.setLighting(phase);
+      world.setTableScene?.(phase !== "trial");
       world.render();
       window.disposeNoirMap = () => world.dispose();
     };
@@ -152,12 +161,6 @@ try {
     }
   }
 
-  async function renderGhostPortrait() {
-    const ghost = await portrait({ ghost: true, ratio: 0.75 });
-    await savePng(ghost, "public/characters/ghost/ghost_default@2x.png", 144, 192);
-    await savePng(ghost, "public/characters/ghost/ghost_default@4x.png", 288, 384);
-  }
-
   async function renderOutfitPortraits() {
     for (const outfit of outfits) {
       const image = await portrait({ seat: 0, outfit, ratio: 0.75 });
@@ -174,15 +177,13 @@ try {
     }
   }
 
-  if (process.argv.includes("--backdrops-only")) {
+  if (backdropsOnly) {
     await renderBackdrops(scene);
-  } else if (process.argv.includes("--3d-art-refresh") || process.argv.includes("--bar-art-only")) {
-    if (process.argv.includes("--3d-art-refresh")) {
-      await renderAnimalPortraits();
-      await renderGhostPortrait();
-    }
+  } else if (refreshArt || process.argv.includes("--bar-art-only")) {
+    if (refreshArt) await renderAnimalPortraits();
     await renderMapCards("bar");
     await renderBackdrops(scene, "bar");
+    renderEntry = refreshArt;
   } else if (process.argv.includes("--faces-only")) {
     for (const [seat] of figures.entries()) await renderFace(`public/characters/faces/face-${seat}.png`, seat);
     for (const animal of animals) await renderFace(`public/characters/animals/${animal}/face.png`, 0, animal);
@@ -198,11 +199,16 @@ try {
     await renderSeatPortraits();
     await renderRolePortraits();
     await renderAnimalPortraits();
-    await renderGhostPortrait();
     await renderOutfitPortraits();
     await renderMapCards();
     await renderBackdrops(scene);
+    renderEntry = true;
   }
 } finally {
   await browser.close();
+}
+
+if (renderEntry) {
+  execFileSync(process.execPath, [root("scripts/render-entry-scene.mjs"), origin.href], { stdio: "inherit" });
+  execFileSync(process.execPath, [root("scripts/make-og.mjs")], { stdio: "inherit" });
 }
