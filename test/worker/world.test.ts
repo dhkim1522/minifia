@@ -147,8 +147,8 @@ describe("로비 이동 — 트레이서 (MAP-02, MAP-01)", () => {
     send(guest.sock, { t: "move", x: 300, z: 100 });
     await nextFrame(s.host, isWalk(1));
     await sleep(160);
-    send(guest.sock, { t: "move", x: -300, z: 100 });
-    const second = (await nextFrame(s.host, (m): m is MoveFrame => isWalk(1)(m) && m.p.slice(-2).join(",") === "-300,100")) as MoveFrame;
+    send(guest.sock, { t: "move", x: -325, z: 125 });
+    const second = (await nextFrame(s.host, (m): m is MoveFrame => isWalk(1)(m) && m.p.slice(-2).join(",") === "-325,125")) as MoveFrame;
     expect(second.s).toBe(1);
   });
 

@@ -40,13 +40,15 @@ export interface MapDef {
   stage?: { x: number; z: number };
   /** 무대와 가까워도 의자를 가로지르면 안 되는 맵은 출입 바닥점을 지정한다. */
   stageDoors?: readonly { x: number; z: number }[];
+  /** 테이블이 무대로 바뀌면 의자에서 안쪽으로 바로 들어가는 연출 경로를 사용한다. */
+  stageFromSeats?: true;
   /** 바닥을 가로지르지 않고 의자로만 드나드는 고정소수점 경로의 끝점. */
   seats?: readonly { x: number; z: number; door: { x: number; z: number } }[];
 }
 
 /** 변론자가 서는 무대 위 자리(고정소수점). 블록아웃 design/v2.0/screens/bar.js 의 ctx.center 와 같은 점이다(높이 0.29 는 화면 규칙, A4). */
 export const STAGE_SPOT = { x: 0, z: 0 } as const;
-/** 무대 자리에 닿는 선분의 최대 길이(고정소수점 3.0). 무대 둘레 한 걸음이고, 이보다 먼 점과는 이어지지 않는다. */
+/** 전용 출입점이 없는 무대의 기본 접근 반경(고정소수점 3.0). */
 export const STAGE_REACH_FX = 300;
 
 /**
@@ -67,45 +69,62 @@ export type Obstacle = (
 export const BAR_ROOM_HALF = 4.7;
 export const BAR_STAGE_RADIUS = 0.66;
 export const BAR_STAGE_HEIGHT = 0.1175;
-export const BAR_SEAT_RADIUS = 0.36;
-export const BAR_SEAT_HEIGHT = 0.19;
+export const BAR_TABLE_RADIUS = 1.63;
+export const BAR_TABLE_HEIGHT = 0.79;
+export const BAR_SEAT_RADIUS = 0.44;
+export const BAR_SEAT_HEIGHT = 0.43;
 export const BAR_PIANO = { x: -1.85, z: -BAR_ROOM_HALF + 0.63, width: 1.62, depth: 0.66 } as const;
 export const BAR_COUNTER = { x: BAR_ROOM_HALF - 0.35, z: -1.24, width: 0.55, depth: 2.05 } as const;
 
-/** 승인된 앞뒤 엇갈린 8자리. 4명은 앞·뒤 각 두 자리(좌석 0~3)를 쓴다. */
+/** 승인된 원형 테이블의 물리 의자. 정면의 0과 2를 기준으로 인접 좌석이 서로 엇갈린다. */
 export const BAR_SEATS_FX = [
-  [-136, 130], [-149, -183], [-13, -236], [194, 31],
-  [-196, -54], [118, -161], [1, 220], [135, 173],
+  [0, 204], [-151, 138], [11, -204], [156, 131],
+  [-204, -14], [203, -18], [-139, -149], [136, -152],
 ] as const;
+
+/** 인원마다 정면을 포함하고 빈 의자가 연달아 생기지 않는 점유 패턴. */
+const BAR_CHAIRS_BY_COUNT: Readonly<Partial<Record<number, readonly number[]>>> = {
+  4: [0, 2, 4, 5],
+  5: [0, 1, 2, 4, 5],
+  6: [0, 1, 2, 3, 6, 7],
+  7: [0, 1, 2, 3, 5, 6, 7],
+  8: [0, 1, 2, 3, 4, 5, 6, 7],
+};
+
+/** 라운드 참가자 전체의 논리 좌석을 오름차순으로 물리 의자에 대응시킨다. */
+export function barChairAssignment(seats: readonly number[]): Partial<Record<number, number>> {
+  const slots = BAR_CHAIRS_BY_COUNT[seats.length];
+  return Object.fromEntries([...seats].sort((a, b) => a - b).map((seat, index) => [seat, slots?.[index] ?? index]));
+}
 
 /** 의자마다 이동 가능한 바닥과 연결하는 인접 칸 중심. 일반 경로는 의자 칸을 통과하지 않는다. */
 const BAR_SEAT_DOORS_FX = [
-  [-225, 125], [-225, -175], [-75, -275], [275, 25],
-  [-225, -125], [75, -225], [75, 225], [225, 225],
+  [125, 275], [-275, 125], [125, -275], [275, 125],
+  [-275, -125], [275, 75], [-125, -275], [225, -225],
 ] as const;
 
-/** 배포 마스크는 28×28의 공통 격자 원점을 쓴다. 좁은 통로 옆 피아노·바·중앙 스탠드·의자는 막는다. */
+/** 테이블과 의자 둘레에 캐릭터 반지름을 더해, 격자가 가구에 닿는 칸을 막는다. */
 export const BAR_MASK: readonly string[] = [
   "############################",
   "############################",
   "############################",
   "############################",
   "############################",
-  "#####...#####..........#####",
-  "#####...#####..........#####",
-  "#####...#####..........#####",
-  "#####........##......#######",
-  "#####.....#####.#....#######",
-  "#####.....##.#.###...#######",
-  "#####.....##...###...#######",
-  "#####....##..##......#######",
-  "#####....##.####.##..#######",
-  "#####.......#######..#######",
-  "#####.....#########....#####",
+  "#####..######..........#####",
+  "#####..######..........#####",
+  "#####..######..........#####",
+  "#####.......####.....#######",
+  "#####.....########...#######",
+  "#####....##########..#######",
+  "#####....##########..#######",
+  "#####...############.#######",
+  "#####...############.#######",
+  "#####...############.#######",
+  "#####...###########....#####",
+  "#####....##########....#####",
+  "#####....##########....#####",
   "#####.....########.....#####",
-  "#####.....##.#####.....#####",
-  "#####........##.##.....#####",
-  "#####........##........#####",
+  "#####.......####.......#####",
   "#####..................#####",
   "#####..................#####",
   "#####..................#####",
@@ -117,9 +136,9 @@ export const BAR_MASK: readonly string[] = [
 ];
 
 export const BAR_SPAWNS: readonly Spawn[] = [
-  { x: 1.0, z: 2.95, yaw: 0.34 },
-  { x: -2.85, z: -0.65, yaw: 0.48 },
-  { x: 0.75, z: -2.95, yaw: 0.12 },
+  { x: 1.25, z: 2.95, yaw: 0.34 },
+  { x: -3.25, z: -0.75, yaw: 0.48 },
+  { x: 0.75, z: -3.25, yaw: 0.12 },
   { x: 2.85, z: 1.25, yaw: -0.36 },
   { x: -2.85, z: 1.85, yaw: 0.86 },
   { x: 2.85, z: -1.75, yaw: -0.24 },
@@ -134,7 +153,8 @@ export const BAR_MAP: MapDef = {
   mask: parseMask(BAR_MASK),
   spawns: BAR_SPAWNS,
   stage: STAGE_SPOT,
-  stageDoors: [{ x: -125, z: 25 }, { x: 125, z: -25 }, { x: -25, z: -125 }, { x: -75, z: 175 }],
+  stageDoors: [{ x: -125, z: 275 }, { x: 125, z: 275 }, { x: -315, z: 110 }],
+  stageFromSeats: true,
   seats: BAR_SEATS_FX.map(([x, z], i) => {
     const [dx, dz] = BAR_SEAT_DOORS_FX[i]!;
     return { x, z, door: { x: dx, z: dz } };
@@ -377,8 +397,9 @@ export function lineWalkable(map: MapDef, a: { x: number; z: number }, b: { x: n
   const bSeat = seatAt(map, b);
   if (aSeat !== undefined || bSeat !== undefined) {
     if (aSeat !== undefined && bSeat !== undefined) return aSeat === bSeat;
-    const door = (aSeat ?? bSeat)!.door;
     const other = aSeat === undefined ? a : b;
+    if (map.stageFromSeats === true && isStageSpot(map, other)) return true;
+    const door = (aSeat ?? bSeat)!.door;
     return other.x === door.x && other.z === door.z;
   }
   const stage = map.stage;
@@ -499,7 +520,7 @@ export function routeFx(map: MapDef, from: { x: number; z: number }, to: { x: nu
   const aSeat = seatAt(map, s);
   const bSeat = seatAt(map, e);
   if (aSeat !== undefined || bSeat !== undefined) {
-    if (aSeat !== undefined && aSeat === bSeat) return [s.x, s.z, e.x, e.z];
+    if (lineWalkable(map, s, e)) return [s.x, s.z, e.x, e.z];
     const start = aSeat?.door ?? s;
     const end = bSeat?.door ?? e;
     const path = routeStageOrFloor(map, start, end);

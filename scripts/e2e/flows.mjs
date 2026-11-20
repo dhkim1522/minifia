@@ -146,7 +146,7 @@ import { SHORT_PHONE_H, readBenchView, readRematchState, readResultHidden, readR
 import { makePoliticsFlows } from "./politics.mjs";
 import { makeSoundFlows } from "./sound.mjs";
 import { makeHostFlows } from "./host.mjs";
-import { CHAT_OPEN_STAGE_MIN, ghostStillChecks, ghostViewChecks, liveGhostChecks, makePolishFlows, readLiveGhost } from "./polish.mjs";
+import { CHAT_OPEN_STAGE_MIN, ghostViewChecks, liveGhostChecks, makePolishFlows, readLiveGhost } from "./polish.mjs";
 
 // Windows 에서 URL.pathname 은 "/C:/..." 라 mkdir 이 "C:\C:\..." 로 깨진다 — fileURLToPath 로 바꾼다(21-16).
 export const OUT_DIR = fileURLToPath(new URL("./out/", import.meta.url));
@@ -1847,14 +1847,14 @@ async function ghostFlow(ctx) {
       }
     }
 
-    // 유령 그림(0083-2): 탈락자는 직업과 무관하게 모두 같은 유령 그림이고, 직업은 이름표의 칩으로만 보인다. 산 사람 페이지에도 의상 재료가 없다(L13)
+    // 탈락자는 평소 모습의 반투명 캐릭터로 보이며 역할은 기존 관전용 이름표에 표시한다.
     {
       const sc = `${id}/outfit`;
       const got = await ghostHookMatch(hp, ht.last());
       rec(sc, "GH14", "유령 페이지의 유령 그림 훅(__mfGhosts)이 탈락 좌석 전부와 같고 그림이 준비됐다(직업과 무관)", got.ok, got.ok ? got.label : got.detail, true);
-      // D-20: 유령은 산 캐릭터의 75% 크기다. 훅이 배율을 알린다(facing 은 좌석마다 하나)
+      // 반투명 캐릭터에 기존 몸 배율과 좌석마다 하나의 몸 방향이 적용된다.
       const sizeHook = (await readGhosts(hp)).ghosts;
-      rec(sc, "GH16", "유령 훅이 배율 0.75 와 좌석마다 하나의 몸 방향(facing)을 알린다(D-20)", sizeHook !== null && sizeHook.scale === 0.75 && sizeHook.facing.length === sizeHook.seats.length && sizeHook.facing.every(Number.isFinite), `훅 ${JSON.stringify(sizeHook)}`, true);
+      rec(sc, "GH16", "반투명 캐릭터의 배율이 1이고 좌석마다 몸 방향이 하나이다", sizeHook !== null && sizeHook.scale === 1 && sizeHook.facing.length === sizeHook.seats.length && sizeHook.facing.every(Number.isFinite), `훅 ${JSON.stringify(sizeHook)}`, true);
       const first = await ghostViewSettled(hp, ht.last(), 4000);
       for (const r of first.rows) rec(sc, r.id, `${r.label} (처형 직후 ${ht.last().phase})`, r.ok, r.detail, r.ok);
       const dom = await readGhosts(hp);
@@ -1864,8 +1864,8 @@ async function ghostFlow(ctx) {
         if (!aliveOf(g.tracker.last()).includes(g.seat)) continue;
         const r = await readGhosts(g.page);
         const deadNow = g.tracker.last().players.filter((p) => p.alive === false).map((p) => p.seat);
-        const shape = r.ghosts !== null && JSON.stringify(r.ghosts.keys) === JSON.stringify(["facing", "ready", "scale", "seats"]) && r.ghosts.seats.every((seat) => deadNow.includes(seat));
-        rec(sc, "GH15", `산 사람 페이지의 유령 훅에는 좌석 번호·준비 여부·배율·몸 방향뿐이고(탈락 좌석만) [data-ghost-outfit] 이 0개다 — L13 (손님${i + 1})`, shape && r.domCount === 0, `훅 ${JSON.stringify(r.ghosts)}, 탈락 ${deadNow}, DOM ${r.domCount}개`);
+        const hidden = r.ghosts !== null && r.ghosts.seats.length === 0;
+        rec(sc, "GH15", `생존자 화면의 유령 훅과 의상 표식에 탈락 좌석이 없다 (손님${i + 1})`, hidden && r.domCount === 0, `훅 ${JSON.stringify(r.ghosts)}, 탈락 ${deadNow}, DOM ${r.domCount}개`);
       }
     }
 
@@ -1876,18 +1876,6 @@ async function ghostFlow(ctx) {
       const g0 = await untilGame(hp, (x) => x.phase === "nomination" && x.ghostView, 9000, "다음 날 지목 도착(유령)");
       await settle(hp);
       const movesBefore = guests.map((g) => g.tracker.moves.get(hostSeat)?.n ?? 0);
-      // C-6: 걷기 전 산 사람 화면 유령 자리(마지막으로 받은 구간 자리) — 걷고 난 뒤와 견준다(GH12)
-      const liveBefore = [];
-      for (const g of guests) {
-        const dl = performance.now();
-        let shown = null;
-        while (performance.now() - dl < 4000) {
-          shown = (await readLiveGhost(g.page, [hostSeat]).catch(() => null))?.seats?.[0]?.shown ?? null;
-          if (shown) break;
-          await sleep(250);
-        }
-        liveBefore.push(shown);
-      }
       // 14페이즈: 앱의 스테이지(useMapInsets)는 윗변이 자막 띠 면 아랫변이다 — 목적지도 띠 아래에서 고른다(띠 밑으로 걸어간 유령 이름표는 띠 면이 글자를 덮어 대비를 재지 못한다, 360x560 에서 간헐)
       const bandNow = g0.stage ? await readHostBand(hp) : null;
       const stageBelowBand = g0.stage ? { ...g0.stage, top: Math.max(g0.stage.top, bandNow?.bandRect?.bottom ?? 0) } : null;
@@ -1973,19 +1961,16 @@ async function ghostFlow(ctx) {
         const after = g.tracker.moves.get(hostSeat)?.n ?? 0;
         const before = movesBefore[i];
         rec(sc, "GH11", `유령이 걷는 동안 산 사람 페이지가 유령 좌석 구간을 받지 않는다 (손님${i + 1})`, after === before, `받은 구간 번호 ${before} → ${after}`);
-        // 18.1-09 R3: 옛 GH12 '산 사람 화면에 유령 이름표가 없다' 는 바뀌었다 — 탈락 좌석 전원이 유령 그림으로 남고(C1·C2) 처형된 방장의 자리는 유령이 걸어도 그대로다(GH12, C-6)
+        // 유령이 걸어도 생존자 화면에는 몸·이름표가 나타나지 않는다.
         const deadNow = gv.players.filter((p) => p.alive === false).map((p) => p.seat);
         const lg = await liveGhostSettled(g.page, deadNow.length > 0 ? deadNow : [hostSeat], 4000);
         for (const r of lg.rows) rec(sc, r.id, `산 사람 화면 유령 — ${r.label} (손님${i + 1}, 유령이 걸은 뒤, ${lg.phase})`, r.ok, r.detail, r.ok);
-        const liveAfter = (await readLiveGhost(g.page, [hostSeat]).catch(() => null))?.seats?.[0]?.shown ?? null;
-        const still = ghostStillChecks(liveBefore[i], liveAfter);
-        rec(sc, still.id, `${still.label} (손님${i + 1})`, still.ok, still.detail, still.ok);
         await gameGH(ctx, id, `nomination-guest${i + 1}`, g);
       }
     }
 
     // 18.1-09 R3(C3·C1·C2): 다음 날 단계를 한 칸씩 넘기며(낮 시작·토론·지목·변론·찬반·처형·밤·아침 중 판이 거치는 것) 단계마다
-    // 유령(방장) 화면은 탈락 좌석 전원이 직업 칩 1개·유령 이름표·유령 그림이고(직업과 무관), 같은 단계의 산 손님 화면은 탈락 좌석을 유령 그림으로 그린다(밤은 그리지 않음)
+    // 유령(방장) 화면은 탈락 좌석의 관전 모습을 유지하고 생존자 화면에서는 탈락 좌석을 거둔다.
     {
       const sc = `${id}/stages`;
       const covered = [];

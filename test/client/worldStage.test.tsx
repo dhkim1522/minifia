@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import "../helpers/singleLineErrors";
 import { installMemoryStorage, MemoryStorage } from "../helpers/memoryStorage";
-import { BAR_MAP, BAR_ROOM_HALF, BAR_SEATS_FX, BAR_SEAT_HEIGHT, BAR_STAGE_HEIGHT, snapToWalkable } from "../../shared/game/map";
+import { BAR_MAP, BAR_ROOM_HALF, BAR_SEATS_FX, BAR_SEAT_HEIGHT, BAR_STAGE_HEIGHT, barChairAssignment, snapToWalkable } from "../../shared/game/map";
 import { PLAZA_MAP } from "../../shared/game/mapPlaza";
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
@@ -122,7 +122,7 @@ export interface FakeHandle extends CharacterHandle {
   disposed: number;
 }
 
-/** 가짜 캐릭터 모듈의 유령 그림 준비 여부(kit.ghostReady) — 시험이 끈다 */
+/** 예전 유령 그림의 준비 여부. 동물 유령이 의존하지 않는지 확인할 때 끈다. */
 export const fakeArt = { ready: true };
 
 export function makeFakeKit(created: FakeHandle[]): WorldModules["characterKit"] {
@@ -153,6 +153,7 @@ export function makeFakeKit(created: FakeHandle[]): WorldModules["characterKit"]
         }),
         // 08-10 의 optional 메서드(게임 장면 시험이 호출을 본다)
         setGhost: vi.fn(),
+        setSeated: vi.fn(),
         applyOutfit: vi.fn(),
         setOpacity: vi.fn(),
         holdPose: vi.fn(),
@@ -2035,16 +2036,20 @@ const FOUR = [player(0, "민지"), player(1, "철수"), player(2, "영희"), pla
 const FOUR_ENTS = (): WorldSeg[] => [seg(0, [200, 100]), seg(1, [-300, 50]), seg(2, [-100, 400]), seg(3, [400, -200])];
 
 describe("게임 장면: 보임·유령 (GHOST-01)", () => {
-  it("재즈 바 좌석의 캐릭터는 들어오자마자 의자 높이와 얼굴이 보이는 방향을 쓴다", async () => {
+  it("재즈 바 좌석의 캐릭터는 실제 의자에 앉은 키와 테이블을 향하는 방향을 쓴다", async () => {
     const seats = Object.fromEntries(FOUR.map(({ seat }) => [seat, {}]));
     const view: RoomView = { ...makeView(FOUR), phase: "discussion", map: "bar" };
     const scene = sceneOf(seats, { camera: cameraModeOf(view, 600) });
-    const ents = FOUR.map(({ seat }) => seg(seat, [...BAR_SEATS_FX[seat]!]));
+    const chairs = barChairAssignment(FOUR.map(({ seat }) => seat));
+    const ents = FOUR.map(({ seat }) => seg(seat, [...BAR_SEATS_FX[chairs[seat]!]!]));
     const s = await open({ view, scene }, { players: FOUR, ents });
     const renderer = s.world.renderers[0]!;
     for (const char of renderer.chars.values()) {
-      expect(char.root.position.y).toBe(BAR_SEAT_HEIGHT);
-      expect(Math.abs((char as FakeHandle).yaws.at(-1)!)).toBeLessThan(Math.PI / 2);
+      const { x, y, z } = char.root.position;
+      const yaw = (char as FakeHandle).yaws.at(-1)!;
+      expect(char.setSeated).toHaveBeenLastCalledWith(true, false);
+      expect(y + 0.30).toBeCloseTo(BAR_SEAT_HEIGHT);
+      expect(Math.sin(yaw) * x + Math.cos(yaw) * z).toBeCloseTo(-Math.hypot(x, z));
     }
   });
 
@@ -2087,12 +2092,12 @@ describe("게임 장면: 보임·유령 (GHOST-01)", () => {
     expect(tagOf(s.utils, 3)).not.toBeNull();
   });
 
-  it("ghost 좌석은 setGhost(true, { opacity, tint }) 를 부르고 이름표에 data-ghost 가 붙는다. 해제하면 setGhost(false)", async () => {
+  it("ghost 좌석은 원래 동물 형태와 유령 이름표를 쓰고 해제하면 setGhost(false)를 부른다", async () => {
     const s = await open({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: { ghost: true } }) }, { players: FOUR, ents: FOUR_ENTS() });
     const r = s.world.renderers[0]!;
     const h3 = r.chars.get(3) as FakeHandle;
     const h2 = r.chars.get(2) as FakeHandle;
-    expect(h3.setGhost).toHaveBeenCalledWith(true, { opacity: 0, tint: 1 });
+    expect(h3.setGhost).toHaveBeenCalledWith(true, { opacity: 0, tint: 1, animalForm: true });
     expect(h3.setGhost).toHaveBeenCalledTimes(1);
     expect(h2.setGhost).not.toHaveBeenCalled();
     expect(tagOf(s.utils, 3)!.querySelector(".mv-head")!.getAttribute("data-ghost")).toBe("true");
@@ -2155,21 +2160,17 @@ describe("좌석별 의상 (D-6, L33)", () => {
   });
 });
 
-// ---------- 18.1-17: 탈락자는 누구든 같은 유령 그림 (결정 0083-2, L13) ----------
-describe("탈락자 유령 그림 (0083-2)", () => {
+// ---------- 관전에서는 원래 동물과 공개 의상을 반투명하게 그린다 ----------
+describe("탈락자 동물 유령", () => {
   const ALIVE = { 0: {}, 1: {}, 2: {}, 3: {} };
   const handleOf = (s: Setup, seat: number): FakeHandle => s.world.renderers[0]!.chars.get(seat) as FakeHandle;
   const openGhost = (seats: Parameters<typeof sceneOf>[0], over: Partial<WorldStageProps> = {}, players: PublicPlayer[] = FOUR) =>
     open({ view: makeView(players), scene: sceneOf(seats), ...over }, { players, ents: FOUR_ENTS() });
 
-  afterEach(() => {
-    fakeArt.ready = true;
-  });
-
-  it("ghost 좌석은 의상 바꾸기 없이 setGhost(true, { opacity: 0, tint: 1 }) 한 번을 받고 이름표에 data-ghost 가 붙는다", async () => {
+  it("ghost 좌석은 공개 의상 그대로 동물 유령을 한 번 켜고 이름표에 data-ghost를 붙인다", async () => {
     const s = await openGhost({ ...ALIVE, 3: { ghost: true } });
     const h3 = handleOf(s, 3);
-    expect(h3.setGhost).toHaveBeenCalledWith(true, { opacity: 0, tint: 1 });
+    expect(h3.setGhost).toHaveBeenCalledWith(true, { opacity: 0, tint: 1, animalForm: true });
     expect(h3.setGhost).toHaveBeenCalledTimes(1);
     for (const h of s.world.handles) expect(h.applyOutfit).not.toHaveBeenCalled();
     expect(handleOf(s, 2).setGhost).not.toHaveBeenCalled();
@@ -2190,30 +2191,30 @@ describe("탈락자 유령 그림 (0083-2)", () => {
     const h3 = handleOf(s, 3);
     s.rerender({ scene: sceneOf({ ...ALIVE, 3: { ghost: true } }, { lighting: "vote" }) });
     frames(50);
-    expect(h3.setGhost).toHaveBeenLastCalledWith(true, { tint: 0.85 });
+    expect(h3.setGhost).toHaveBeenLastCalledWith(true, { tint: 0.85, animalForm: true });
     const n = vi.mocked(h3.setGhost!).mock.calls.length;
     frames(100);
     expect(vi.mocked(h3.setGhost!).mock.calls.length).toBe(n);
     s.rerender({ scene: sceneOf({ ...ALIVE, 3: { ghost: true } }, { lighting: "nightGhost" }) });
     frames(50);
-    expect(h3.setGhost).toHaveBeenLastCalledWith(true, { tint: 0.7 });
+    expect(h3.setGhost).toHaveBeenLastCalledWith(true, { tint: 0.7, animalForm: true });
   });
 
   it("끊긴 사람·장면 어둠(dim)은 같은 밝기 배율에 0.6 을 곱한다", async () => {
     const s = await openGhost({ ...ALIVE, 3: { ghost: true, dim: true } });
     frames(50);
-    expect(handleOf(s, 3).setGhost).toHaveBeenCalledWith(true, { opacity: 0, tint: 0.6 });
+    expect(handleOf(s, 3).setGhost).toHaveBeenCalledWith(true, { opacity: 0, tint: 0.6, animalForm: true });
     s.rerender({ scene: sceneOf({ ...ALIVE, 3: { ghost: true } }) });
     frames(50);
-    expect(handleOf(s, 3).setGhost).toHaveBeenLastCalledWith(true, { tint: 1 });
+    expect(handleOf(s, 3).setGhost).toHaveBeenLastCalledWith(true, { tint: 1, animalForm: true });
   });
 
-  it("좌석이 ghost 가 된 직후 inMs(300ms) 동안 불투명도가 0 에서 1 로 오른다", async () => {
+  it("좌석이 ghost가 되면 300ms 동안 유령 등장 진행도가 0에서 1로 오른다", async () => {
     const s = await openGhost(ALIVE);
     const h3 = handleOf(s, 3);
     s.rerender({ scene: sceneOf({ ...ALIVE, 3: { ghost: true } }) });
     frame(); // 등장 프레임
-    expect(h3.setGhost).toHaveBeenCalledWith(true, { opacity: 0, tint: 1 });
+    expect(h3.setGhost).toHaveBeenCalledWith(true, { opacity: 0, tint: 1, animalForm: true });
     frames(160);
     const mid = vi.mocked(h3.setOpacity!).mock.calls.at(-1)![0] as number;
     expect(mid).toBeGreaterThan(0.2);
@@ -2224,11 +2225,11 @@ describe("탈락자 유령 그림 (0083-2)", () => {
     expect([...seen].sort((a, b) => a - b)).toEqual(seen); // 오르기만 한다
   });
 
-  it("모션 줄이기면 처음부터 1 이다", async () => {
+  it("모션 줄이기면 유령 등장 진행도가 처음부터 1이다", async () => {
     stubReducedMotion(true);
     const s = await openGhost({ ...ALIVE, 3: { ghost: true } });
     const h3 = handleOf(s, 3);
-    expect(h3.setGhost).toHaveBeenCalledWith(true, { opacity: 1, tint: 1 });
+    expect(h3.setGhost).toHaveBeenCalledWith(true, { opacity: 1, tint: 1, animalForm: true });
     frames(400);
     for (const c of vi.mocked(h3.setOpacity!).mock.calls) expect(c[0]).toBeCloseTo(1, 9);
   });
@@ -2253,7 +2254,7 @@ describe("탈락자 유령 그림 (0083-2)", () => {
     }
   });
 
-  it("연출 뒤 장면 표가 ghost 로 바뀌면 같은 자리에서 유령 그림이 선다", async () => {
+  it("관전 화면에서 처형 연출 뒤 같은 자리와 캐릭터로 동물 유령이 이어진다", async () => {
     const s = await openGhost({ ...ALIVE, 3: { fadeAt: Date.now() } });
     frames(GHOST_FADE_END_MS + 50);
     const h3 = handleOf(s, 3);
@@ -2261,7 +2262,7 @@ describe("탈락자 유령 그림 (0083-2)", () => {
     frames(400);
     expect(handleOf(s, 3)).toBe(h3);
     expect(h3.disposed).toBe(0);
-    expect(h3.setGhost).toHaveBeenCalledWith(true, { opacity: 0, tint: 1 });
+    expect(h3.setGhost).toHaveBeenCalledWith(true, { opacity: 0, tint: 1, animalForm: true });
     expect(vi.mocked(h3.setOpacity!).mock.calls.at(-1)![0]).toBeCloseTo(1, 9);
   });
 
@@ -2334,7 +2335,7 @@ describe("산 사람 화면의 탈락자 유령 — 마지막 구간에 선다 (
   });
 });
 
-describe("E2E 훅 window.__mfGhosts (0083-2, T-18.1-41)", () => {
+describe("E2E 훅 window.__mfGhosts", () => {
   /** 지워진 옛 의상 훅 전역 이름(이름을 이어 붙여 저장소 검색에 걸리지 않게 한다) */
   const OLD_OUTFIT_HOOK = `__mfGhost${"Outfits"}`;
   const ALIVE = { 0: {}, 1: {}, 2: {}, 3: {} };
@@ -2342,9 +2343,9 @@ describe("E2E 훅 window.__mfGhosts (0083-2, T-18.1-41)", () => {
     fakeArt.ready = true;
   });
 
-  it("유령 그림으로 그리는 좌석(오름차순)과 그림 준비 여부만 싣는다 — 직업·의상은 없다", async () => {
+  it("유령 좌석, 3D 준비 여부, 캐릭터 배율과 방향만 공개한다", async () => {
     const s = await open({ scene: sceneOf({ ...ALIVE, 1: { ghost: true }, 3: { ghost: true } }) }, { players: FOUR, ents: FOUR_ENTS() });
-    expect(window.__mfGhosts).toMatchObject({ seats: [1, 3], ready: true, scale: 0.75 });
+    expect(window.__mfGhosts).toMatchObject({ seats: [1, 3], ready: true, scale: 1 });
     expect(window.__mfGhosts!.facing).toHaveLength(2);
     expect(Object.keys(window.__mfGhosts!).sort()).toEqual(["facing", "ready", "scale", "seats"]);
     s.utils.unmount();
@@ -2376,13 +2377,14 @@ describe("E2E 훅 window.__mfGhosts (0083-2, T-18.1-41)", () => {
     expect(window.__mfGhosts).toMatchObject({ seats: [], ready: true });
   });
 
-  it("그림을 아직 못 불렀으면 ready 거짓이고, 불러오면 바뀐다", async () => {
+  it("동물 3D가 준비되면 예전 유령 그림의 로드 여부와 무관하게 ready다", async () => {
     fakeArt.ready = false;
     await open({ scene: sceneOf({ ...ALIVE, 3: { ghost: true } }) }, { players: FOUR, ents: FOUR_ENTS() });
-    expect(window.__mfGhosts).toMatchObject({ seats: [3], ready: false });
+    const ready = window.__mfGhosts;
+    expect(ready).toMatchObject({ seats: [3], ready: true });
     fakeArt.ready = true;
     frame();
-    expect(window.__mfGhosts).toMatchObject({ seats: [3], ready: true });
+    expect(window.__mfGhosts).toBe(ready);
   });
 
   it("훅이 꺼진 문맥에는 전역이 없고, 옛 의상 훅 전역은 어느 문맥에도 없다", async () => {
@@ -2946,7 +2948,7 @@ describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연
       frames(100);
       expect(r.chars.get(3)).toBe(h3);
       expect(h3.disposed).toBe(0);
-      expect(h3.setGhost).toHaveBeenCalledWith(true, { opacity: 0, tint: 1 });
+      expect(h3.setGhost).toHaveBeenCalledWith(true, { opacity: 0, tint: 1, animalForm: true });
     });
 
     it("유령 시점의 ghost 좌석은 fadeAt 이 있어도 지워지지 않고 유령으로 남는다", async () => {
@@ -3786,12 +3788,12 @@ describe("결과 장면: costume·dim 적용과 onCostumes (11-05)", () => {
     expect(handleOf(s, 1).applyOutfit).toHaveBeenLastCalledWith("coat");
   });
 
-  it("탈락자(ghost) 는 costume 이 와도 직업 의상을 입지 않고 유령 그림으로 선다 (0083-2)", async () => {
+  it("탈락자는 costume이 와도 공개 의상을 유지하고 동물 유령으로 보인다", async () => {
     const s = await openResult({ 0: {}, 1: {}, 2: {}, 3: { ghost: true, costume: "mafia" } });
     frames(50);
     const h3 = handleOf(s, 3);
     expect(h3.applyOutfit).not.toHaveBeenCalled();
-    expect(h3.setGhost).toHaveBeenCalledWith(true, { opacity: 0, tint: 1 });
+    expect(h3.setGhost).toHaveBeenCalledWith(true, { opacity: 0, tint: 1, animalForm: true });
   });
 
   it("costume 중에 서버 look 이 바뀌어도 의상을 덮지 않는다", async () => {

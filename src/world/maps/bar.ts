@@ -294,6 +294,7 @@ export interface BarScene {
   /** 월넛 바닥 재질을 읽어 붙였거나 기본 월넛 색으로 대체한 뒤 완료된다. */
   readonly woodReady?: Promise<void>;
   setLighting(phase: LightingPhase, seconds?: number): void;
+  setCenterTable?(on: boolean): void;
   /** 프레임 사이 경과 초와 단조 증가 시각. */
   update(dt: number, t: number): void;
   /** 분필 윤곽을 그 자리(월드 단위, 바닥 y 0.015)에 보인다. null 이면 숨긴다. 메시는 처음부터 만들어 두고 보이기·불투명도만 바꾼다 */
@@ -413,6 +414,8 @@ function compactProps(
   pendants: Bundle,
   stand: Bundle,
   bulb: Bundle,
+  platform: Bundle,
+  platformTrim: Bundle,
   omitSeats: boolean,
 ): void {
   const P = PALETTE;
@@ -497,9 +500,9 @@ function compactProps(
   }
 
   const radius = BAR_STAGE_RADIUS;
-  furniture.cyl(radius, radius, 0.087, 48, P.stageBody, tf(0, 0.0435, 0));
-  furniture.cyl(radius - 0.018, radius, BAR_STAGE_HEIGHT - 0.087, 48, "#8d5d42", tf(0, (BAR_STAGE_HEIGHT + 0.087) / 2, 0));
-  brass.add(new TorusGeometry(radius - 0.016, 0.013, 6, 48), P.brass, tf(0, BAR_STAGE_HEIGHT - 0.011, 0, -Math.PI / 2));
+  platform.cyl(radius, radius, 0.087, 48, P.stageBody, tf(0, 0.0435, 0));
+  platform.cyl(radius - 0.018, radius, BAR_STAGE_HEIGHT - 0.087, 48, "#8d5d42", tf(0, (BAR_STAGE_HEIGHT + 0.087) / 2, 0));
+  platformTrim.add(new TorusGeometry(radius - 0.016, 0.013, 6, 48), P.brass, tf(0, BAR_STAGE_HEIGHT - 0.011, 0, -Math.PI / 2));
   for (let i = 0; i < 18; i++) {
     const a = i * Math.PI * 2 / 18;
     rim.sph(0.017, P.rimBulb, tf(Math.sin(a) * radius, 0.064, Math.cos(a) * radius), 1.25);
@@ -562,6 +565,8 @@ export function buildBarScene(budget: Budget, { compact = false, omitCenterSeats
   const floor = new Bundle();
   const stand = new Bundle();
   const bulb = new Bundle();
+  const platform = new Bundle();
+  const platformTrim = new Bundle();
 
   // 빛 무리: 카메라 yaw 가 고정이라 카메라를 향해 미리 돌린 쿼드를 합친다(Sprite 대신). 색 = hex, 알파 = k
   const basis = cameraBasis();
@@ -572,7 +577,7 @@ export function buildBarScene(budget: Budget, { compact = false, omitCenterSeats
   };
 
   if (compact) {
-    compactProps(shell, floor, furniture, furnitureFar, brass, emRoom, emRoomFar, emVote, pendants, stand, bulb, omitCenterSeats);
+    compactProps(shell, floor, furniture, furnitureFar, brass, emRoom, emRoomFar, emVote, pendants, stand, bulb, platform, platformTrim, omitCenterSeats);
     glow(glowRoom, P.lamp, 1.3, -2.75, 2.68, -4.22, 0.42);
     glow(glowRoom, P.lamp, 1.3, 1.95, 2.68, -4.22, 0.42);
     glow(glowVote, P.stageGlow, 2.1, 0, 0.24, 0, 0.27);
@@ -786,6 +791,9 @@ export function buildBarScene(budget: Budget, { compact = false, omitCenterSeats
     meshes.centerStand = stand.build(matBrass, "centerStand");
     meshes.centerStand.castShadow = meshes.centerStand.receiveShadow = true;
     meshes.centerBulb = bulb.build(matEmRoom, "centerBulb");
+    meshes.centerPlatform = platform.build(matProp, "centerPlatform");
+    meshes.centerPlatform.castShadow = meshes.centerPlatform.receiveShadow = true;
+    meshes.centerPlatformTrim = platformTrim.build(matBrass, "centerPlatformTrim");
   }
   let disposed = false;
   let woodTexture: Texture | null = null;
@@ -930,6 +938,7 @@ export function buildBarScene(budget: Budget, { compact = false, omitCenterSeats
   let pinState: { x: number; z: number; strength: number } | null = null;
   let pinDim = 1;
   let stagePhase = false;
+  let centerTable = false;
   const base = { stage: 0, x: T.point.stage.x, z: T.point.stage.z, room: 0, vote: 0 };
 
   /** 핀 상태를 점광원 위치·세기와 두 발광 색에 반영한다 — 값 몇 개 대입뿐이다(프레임마다 불려도 비용이 없다) */
@@ -982,7 +991,7 @@ export function buildBarScene(budget: Budget, { compact = false, omitCenterSeats
     matGlowRoom.opacity = t.glow.room;
     matGlowVote.opacity = t.glow.vote;
     meshes.glowRoom!.visible = b.glows && t.glow.room > 0;
-    meshes.glowVote!.visible = b.glows && t.glow.vote > 0;
+    meshes.glowVote!.visible = !centerTable && b.glows && t.glow.vote > 0;
     matCone.opacity = t.cone;
     trialCone.visible = b.glows && t.cone > 0;
     matWindowBeam.opacity = t.beam;
@@ -990,12 +999,18 @@ export function buildBarScene(budget: Budget, { compact = false, omitCenterSeats
     root.fog = b.fog ? fog : null;
     exposure = t.exposure;
   };
+  const syncCenter = (): void => {
+    if (meshes.centerStand && meshes.centerBulb) {
+      meshes.centerStand.visible = !centerTable && !stagePhase;
+      meshes.centerBulb.visible = !centerTable && !stagePhase;
+      meshes.centerPlatform!.visible = !centerTable;
+      meshes.centerPlatformTrim!.visible = !centerTable;
+      meshes.emissiveVote!.visible = !centerTable;
+    }
+  };
   const setLighting = (next: LightingPhase, seconds = 0): void => {
     stagePhase = next === "trial";
-    if (meshes.centerStand && meshes.centerBulb) {
-      meshes.centerStand.visible = !stagePhase;
-      meshes.centerBulb.visible = !stagePhase;
-    }
+    syncCenter();
     lighting.set(next, seconds);
     applyLook();
   };
@@ -1058,6 +1073,12 @@ export function buildBarScene(budget: Budget, { compact = false, omitCenterSeats
     markers,
     plate,
     woodReady,
+    setCenterTable(on) {
+      if (centerTable === on) return;
+      centerTable = on;
+      syncCenter();
+      applyLook();
+    },
     get exposure(): number {
       return exposure;
     },

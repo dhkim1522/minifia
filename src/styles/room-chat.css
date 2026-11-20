@@ -126,6 +126,11 @@
 .is-compact .mf-room-chat__surface { max-height: clamp(44px, calc(var(--mf-room-h, 844px) - var(--mf-kb-lift, 0px) - 168px), 180px); }
 .mf-room-chat__surface:focus-visible { outline: 2px solid var(--noir-paper); outline-offset: -2px; }
 .mf-room-chat__surface[data-suspect-guidance] { padding: 6px 8px; }
+.mf-game__panel:has(.mf-table-controls) .mf-room-chat__surface[data-suspect-guidance] {
+  position: static;
+  margin: 0 12px 4px;
+  pointer-events: none;
+}
 .mf-room-chat__reactions .mv-emote-tray { position: static; grid-auto-rows: var(--tap-min); gap: 4px; padding: 0; border: 0; background: transparent; box-shadow: none; }
 .mf-room-chat__reactions[data-quick-reactions] .mv-emote-tray { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 

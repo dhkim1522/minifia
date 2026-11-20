@@ -32,6 +32,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { ANIMALS, type AnimalId } from "../../shared/game/animals";
 import { animalHatFit, animalLayout, animalSkin, buildAnimalBody, buildAnimalHead } from "./animalGeometry";
 import { animalMaterial, FINISH, type Finish } from "./animalFinish";
+import { seatedAnimalHead } from "./barAssets/animal-detail";
 import { MOVE_SPEED } from "../../shared/game/world";
 import { buildGhost3d, type Ghost3d } from "./ghost3d";
 import { createNoteRig, type NoteRig, noteKit } from "./postit";
@@ -894,9 +895,10 @@ interface Merged {
 }
 
 /** 한 관절의 보이는 부품을 버텍스 컬러로 병합한다(투명 조각은 제외) */
-function mergeJoint(parts: readonly Part[], o: Outfit, fig: Fig, face: string, skin = SKIN): Merged {
-  const list: BufferGeometry[] = [];
+function mergeJoint(parts: readonly Part[], o: Outfit, fig: Fig, face: string, skin = SKIN, sculpted?: BufferGeometry): Merged {
+  const list: BufferGeometry[] = sculpted === undefined ? [] : [sculpted];
   for (const p of parts) {
+    if (sculpted && !p.tag.startsWith("hat:") && !p.tag.startsWith("acc:")) continue;
     if (p.glass || !isShown(p.tag, o, fig, face)) continue;
     const g = new BufferGeometry();
     const pos = p.geo.getAttribute("position");
@@ -920,6 +922,7 @@ function mergeJoint(parts: readonly Part[], o: Outfit, fig: Fig, face: string, s
   }
   const geo = mergeGeometries(list, false);
   if (!geo) throw new Error("캐릭터 병합 실패");
+  if (sculpted) geo.computeBoundingBox();
   return { geo, base: (geo.getAttribute("color").array as Float32Array).slice() };
 }
 
@@ -1013,9 +1016,11 @@ export interface WorldCharacter {
    * 켠 채 다시 부르면 준 값만 바꾼다. 끄면 스프라이트를 숨기고 몸·원판이 돌아온다.
    * 그림(setGhostArt)이 아직 없거나 불러오지 못했으면 스프라이트 없이 예전 반투명 몸(불투명도 0.6, 발광 없음)으로 대신하고, 그림이 오면 다음 update 부터 그림으로 바뀐다.
    */
-  setGhost(on: boolean, opts?: GhostOpts): void;
+  setGhost(on: boolean, opts?: GhostOpts & { animalForm?: boolean }): void;
+  setSeated(on: boolean, firstPerson: boolean): void;
+  setGaze(yaw: number, pitch: number, pointYaw?: number): void;
   /** 유령일 때만 유령 그림(또는 대체 몸)의 불투명도를 바꾼다(유령이 아니면 무시) */
-  setOpacity(alpha: number): void;
+  setOpacity(alpha: number, allowLiving?: boolean): void;
   /**
    * 동작의 마지막 자세를 해제할 때까지 유지한다(DAY-04 손가락). POSE_BLEND_MS 에 걸쳐 섞여 들어가고 null 이면 섞여 나온다.
    * 유지 중 playEmote 는 유지 자세 위에서 한 번 재생되고 끝나면 유지로 돌아온다. 동작 표(characterData)는 바꾸지 않는다
@@ -1146,10 +1151,17 @@ export function createCharacter(
   let lastPoseFace = "base";
   let dim = false;
   let disposed = false;
+  let seated = false;
+  let firstPerson = false;
+  let gazeYaw = 0;
+  let gazePitch = 0;
+  let pointYaw = 0;
   /** 대체 몸(그림이 없는 유령)일 때만 있는 이 캐릭터 전용 복제 재질 */
   let ghostMat: MeshStandardMaterial | null = null;
   /** 유령 상태(켜짐·불투명도·밝기 배율)와 유령 그림 스프라이트(그림이 준비된 뒤 처음 켤 때 만든다) */
   let ghostOn = false;
+  let animalGhost = false;
+  let transitionMat: MeshStandardMaterial | null = null;
   let ghostAlpha = GHOST_ART_OPACITY;
   let ghostTint = 1;
   let sprite: Ghost3d | null = null;
@@ -1202,12 +1214,14 @@ export function createCharacter(
   const cache = new Map<string, Merged>();
   const owned = new Set<BufferGeometry>();
   function merged(j: JointName, faceId: string = face): Merged {
-    const key = j === "head" ? `${appearanceKey()}|${j}|${faceId}` : `${appearanceKey()}|${j}`;
+    const detailed = j === "head" && species !== undefined && (seated || (ghostOn && animalGhost)) && faceId === "base";
+    const key = j === "head" ? `${appearanceKey()}|${j}|${faceId}${detailed ? "|detail" : ""}` : `${appearanceKey()}|${j}`;
     let m = cache.get(key);
     if (!m) {
       const colors = (outfitId === initialOutfit ? portraitOutfit : undefined) ?? OUTFITS[outfitId];
       const { fig, parts } = model();
-      m = mergeJoint(parts[j], colors, fig, faceId, species === undefined ? SKIN : animalSkin(species));
+      m = mergeJoint(parts[j], colors, fig, faceId, species === undefined ? SKIN : animalSkin(species),
+        detailed ? seatedAnimalHead(species!) : undefined);
       owned.add(m.geo);
       if (dim) paint(m, true);
       cache.set(key, m);
@@ -1252,7 +1266,7 @@ export function createCharacter(
   }
   /** 지금 몸 대신 유령 그림이 보이나 */
   function spriteShown(): boolean {
-    return ghostOn && ghostArt;
+    return ghostOn && ghostArt && !animalGhost;
   }
   refreshGlass();
 
@@ -1316,7 +1330,7 @@ export function createCharacter(
       return;
     }
     disc.visible = false;
-    if (ghostArt) {
+    if (spriteShown()) {
       if (ghostMat) {
         for (const j of JOINTS) meshes[j].material = surfaceMaterial();
         ghostMat.dispose();
@@ -1339,12 +1353,16 @@ export function createCharacter(
     if (sprite) sprite.root.visible = false;
     for (const j of JOINTS) meshes[j].visible = true;
     if (!ghostMat) {
-      ghostMat = bodyMaterial.clone();
+      const source = animalGhost ? surfaceMaterial() : bodyMaterial;
+      ghostMat = source.clone();
+      ghostMat.onBeforeCompile = source.onBeforeCompile;
+      ghostMat.customProgramCacheKey = source.customProgramCacheKey;
       ghostMat.transparent = true;
       ghostMat.depthWrite = false;
       for (const j of JOINTS) meshes[j].material = ghostMat;
     }
     ghostMat.opacity = Math.min(ghostAlpha, GHOST_DEFAULT_OPACITY);
+    if (animalGhost) ghostMat.color.setScalar(ghostTint);
     appliedSprite = false;
     refreshGlass();
   }
@@ -1359,13 +1377,13 @@ export function createCharacter(
   let holdMix = 0;
   function applyPose(p: Pose): void {
     groups.armA.rotation.set(p.aAx, 0, p.aAz);
-    groups.armB.rotation.set(p.aBx, 0, p.aBz);
+    groups.armB.rotation.set(p.aBx, pointYaw, p.aBz, "YXZ");
     const shoulderTravel = species === undefined ? 1 : 0.66;
-    groups.armA.position.z = p.fA * shoulderTravel;
-    groups.armB.position.z = p.fB * shoulderTravel;
+    groups.armA.position.z = p.fA * shoulderTravel + (firstPerson ? 0.31 : 0);
+    groups.armB.position.z = p.fB * shoulderTravel + (firstPerson ? 0.29 : 0);
     groups.legA.rotation.x = p.lA;
     groups.legB.rotation.x = p.lB;
-    groups.head.rotation.set(p.hx, p.hy, p.hz);
+    groups.head.rotation.set(p.hx + gazePitch, p.hy + gazeYaw, p.hz);
     body.position.y = p.y;
     body.scale.set(1 + (1 - p.s) * 0.6, p.s, 1 + (1 - p.s) * 0.6);
     body.rotation.y = p.ry;
@@ -1399,7 +1417,12 @@ export function createCharacter(
       walkMix = Math.min(1, Math.max(0, walkMix + ((moving ? 1 : -1) * dt * 1000) / POSE_BLEND_MS));
       // 0 이하는 서 있는 자세 객체, 1 이상은 걷기 자세 객체 그대로(보간 오차 없음)
       const fig = species === undefined ? FIGS[visibleFigure] : animalParts(species).fig;
-      const base = walkMix >= 1 ? walkPose(walkPhase) : walkMix <= 0 ? idlePose(t, root.position.x, fig) : blendPose(idlePose(t, root.position.x, fig), walkPose(walkPhase), walkMix);
+      const idle = idlePose(t, root.position.x, fig);
+      const still = seated && !moving ? {
+        ...idle, aAx: -1.33, aAz: 0.17, aBx: -1.30, aBz: -0.18, lA: -1.33, lB: -1.33,
+        hx: 0.018, hz: 0, y: 0,
+      } : idle;
+      const base = walkMix >= 1 ? walkPose(walkPhase) : walkMix <= 0 ? still : blendPose(still, walkPose(walkPhase), walkMix);
       // 유지 자세: 동작의 마지막 프레임을 목표로 base 와 섞는다. 1 이상은 목표 그대로, 0 이하는 base 그대로(보간 오차 없음)
       holdMix = Math.min(1, Math.max(0, holdMix + ((holdId ? 1 : -1) * dt * 1000) / POSE_BLEND_MS));
       if (holdMix <= 0 && !holdId) holdShown = null;
@@ -1440,10 +1463,28 @@ export function createCharacter(
         pickAge += dt;
         if (ring) ring.scale.setScalar(pickAnimate ? pickRingScale(pickAge, t) : 1);
       }
-      return { headY: (GHOST_ART_H + (ghostOn ? 0 : pose.y)) * CHAR_SCALE };
+      const headTop = (seated || animalGhost) && meshes.head.geometry.boundingBox ? 1 + meshes.head.geometry.boundingBox.max.y : GHOST_ART_H;
+      return { headY: (headTop + (ghostOn ? 0 : pose.y)) * CHAR_SCALE };
     },
     setYaw(yaw) {
       root.rotation.y = yaw;
+    },
+    setSeated(on, ownEye) {
+      if (disposed) return;
+      if (seated !== on) {
+        seated = on;
+        refresh(["head"]);
+      }
+      if (firstPerson !== ownEye) {
+        firstPerson = ownEye;
+        for (const child of body.children) child.visible = !ownEye || child === groups.armA || child === groups.armB;
+        disc.visible = !ownEye && !ghostOn;
+      }
+    },
+    setGaze(yaw, pitch, aim = 0) {
+      gazeYaw = yaw;
+      gazePitch = pitch;
+      pointYaw = aim;
     },
     setDim(on) {
       if (disposed || on === dim) return;
@@ -1488,22 +1529,33 @@ export function createCharacter(
     },
     setGhost(on, opts) {
       if (disposed) return;
+      const hadAnimalForm = ghostOn && animalGhost;
       if (!on) {
         if (!ghostOn) return;
         ghostOn = false;
+        animalGhost = false;
         hopAge = null;
         if (sprite) sprite.root.position.y = 0;
+        if (hadAnimalForm && !seated && species !== undefined && face === "base") refresh(["head"]);
         applyGhost();
         return;
       }
       if (!ghostOn) {
         ghostOn = true;
+        transitionMat?.dispose();
+        transitionMat = null;
         ghostAlpha = GHOST_ART_OPACITY;
         ghostTint = 1;
         noteRig?.clear(); // 관절 메시만 숨기므로 body 자식 종이를 따로 뗀다 — 모션 없이(P24-17)
       }
+      if (opts?.animalForm !== undefined && opts.animalForm !== animalGhost) {
+        animalGhost = opts.animalForm;
+        ghostMat?.dispose();
+        ghostMat = null;
+      }
       if (opts?.opacity !== undefined) ghostAlpha = clamp01(opts.opacity);
       if (opts?.tint !== undefined) ghostTint = clamp01(opts.tint);
+      if (hadAnimalForm !== animalGhost && !seated && species !== undefined && face === "base") refresh(["head"]);
       applyGhost();
     },
     holdPose(id) {
@@ -1568,10 +1620,27 @@ export function createCharacter(
     bodyMeshes() {
       return JOINTS.map((joint) => meshes[joint]);
     },
-    setOpacity(alpha) {
-      if (disposed || !ghostOn) return;
-      ghostAlpha = clamp01(alpha);
-      applyGhost();
+    setOpacity(alpha, allowLiving = false) {
+      if (disposed) return;
+      if (ghostOn) {
+        ghostAlpha = clamp01(alpha);
+        applyGhost();
+      } else if (allowLiving && alpha < 1) {
+        if (!transitionMat) {
+          const source = surfaceMaterial();
+          transitionMat = source.clone();
+          transitionMat.onBeforeCompile = source.onBeforeCompile;
+          transitionMat.customProgramCacheKey = source.customProgramCacheKey;
+          transitionMat.transparent = true;
+          transitionMat.depthWrite = false;
+          for (const j of JOINTS) meshes[j].material = transitionMat;
+        }
+        transitionMat.opacity = clamp01(alpha);
+      } else if (allowLiving && transitionMat) {
+        for (const j of JOINTS) meshes[j].material = surfaceMaterial();
+        transitionMat.dispose();
+        transitionMat = null;
+      }
     },
     setNotes(fromSeats, opts) {
       if (disposed || ghostOn) return;
@@ -1580,6 +1649,9 @@ export function createCharacter(
         noteRig = createNoteRig(noteKit(), body, { floorY: 0.02 / CHAR_SCALE });
       }
       noteRig.set(fromSeats, opts);
+      if (firstPerson) for (const child of body.children) {
+        if (child.name === "note") child.visible = false;
+      }
     },
     noteCounts() {
       return noteRig ? noteRig.counts() : { total: 0, visible: 0 };
@@ -1594,6 +1666,8 @@ export function createCharacter(
     dispose() {
       if (disposed) return;
       disposed = true;
+      transitionMat?.dispose();
+      transitionMat = null;
       noteRig?.detach(); // 메시만 뗀다 — 공유 키트는 해제하지 않는다
       noteRig = null;
       if (ghostMat) {

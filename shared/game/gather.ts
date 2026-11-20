@@ -7,7 +7,7 @@
 // 퇴거·재시작 뒤에도 같은 판단을 한다. 이미 목적지에 선(또는 그리로 걷는 중인) 사람은 이동 목록에 없다.
 import { isAlive } from "./alive";
 import { firstPlaytestDay } from "./playtest";
-import { BAR_SEATS_FX, STAGE_SPOT } from "./map";
+import { BAR_SEATS_FX, STAGE_SPOT, barChairAssignment } from "./map";
 import type { RoomState } from "./room";
 import { positionAtFx } from "./world";
 import type { LayoutMemo, WorldState } from "./world";
@@ -194,6 +194,8 @@ export function layoutFor(state: RoomState, w: WorldState, now: number): GatherL
   const defender = state.phase === "defense" || state.phase === "execution" ? state.verdict?.candidate : undefined;
   const runoffCand = state.phase === "runoff" ? state.runoff?.cand : undefined;
   const bar = (state.map ?? "bar") === "bar";
+  // 옛 저장에는 표가 없다. 탈락자와 연결이 끊긴 사람도 원래 명단에 남는다.
+  const chairs = bar ? state.barChairs ?? barChairAssignment(state.players.filter((p) => p.sat !== true).map((p) => p.seat)) : undefined;
 
   const participants = [...state.players]
     .sort((a, b) => a.seat - b.seat)
@@ -209,8 +211,9 @@ export function layoutFor(state: RoomState, w: WorldState, now: number): GatherL
   const slots: Record<string, Slot> = {};
   const unplaced: { id: string; x: number; z: number }[] = [];
   for (const p of participants) {
-    if (bar) {
-      const seat = BAR_SEATS_FX[p.seat];
+    if (chairs !== undefined) {
+      const index = chairs[p.seat];
+      const seat = index === undefined ? undefined : BAR_SEATS_FX[index];
       if (seat !== undefined) slots[p.id] = seat;
       continue;
     }
@@ -236,7 +239,7 @@ export function layoutFor(state: RoomState, w: WorldState, now: number): GatherL
       dest = { x, z };
     }
     else if (isDefender && state.phase === "defense") dest = { x: STAGE_SPOT.x, z: STAGE_SPOT.z };
-    else if (isDefender && state.phase === "execution") dest = null; // 처형: 무대에 남는다
+    else if (isDefender && state.phase === "execution") dest = bar ? STAGE_SPOT : null; // 이미 무대라면 유지한다
     else {
       const s = slots[p.id];
       dest = s === undefined ? null : { x: s[0], z: s[1] };

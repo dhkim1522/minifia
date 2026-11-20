@@ -5,9 +5,10 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Plane, Raycaster, Vector2, Vector3 } from "three";
 import { describe, expect, it } from "vitest";
-import { BAR_TABLE_CAMERA, BAR_WALK_CAMERA, barTableZoom, cameraScale, groundToScreen, PX_PER_UNIT, screenToGround, STAGE_SIZES, stageOffsetY, stageRect } from "../../src/world/camera";
+import { BAR_TABLE_CAMERA, BAR_WALK_CAMERA, barTableZoom, cameraScale, eyeTableCamera, groundToScreen, PX_PER_UNIT, screenToGround, STAGE_SIZES, stageOffsetY, stageRect, tableAim, tableEyeAt, WIDE_TABLE_CAMERA } from "../../src/world/camera";
+import { BAR_SEATS_FX, UNIT } from "../../shared/game/map";
 import { nextLadderStep, UnsupportedRendererError } from "../../src/world/renderer";
-import { configureCamera, createCamera } from "../../src/world/threeCamera";
+import { configureCamera, configureTableCamera, createCamera, createTableCamera } from "../../src/world/threeCamera";
 import { createThreeRenderer } from "../../src/world/threeRenderer";
 
 /** 시드 고정 난수(mulberry32) */
@@ -33,6 +34,28 @@ function forEachPhone(fn: (size: { w: number; h: number; label: string }, offset
     for (const offsetY of [0, stageOffsetY(size.h, r.top, r.bottom)]) for (const target of targets) fn(size, offsetY, target);
   }
 }
+
+describe("재즈 바 착석 카메라", () => {
+  it("어느 의자에서도 시선 투영과 탭 방향이 일치하고 카메라 뒤는 프러스텀에서 빠진다", () => {
+    const camera = createTableCamera();
+    const ray = new Raycaster();
+    for (const [x, z] of BAR_SEATS_FX) {
+      const seat = { x: x / UNIT, z: z / UNIT };
+      const eye = tableEyeAt(seat);
+      const target = { x: -seat.x, y: 1.32, z: -seat.z };
+      const aim = tableAim(eye, target);
+      for (const view of [eyeTableCamera(eye, aim.yaw, aim.pitch), WIDE_TABLE_CAMERA]) {
+        configureTableCamera(camera, view, { w: 320, h: 640 }, 42);
+        const point = new Vector3(target.x, target.y, target.z);
+        const projection = point.clone().project(camera);
+        ray.setFromCamera(new Vector2(projection.x, projection.y), camera);
+        expect(ray.ray.distanceToPoint(point)).toBeLessThan(1e-6);
+        const behind = camera.position.clone().addScaledVector(camera.getWorldDirection(new Vector3()), -0.45);
+        expect(behind.project(camera).z).toBeGreaterThan(1);
+      }
+    }
+  });
+});
 
 describe("three 정사영 카메라 = camera.ts 순수 수학", () => {
   it("재즈 바 근접 카메라에서도 화면 투영과 바닥 탭이 일치한다", () => {

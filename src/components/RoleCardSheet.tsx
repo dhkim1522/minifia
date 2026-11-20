@@ -157,36 +157,32 @@ function RecordsPanel({ view }: { view: RoomView }): ReactElement {
   const days = suspectLogByDay(view);
   return (
     <div className="mf-suspect-log">
-      {days.map(({ n, rows }) => (
-        <section key={n} className="mf-suspect-log__day" data-log-day={n}>
-          <div className="mf-suspect-log__head">
-            <span className="mf-suspect-log__dayname">{n}일차</span>
-          </div>
-          <ul className="mf-suspect__list" data-suspect-list="">
-            {rows.map((r) => {
-              const mine = r.from === view.me.seat;
-              return (
+      {days.map(({ n, rows }) => {
+        const counts = new Map<number, number>();
+        for (const { to } of rows) counts.set(to, (counts.get(to) ?? 0) + 1);
+        return (
+          <section key={n} className="mf-suspect-log__day" data-log-day={n}>
+            <div className="mf-suspect-log__head">
+              <span className="mf-suspect-log__dayname">{n}일차</span>
+            </div>
+            <ul className="mf-suspect__list" data-suspect-list="">
+              {[...counts].sort(([a], [b]) => a - b).map(([to, count]) => (
                 <li
-                  key={r.from}
-                  className={mine ? "mf-suspect__row mf-suspect__row--mine" : "mf-suspect__row"}
+                  key={to}
+                  className="mf-suspect__row"
                   data-suspect-row=""
-                  data-suspect-from={r.from}
-                  data-suspect-to={r.to}
-                  aria-label={mine ? `${nick(r.to)} 님에게 내가 붙인 의심딱지` : `${nick(r.from)} 님이 ${nick(r.to)} 님에게 붙인 의심딱지`}
+                  data-suspect-to={to}
+                  aria-label={`${nick(to)} 님, 의심딱지 ${count}장`}
                 >
-                  <span className="mf-suspect__dot" style={{ background: playerColor(r.from, players.get(r.from)?.animal) }} aria-hidden="true" />
-                  <span className="mf-suspect__nick mf-suspect__nick--from">{nick(r.from)}</span>
-                  <span className="mf-suspect__arrow" aria-hidden="true">
-                    <V2Icon name="chevronRight" size={16} />
-                  </span>
-                  <span className="mf-suspect__dot" style={{ background: playerColor(r.to, players.get(r.to)?.animal) }} aria-hidden="true" />
-                  <span className="mf-suspect__nick mf-suspect__nick--to">{nick(r.to)}</span>
+                  <span className="mf-suspect__dot" style={{ background: playerColor(to, players.get(to)?.animal) }} aria-hidden="true" />
+                  <span className="mf-suspect__nick mf-suspect__nick--to">{nick(to)}</span>
+                  <span className="mf-suspect__total">{count}장</span>
                 </li>
-              );
-            })}
-          </ul>
-        </section>
-      ))}
+              ))}
+            </ul>
+          </section>
+        );
+      })}
     </div>
   );
 }

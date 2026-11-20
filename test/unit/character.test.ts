@@ -3,10 +3,12 @@
 import { Box3, BufferGeometry, CircleGeometry, Color, Euler, type Group, type Material, type Mesh, MeshBasicMaterial, MeshStandardMaterial, type Object3D, Quaternion } from "three";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MOVE_SPEED } from "../../shared/game/world";
+import { ANIMAL_IDS } from "../../shared/game/animals";
 import { emoteDurationMs } from "../../src/world/emoteCap";
 import { CHAR_SCALE, characterKit, createCharacter, figForSeat, POSE_BLEND_MS, setGhostArt, WALK_PHASE_RATE, type WorldCharacter } from "../../src/world/character";
 import { EMOTE_KEYS, EMOTES, type EmoteId, FACE_IDS, FIGS, OUTFITS, SKIN, type OutfitId } from "../../src/world/characterData";
 import { noteKit } from "../../src/world/postit";
+import { seatedAnimalHead } from "../../src/world/barAssets/animal-detail";
 
 function meshes(root: Object3D, visibleOnly = true): Mesh[] {
   const out: Mesh[] = [];
@@ -24,6 +26,51 @@ function joint(root: Object3D, name: string): Object3D {
   if (!o) throw new Error(`관절 ${name} 없음`);
   return o;
 }
+
+describe("착석 동물 리그", () => {
+  it("승인된 12종 머리를 기존 관절에 병합하고 착석 상태를 되돌릴 수 있다", () => {
+    for (const animal of ANIMAL_IDS) {
+      const character = createCharacter(0, "coat", undefined, animal);
+      const neck = joint(character.root, "neck");
+      const head = neck.children[0] as Mesh;
+      const standing = head.geometry;
+      character.setSeated(true, true);
+      character.setGaze(0.6, 0, 0.2);
+      character.update(0.016, 0, false);
+      expect(head.geometry).not.toBe(standing);
+      expect(head.geometry.getAttribute("position").count).toBeGreaterThan(standing.getAttribute("position").count);
+      expect(neck.children).toHaveLength(1);
+      expect(neck.visible).toBe(false);
+      expect(neck.rotation.y).toBeCloseTo(0.6);
+      expect(joint(character.root, "legA").rotation.x).toBeCloseTo(-1.33);
+      character.setSeated(false, false);
+      expect(neck.visible).toBe(true);
+      expect(head.geometry).toBe(standing);
+      character.dispose();
+    }
+  });
+
+  it("관전 유령은 원래 동물 관절에 반투명을 적용하고 복귀 시 공유 재질을 되돌린다", () => {
+    const character = createCharacter(0, "mafia", undefined, "fox");
+    const torso = character.bodyMeshes()[0] as Mesh;
+    const material = torso.material as MeshStandardMaterial;
+    const head = joint(character.root, "neck").children[0] as Mesh;
+    const standing = head.geometry;
+    character.setSeated(true, false);
+    const detail = head.geometry;
+    expect(detail.getAttribute("position").count).toBeGreaterThan(seatedAnimalHead("fox").getAttribute("position").count);
+    character.setSeated(false, false);
+    character.setGhost(true, { animalForm: true, opacity: 0.5 });
+    expect(character.root.getObjectByName("ghost-3d")).toBeUndefined();
+    expect(head.geometry).toBe(detail);
+    expect((torso.material as MeshStandardMaterial).opacity).toBeCloseTo(0.5);
+    expect(torso.visible).toBe(true);
+    character.setGhost(false);
+    expect(torso.material).toBe(material);
+    expect(head.geometry).toBe(standing);
+    character.dispose();
+  });
+});
 
 describe("기본 코트 인물 하나 (트레이서)", () => {
   it("node 에서 만들어지고 맵 위 크기는 0.83 이다", () => {

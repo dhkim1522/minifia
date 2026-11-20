@@ -9,11 +9,12 @@ import { createCharacter } from "../../../src/world/character";
 import { buildBarScene, Bundle, tf, under } from "../../../src/world/maps/bar";
 import { LADDER } from "../../../src/world/renderer";
 import { addFinishedRoom } from "./finish";
-import { addDetailedTable } from "./table-detail";
-import { makeElephantDetail } from "./elephant-detail";
-import { makeFoxDetail } from "./fox-detail";
-import { makeBatDetail, makeLionDetail, makePigDetail, makeRabbitDetail, makeRamDetail } from "./mammal-detail";
-import { makeCrocodileDetail, makeFrogDetail, makeHedgehogDetail, makeParrotDetail, makePenguinDetail } from "./mixed-detail";
+import { addDetailedTable } from "../../../src/world/barAssets/table-detail";
+import { makeElephantDetail } from "../../../src/world/barAssets/elephant-detail";
+import { makeFoxDetail } from "../../../src/world/barAssets/fox-detail";
+import { makeBatDetail, makeLionDetail, makePigDetail, makeRabbitDetail, makeRamDetail } from "../../../src/world/barAssets/mammal-detail";
+import { makeCrocodileDetail, makeFrogDetail, makeHedgehogDetail, makeParrotDetail, makePenguinDetail } from "../../../src/world/barAssets/mixed-detail";
+import { addChairParts, addSeatedRoomShell } from "../../../src/world/barAssets/seated-bar";
 import { occupiedSlots } from "./table-layout";
 import type { TableCount } from "./table-layout";
 
@@ -113,19 +114,7 @@ function makeFurniture(root: Scene, finish: boolean, crafted: boolean): void {
 
   for (const [i, pos] of places.entries()) {
     const facing = Math.atan2(-pos.x, -pos.z);
-    const chair = tf(pos.x, 0, pos.z, 0, facing, 0);
-    const upholstery = i === 0 ? "#414956" : "#473435";
-    felt.add(new SphereGeometry(0.44, 20, 12).scale(1, 0.15, 0.85),
-      upholstery, under(chair, tf(0, chairY - 0.025, 0)));
-    felt.add(new SphereGeometry(0.40, 20, 12).scale(1, 0.63, 0.19),
-      upholstery, under(chair, tf(0, 0.73, -0.34, -0.16)));
-    for (const x of [-0.25, 0.25]) {
-      for (const z of [-0.23, 0.25]) {
-        wood.cyl(0.029, 0.038, 0.39, 10, "#58423a", under(chair, tf(x, 0.195, z)));
-      }
-      wood.cyl(0.026, 0.03, 0.47, 12, "#634b3e", under(chair, tf(x, 0.61, -0.31, -0.19)));
-      brass.sph(0.022, "#9d7853", under(chair, tf(x, 0.86, -0.36)));
-    }
+    addChairParts(wood, felt, brass, pos, i === 0, chairY);
     if (crafted) continue;
     const settingRadius = i === 0 ? 0.51 : 0.655;
     const placeSetting = tf(pos.x * settingRadius, tableY + 0.009, pos.z * settingRadius, 0, facing, 0);
@@ -159,24 +148,7 @@ function makeFurniture(root: Scene, finish: boolean, crafted: boolean): void {
   meshes[0]!.castShadow = meshes[1]!.castShadow = true;
   root.add(...meshes);
 
-  // 실내 쪽에서만 보이는 천장이라 테이블 전체를 보는 카메라를 가리지 않는다.
-  const ceiling = new Mesh(
-    new PlaneGeometry(9.43, 9.43),
-    new MeshStandardMaterial({ color: "#252437", roughness: 1, emissive: "#231d2f", emissiveIntensity: 0.54 }),
-  );
-  ceiling.rotation.x = Math.PI / 2;
-  ceiling.position.y = 3.44;
-  root.add(ceiling);
-
-  const molding = new Bundle();
-  for (const z of [-3.78, -2.40, -1.02, 0.36, 1.74, 3.12]) {
-    molding.add(new PlaneGeometry(9.4, 0.032), "#373047", tf(0, 3.437, z, Math.PI / 2));
-  }
-  molding.add(new PlaneGeometry(9.4, 3.45), "#29293a", tf(4.6, 1.725, 0, 0, -Math.PI / 2, 0));
-  for (const y of [0.09, 0.86, 3.18]) {
-    molding.add(new PlaneGeometry(9.4, 0.037), "#44384a", tf(4.59, y, 0, 0, -Math.PI / 2, 0));
-  }
-  root.add(molding.build(new MeshBasicMaterial({ vertexColors: true }), "seated-room-molding"));
+  addSeatedRoomShell(root, false);
 }
 
 function cameraSpot(mode: ViewMode): Vector3 {

@@ -95,6 +95,45 @@ export const BAR_WALK_CAMERA: CameraRig = {
 };
 export const BAR_FOLLOW_SHARE = 0.73;
 
+export type TableCamera = {
+  mode: "eye" | "wide";
+  position: V3;
+  target: V3;
+};
+
+export const TABLE_PAN_LIMIT = 66 * Math.PI / 180;
+
+/** 좌석 중심에서 탁자 쪽으로 8cm, 보는 사람 오른쪽으로 4cm 옮긴 눈높이. */
+export function tableEyeAt(seat: { x: number; z: number }): V3 {
+  const radius = Math.hypot(seat.x, seat.z);
+  const x = seat.x / radius;
+  const z = seat.z / radius;
+  return { x: seat.x - x * 0.08 + z * 0.04, y: 1.42, z: seat.z - z * 0.08 - x * 0.04 };
+}
+
+export function tableAim(position: V3, target: V3): { yaw: number; pitch: number } {
+  const x = target.x - position.x;
+  const z = target.z - position.z;
+  return { yaw: Math.atan2(x, -z), pitch: Math.atan2(target.y - position.y, Math.hypot(x, z)) };
+}
+
+export function tableYaw(yaw: number, center: number): number {
+  const delta = Math.atan2(Math.sin(yaw - center), Math.cos(yaw - center));
+  return center + Math.max(-TABLE_PAN_LIMIT, Math.min(TABLE_PAN_LIMIT, delta));
+}
+
+export function eyeTableCamera(position: V3, yaw: number, pitch: number): TableCamera {
+  return { mode: "eye", position, target: {
+    x: position.x + Math.sin(yaw),
+    y: position.y + Math.tan(pitch),
+    z: position.z - Math.cos(yaw),
+  } };
+}
+
+export const WIDE_TABLE_CAMERA: TableCamera = {
+  mode: "wide", position: { x: 1.65, y: 4.57, z: 5.72 }, target: { x: 0, y: 0.93, z: 0 },
+};
+
 /** 같은 너비에서는 인원과 관계없이 같은 배율을 쓴다. */
 export function cameraScale(c: Pick<Canvas, "w">, rig: CameraRig = DEFAULT_CAMERA): number {
   if (rig.span === undefined) return PX_PER_UNIT;

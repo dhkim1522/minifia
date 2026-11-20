@@ -1,12 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import { isAlive } from "../../shared/game/alive";
 import { phaseKey } from "../../shared/game/audience";
 import type { ClientMessage, EmoteId, MapId, PublicPlayer, RoomView } from "../../shared/protocol";
 import { MOVE_COORD_LIMIT } from "../../shared/protocol";
 import { playerColor } from "../game/playerIdentity";
 import { useReducedMotion } from "../net/useReducedMotion";
 import { HEADER_BOTTOM, PANEL_HEIGHT } from "../world/camera";
-import { createTapTracker } from "../world/input";
+import { createTapTracker, TAP_SLOP_PX } from "../world/input";
 import { createWorldRuntime, EXIT_CURTAIN_MS, EXIT_MS, ringKindAttr } from "../world/runtime";
 import type { RingKind, WorldModules, WorldRuntime } from "../world/runtime";
 import type { SceneLook } from "../world/presence";
@@ -104,6 +105,7 @@ export interface WorldStageProps {
   canWalk?: boolean;
   /** 있으면 그 좌석들의 이름표가 지목 버튼이 된다 */
   pick?: WorldPick;
+  onTableSeat?(seat: number): void;
   /**
    * 무대(캐릭터 빈 곳 포함) 탭 한 번마다 불린다 — 결과 화면의 건너뛰기(11-05, D-25). 끌기·입력칸 포커스 중 탭(키보드 닫기)에는 부르지 않는다.
    * canWalk 가 거짓이어도 부른다(걷기 요청과 무관한 알림이다)
@@ -152,6 +154,7 @@ export function WorldStage(props: WorldStageProps) {
   const tagRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<WorldRuntime | null>(null);
   const [tracker] = useState(createTapTracker);
+  const tableDrag = useRef<{ id: number; x: number; y: number; lastX: number; active: boolean } | null>(null);
   // 손가락을 대는 순간 입력칸에 포커스가 있었던 포인터(D4). 떼는 순간에 정하지 않는 이유: 마우스는 누르는 동안 브라우저가 포커스를 옮긴다.
   const downWhileTyping = useRef(new Set<number>());
   const [mapStatus, setMapStatus] = useState<MapStatusState>(initialMapStatus);
@@ -180,7 +183,7 @@ export function WorldStage(props: WorldStageProps) {
     if (host === null || tagLayer === null) return;
     // 테스트 훅은 ?e2e=1(세션 저장) 또는 개발 빌드에서만 — 같은 조건에서 소프트웨어 렌더러도 허용한다(E2E 헤드리스, RESEARCH A13)
     const hooksOn = worldTestHooksEnabled(window.location.search, sessionStore(), import.meta.env.DEV);
-    // window.__mfGhosts(유령 그림으로 그리는 좌석·그림 준비 여부, 0083-2): 같은 훅 문맥에서만. 좌석 번호뿐이고 DOM 속성이 아니다(L13)
+    // window.__mfGhosts(유령으로 그리는 좌석과 연출 상태): 같은 훅 문맥에서만 보인다.
     const ghostsHook = hooksOn ? installGhostsHook() : null;
     // window.__mfPin(핀 조명 대상·이동 중 여부, 09.1.1-11): 같은 훅 문맥에서만. DOM 이 아니다
     const pinHook = hooksOn ? installPinHook() : null;
@@ -329,7 +332,13 @@ export function WorldStage(props: WorldStageProps) {
     const { props: p } = live.current;
     const runtime = runtimeRef.current;
     p.onStageTap?.();
-    if (runtime === null || !p.canSend || p.exiting) return;
+    if (runtime === null || p.exiting) return;
+    if (p.scene?.table && p.onTableSeat) {
+      const seat = runtime.tableSeatAt?.(clientX, clientY);
+      if (seat !== null && seat !== undefined) p.onTableSeat(seat);
+      return;
+    }
+    if (!p.canSend) return;
     if (p.pick?.hit === "body" && !p.pick.disabled) {
       const seat = runtime.suspectAt(clientX, clientY);
       if (seat !== null) {
@@ -355,19 +364,34 @@ export function WorldStage(props: WorldStageProps) {
   const stateClass = exiting ? "is-exiting" : mapStatus.status === "ready" ? "is-open" : mapStatus.status === "lost" || mapStatus.status === "recreating" ? "is-redrawing" : "";
 
   return (
-    <div ref={rootRef} className={stateClass ? `mf-world ${stateClass}` : "mf-world"} data-world-stage>
-      <div ref={hostRef} className="mf-world__canvas" role="img" aria-label={SCENE_LABEL} />
+    <div ref={rootRef} className={stateClass ? `mf-world ${stateClass}` : "mf-world"} data-world-stage data-table-camera={scene?.table?.mode}>
+      <div ref={hostRef} className="mf-world__canvas" role="img" aria-label={scene?.table ? "재즈 바 테이블" : SCENE_LABEL} />
       <div
         className="mf-world__input"
         onPointerDown={(e) => {
           if (e.pointerType === "mouse" && e.button !== 0) return;
-          if (chatInputFocused()) downWhileTyping.current.add(e.pointerId);
+          const typing = chatInputFocused();
+          if (typing) downWhileTyping.current.add(e.pointerId);
           else downWhileTyping.current.delete(e.pointerId);
           tracker.down(e.pointerId, e.clientX, e.clientY, Date.now());
+          if (!typing && live.current.props.scene?.table?.mode === "eye" && tableDrag.current === null) {
+            tableDrag.current = { id: e.pointerId, x: e.clientX, y: e.clientY, lastX: e.clientX, active: false };
+            e.currentTarget.setPointerCapture?.(e.pointerId);
+          }
         }}
-        onPointerMove={(e) => tracker.move(e.pointerId, e.clientX, e.clientY)}
+        onPointerMove={(e) => {
+          tracker.move(e.pointerId, e.clientX, e.clientY);
+          const drag = tableDrag.current;
+          if (drag?.id !== e.pointerId) return;
+          const dx = e.clientX - drag.x;
+          if (!drag.active && (Math.abs(dx) < TAP_SLOP_PX || Math.abs(dx) < Math.abs(e.clientY - drag.y))) return;
+          drag.active = true;
+          runtimeRef.current?.panTable(e.clientX - drag.lastX);
+          drag.lastX = e.clientX;
+        }}
         onPointerUp={(e) => {
           const at = tracker.up(e.pointerId, e.clientX, e.clientY, Date.now());
+          if (tableDrag.current?.id === e.pointerId) tableDrag.current = null;
           const typing = downWhileTyping.current.delete(e.pointerId);
           if (at === null) return;
           // D4: 입력칸에 포커스가 있는 동안의 탭은 키보드만 닫는다(blur). 걷기 요청도 링도 없다. 닫힌 뒤의 탭부터 평소처럼 걷는다.
@@ -381,6 +405,12 @@ export function WorldStage(props: WorldStageProps) {
           onTap(at.x, at.y);
         }}
         onPointerCancel={(e) => {
+          if (tableDrag.current?.id === e.pointerId) tableDrag.current = null;
+          downWhileTyping.current.delete(e.pointerId);
+          tracker.cancel(e.pointerId);
+        }}
+        onLostPointerCapture={(e) => {
+          if (tableDrag.current?.id === e.pointerId) tableDrag.current = null;
           downWhileTyping.current.delete(e.pointerId);
           tracker.cancel(e.pointerId);
         }}
@@ -390,8 +420,8 @@ export function WorldStage(props: WorldStageProps) {
         ref={tagRef}
         className="mf-world__tags"
         data-chalk={scene?.chalk === undefined ? undefined : `${scene.chalk.x.toFixed(2)},${scene.chalk.z.toFixed(2)}`}
-        role={pick ? "group" : undefined}
-        aria-label={pick?.group}
+        role={pick && !scene?.table ? "group" : undefined}
+        aria-label={!scene?.table ? pick?.group : undefined}
       >
         {/* 지목 단계에는 이름표 버튼이 같은 사람들을 읽으므로 목록은 읽히지 않게 한다(한 벌만 둔다) */}
         <ul className="mf-world__sr mf-sr-only" aria-label={`방에 있는 사람 ${view.players.length}명`} aria-hidden={pick ? true : undefined}>
@@ -407,11 +437,9 @@ export function WorldStage(props: WorldStageProps) {
           const bodyPick = pickable && pick.hit === "body";
           const kickable = !pickable && current && canKick && away && !me;
           const { ring, turn, ...extra } = props.tagProps?.(p.seat) ?? {};
-          // 죽은 자리 표식(유령 시점에서만): GameMap roleTagProps 가 spectate 가 있을 때만 tagProps.ghost 를 준다.
-          // 산 사람 화면의 유령(장면 표 ghost)은 HeadStack is-ghost 만 — 표식·직업 칩은 없다(18.1 C-2·C-5)
+          // 탈락 표식은 GameMap에서 관전자에게만 준다.
           const ghostSeat = extra.ghost === true;
-          // 산 사람 화면에서 유령의 입력 중 신호는 그리지 않는다(유령 채널은 산 사람에게 보이지 않는다, T-08-44)
-          const hideTyping = scene?.seats[p.seat]?.ghost === true && !ghostSeat;
+          const hideTyping = !isAlive(p) && !ghostSeat;
           const stack = (
             <HeadStack
               name={p.nickname}
@@ -437,10 +465,10 @@ export function WorldStage(props: WorldStageProps) {
               data-turn={turn ? "true" : undefined}
               data-suspect-target={bodyPick && props.canSend && !pick.disabled ? "" : undefined}
               data-ring-kind={ring === undefined ? undefined : ringKindAttr(ring)}
-              aria-hidden={kickable || pickable ? undefined : true}
+              aria-hidden={kickable || (pickable && !scene?.table) ? undefined : true}
               style={TAG_INITIAL_STYLE}
             >
-              {pickable ? (
+              {pickable && !scene?.table ? (
                 <button
                   type="button"
                   className={bodyPick ? "mf-world__pick mf-world__pick--body" : "mf-world__pick"}

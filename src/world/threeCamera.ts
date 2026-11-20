@@ -1,12 +1,28 @@
 // three 정사영 카메라. camera.ts 의 순수 수학과 같은 상수(PX_PER_UNIT·CAM_*·LOOK_Y)로 구성하고,
 // Vector3.project / Raycaster 결과가 groundToScreen / screenToGround 와 같다는 것을 cameraThree.test.ts 가 증명한다.
 // 시안(blockout.js)은 view 14 를 고정해 폰마다 배율이 달라졌다 — 여기서는 배율(px/단위)을 고정한다(UI-SPEC).
-import { OrthographicCamera } from "three";
+import { OrthographicCamera, PerspectiveCamera } from "three";
 import { cameraScale, DEFAULT_CAMERA } from "./camera";
-import type { CameraRig } from "./camera";
+import type { CameraRig, TableCamera } from "./camera";
 
 export function createCamera(): OrthographicCamera {
   return new OrthographicCamera(-1, 1, 1, -1, 0.1, 120);
+}
+
+export function createTableCamera(): PerspectiveCamera {
+  return new PerspectiveCamera(68, 1, 0.07, 28);
+}
+
+export function configureTableCamera(
+  camera: PerspectiveCamera, view: TableCamera, { w, h }: { w: number; h: number }, offsetY: number,
+): void {
+  const horizontal = (view.mode === "wide" ? 47 : 58) * Math.PI / 180;
+  camera.aspect = w / h;
+  camera.fov = 2 * Math.atan(Math.tan(horizontal / 2) / camera.aspect) * 180 / Math.PI;
+  camera.position.set(view.position.x, view.position.y, view.position.z);
+  camera.lookAt(view.target.x, view.target.y, view.target.z);
+  camera.setViewOffset(w, h, 0, offsetY, w, h);
+  camera.updateMatrixWorld(true);
 }
 
 /**

@@ -3,8 +3,8 @@ import {
   MeshPhysicalMaterial, MeshStandardMaterial, Shape, ShapeGeometry, TorusGeometry,
   TubeGeometry, Vector2, Vector3,
 } from "three";
-import type { Scene } from "three";
-import { Bundle, tf, under } from "../../../src/world/maps/bar";
+import type { Object3D } from "three";
+import { Bundle, tf, under } from "../maps/bar";
 
 type Profile = readonly (readonly [radius: number, height: number])[];
 
@@ -133,7 +133,7 @@ function addGlass(
     under(cup, tf(0, 0.066, 0, -Math.PI / 2)));
 }
 
-export function addDetailedTable(root: Scene, seats: readonly Vector3[], tableY: number, speaker: number): void {
+export function addDetailedTable(root: Object3D, seats: readonly Vector3[], tableY: number, speaker: number): void {
   const brass = new Bundle();
   const shade = new Bundle();
   const lampGlow = new Bundle();
@@ -163,5 +163,6 @@ export function addDetailedTable(root: Scene, seats: readonly Vector3[], tableY:
     coasters.build(new MeshStandardMaterial({ vertexColors: true, roughness: 0.91 }), "seated-leather-coasters"),
   ];
   for (const mesh of meshes) mesh.receiveShadow = true;
+  for (const mesh of meshes.slice(0, 4)) mesh.userData.tableBlocker = true;
   root.add(...meshes);
 }

@@ -69,15 +69,15 @@ function viewOf(phase: PhaseId, opts: ViewOpts = {}): RoomView {
 const points = (...pairs: [number, number][]) => pairs.map(([seat, target]) => ({ seat, target }));
 
 describe("visibleSeats (GHOST-01, T-08-25)", () => {
-  it("산 사람 viewer: 탈락한 좌석 3 은 ghost 로 남고 산 좌석은 ghost false 다 (18.1 P181-6)", () => {
+  it("산 사람의 시야에는 생존 좌석만 남는다", () => {
     const seats = visibleSeats(viewOf("discussion", { dead: [3], mySeat: 0 }));
-    same(Object.keys(seats).map(Number), [0, 1, 2, 3, 4]);
+    same(Object.keys(seats).map(Number), [0, 1, 2, 4]);
     same([0, 1, 2, 4].map((n) => seats[n]?.ghost), [false, false, false, false]);
-    same(seats[3], { show: true, ghost: true });
+    expect(seats[3]).toBeUndefined();
   });
 
-  it("산 사람 viewer 의 유령 좌석에는 outfit·costume·opacity 키가 없다 (직업 단서 없음, L13·C-5)", () => {
-    const seat = visibleSeats(viewOf("discussion", { dead: [3] }))[3];
+  it("유령끼리 보이는 반투명 좌석에는 역할 의상 키가 없다", () => {
+    const seat = visibleSeats(viewOf("discussion", { dead: [1, 3], mySeat: 1 }))[3];
     expect(seat).toBeDefined();
     for (const key of ["outfit", "costume", "opacity", "fadeAt"]) expect(key in seat!).toBe(false);
   });
@@ -88,9 +88,9 @@ describe("visibleSeats (GHOST-01, T-08-25)", () => {
     expect(3 in visibleSeats(asRole(night, "citizen"))).toBe(false);
   });
 
-  it("산 사람 viewer: 낮 시작~아침 단계에서는 탈락 좌석이 ghost 로 있다", () => {
+  it("산 사람에게는 낮 시작부터 다음 아침까지 탈락 좌석을 감춘다", () => {
     for (const phase of ["dayAnnounce", "discussion", "nomination", "verdict", "execution", "morning"] as const) {
-      same(visibleSeats(viewOf(phase, { dead: [3], mySeat: 0 }))[3], { show: true, ghost: true });
+      expect(visibleSeats(viewOf(phase, { dead: [3], mySeat: 0 }))[3]).toBeUndefined();
     }
   });
 
@@ -109,17 +109,16 @@ describe("visibleSeats (GHOST-01, T-08-25)", () => {
 
   it("방에 없는 viewer(내 좌석이 players 에 없음)는 산 사람 규칙을 따른다", () => {
     const seats = visibleSeats(viewOf("discussion", { dead: [3], mySeat: 9 }));
-    same(seats[3], { show: true, ghost: true });
+    expect(seats[3]).toBeUndefined();
   });
 
-  it("처형 연출 표시 {3: 시작 시각}: 산 사람 viewer 는 연출 끝(2400ms) 직전까지 ghost 아님 + fadeAt, 끝나면 ghost 로 남는다", () => {
+  it("생존자에게는 처형 연출 종료 시각까지만 탈락자를 표시한다", () => {
     const view = viewOf("execution", { dead: [3], mySeat: 0 });
     const fading = new Map([[3, 1000]]);
     same(visibleSeats(view, fading, 1000)[3], { show: true, ghost: false, fadeAt: 1000 });
     same(visibleSeats(view, fading, 1000 + GHOST_FADE_END_MS - 1)[3], { show: true, ghost: false, fadeAt: 1000 });
     const after = visibleSeats(view, fading, 1000 + GHOST_FADE_END_MS)[3];
-    same(after, { show: true, ghost: true });
-    expect("fadeAt" in after!).toBe(false);
+    expect(after).toBeUndefined();
   });
 
   it("연출 중인 좌석은 fadeAt 으로 시작 시각이 실린다", () => {
@@ -130,8 +129,8 @@ describe("visibleSeats (GHOST-01, T-08-25)", () => {
 
   it("연출 표시에 산 좌석이 섞여 있어도 산 좌석 상태는 바뀌지 않는다", () => {
     const seats = visibleSeats(viewOf("execution", { dead: [3] }), new Map([[1, 0]]), 100);
-    same(Object.keys(seats).map(Number), [0, 1, 2, 3, 4]);
-    same(seats[3], { show: true, ghost: true });
+    same(Object.keys(seats).map(Number), [0, 1, 2, 4]);
+    expect(seats[3]).toBeUndefined();
   });
 });
 
@@ -259,13 +258,13 @@ describe("tensionOf (UI-SPEC 단계 조명: 선두·과반·찬반)", () => {
 });
 
 describe("sceneLook (위를 묶는다)", () => {
-  it("순차 지목 과반 + 스테이지 400: 고정·확대 없음·vote 조명·긴장 0·초점 없음, 산 사람 viewer 의 탈락 좌석 4 는 ghost 다", () => {
+  it("순차 지목 과반에도 고정 카메라·vote 조명과 생존 좌석만 표시한다", () => {
     const view = viewOf("nomination", { dead: [4], day: { turn: { order: [0, 1, 2, 3, 4], i: 3, endsAt: 9000 }, points: points([0, 2], [1, 2], [3, 2]) } });
     const look = sceneLook(view, { stageH: 400 });
     same(look.camera, { mode: "fixed", target: GATHER_CENTER, zoom: 1 });
     same([look.lighting, look.tension, look.focusSeat], ["vote", 0, undefined]);
-    same(Object.keys(look.seats).map(Number), [0, 1, 2, 3, 4]);
-    same(look.seats[4], { show: true, ghost: true });
+    same(Object.keys(look.seats).map(Number), [0, 1, 2, 3]);
+    expect(look.seats[4]).toBeUndefined();
   });
   it("토론: 따라가기·talk·긴장 0·초점 없음", () => {
     const look = sceneLook(viewOf("discussion"), { stageH: 400 });
@@ -434,11 +433,10 @@ describe("sceneLook 의 pointAt (지목 방향)", () => {
     const look = sceneLook(view, { stageH: 400, mine: 4 });
     same([look.seats[1]?.pointAt, look.seats[3]?.pointAt], [4, 2]);
   });
-  it("탈락한 좌석(산 사람 화면의 ghost)에는 남의 지목 줄이 있어도 pointAt 이 생기지 않는다", () => {
+  it("이전 지목 기록이 있어도 탈락 좌석은 생존자의 장면에 나타나지 않는다", () => {
     const v = viewOf("nomination", { count: 6, mySeat: 1, dead: [3], day: { points: points([1, 2], [3, 2]) } });
     const look = sceneLook(v, { stageH: 400 });
-    same(look.seats[3], { show: true, ghost: true });
-    expect(look.seats[3]?.pointAt).toBeUndefined();
+    expect(look.seats[3]).toBeUndefined();
   });
 });
 
@@ -512,14 +510,14 @@ describe("visibleSeats — 밤 시민 편 좌석 표 (T-09-21, 결정 0002·0021
       same(seats[2], { show: true, ghost: false });
     }
   });
-  it("밤·산 마피아는 산 좌석 전부(탈락 좌석 없음), 밤·유령은 모두(탈락 좌석 ghost), 아침·산 사람은 탈락 좌석도 ghost 로 있다", () => {
+  it("밤과 아침의 생존자는 탈락 좌석을 그리지 않고 유령은 모두 본다", () => {
     same(Object.keys(visibleSeats(asRole(viewOf("night", { mySeat: 1, dead: [4] }), "mafia"))).map(Number), [0, 1, 2, 3]);
     const ghost = visibleSeats(asRole(viewOf("night", { mySeat: 4, dead: [4] }), "citizen"));
     same(Object.keys(ghost).map(Number), [0, 1, 2, 3, 4]);
     expect(ghost[4]?.ghost).toBe(true);
     const morning = visibleSeats(asRole(viewOf("morning", { mySeat: 1, dead: [4] }), "citizen"));
-    same(Object.keys(morning).map(Number), [0, 1, 2, 3, 4]);
-    same(morning[4], { show: true, ghost: true });
+    same(Object.keys(morning).map(Number), [0, 1, 2, 3]);
+    expect(morning[4]).toBeUndefined();
   });
   it("낮 단계의 시민은 산 좌석 전부를 본다(밤에만 줄어든다)", () => {
     same(Object.keys(visibleSeats(asRole(viewOf("discussion", { mySeat: 1 }), "citizen"))).map(Number), [0, 1, 2, 3, 4]);
@@ -537,7 +535,7 @@ describe("sceneLook — 시민·경찰·의사의 밤 장면 값이 같다 (NIGH
   });
 });
 
-// ---- 18.1-17: 탈락자는 누구든 같은 유령 그림 (결정 0083-2, L13) ----
+// 관전에서만 반투명 탈락자를 그리며 직업 의상은 쓰지 않는다.
 describe("탈락자 장면 표는 직업과 무관하다 (결정 0083-2, L13)", () => {
   const JOBS_BY_SEAT: RoleId[] = ["mafia", "police", "doctor", "citizen", "citizen"];
   const ghostView = (dead: number[], phase: PhaseId = "discussion"): RoomView => {
@@ -550,10 +548,9 @@ describe("탈락자 장면 표는 직업과 무관하다 (결정 0083-2, L13)", 
     same([jobOutfit(undefined), jobOutfit("unknown")], ["coat", "coat"]);
   });
 
-  it("산 사람 viewer: 연출 뒤 탈락 좌석은 { show, ghost } 뿐이다 — outfit·costume·opacity 키가 없다", () => {
+  it("산 사람에게는 연출 뒤 탈락 좌석을 표시하지 않는다", () => {
     const seats = visibleSeats(viewOf("discussion", { dead: [3], mySeat: 0 }));
-    same(seats[3], { show: true, ghost: true });
-    for (const key of ["outfit", "costume", "opacity"]) expect(key in seats[3]!).toBe(false);
+    expect(seats[3]).toBeUndefined();
   });
 
   it("유령 viewer(spectate 있음): 탈락 좌석도 같은 모양이고, 마피아였던 좌석과 시민이었던 좌석의 표가 같다", () => {
@@ -578,10 +575,10 @@ describe("탈락자 장면 표는 직업과 무관하다 (결정 0083-2, L13)", 
     expect(3 in visibleSeats(viewOf("night", { dead: [3], mySeat: 0 }))).toBe(false);
   });
 
-  it("튜토리얼 지도 장면(아침·투표)의 피해자 좌석은 { show, ghost } 이고 의상 키가 없다", () => {
+  it("튜토리얼 지도 장면(아침·투표)도 생존자의 시야 규칙을 따른다", () => {
     for (const phase of ["morning", "nomination"] as const) {
       const seat = visibleSeats(viewOf(phase, { dead: [2], mySeat: 0 }))[2];
-      same(seat, { show: true, ghost: true });
+      expect(seat).toBeUndefined();
     }
   });
 });
@@ -718,12 +715,12 @@ describe("동시 투표 선두·과반 장치 삭제 (22-10, D-12)", () => {
 
 describe("sceneLook.notes — 의심 포스트잇 (24-05, D-06·D-11)", () => {
   const suspects = [
-    { to: 2, from: 0 },
-    { to: 2, from: 1 },
+    { to: 2, from: 4 },
+    { to: 2, from: 3 },
     { to: 3, from: 0 },
   ];
 
-  it("둘째 날 토론 view 의 day.suspects 가 받은 좌석 → 붙인 좌석 배열(아래→위)로 실린다", () => {
+  it("받은 좌석과 종이 층 번호만 3D 장면에 실린다", () => {
     const look = sceneLook(viewOf("discussion", { day: { n: 2, suspects } }), { stageH: 400 });
     same(look.notes, { 2: [0, 1], 3: [0] });
   });

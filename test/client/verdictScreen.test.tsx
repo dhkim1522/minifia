@@ -504,7 +504,7 @@ describe("처형 화면 (DAY-06, 22-12)", () => {
     }
   });
 
-  it("처형된 도윤은 단계 진입 순간부터 한 번도 사라지지 않고 서 있다가, 알림 시작(3.0초)에 fadeAt 이 걸리고 2.4초 뒤(5.4초)에 fadeAt 없는 ghost 로 남는다(18.1 P181-6)", () => {
+  it("처형된 도윤은 공개 처형 연출이 끝나는 5.4초까지 장면에 남는다", () => {
     const m = mount(verdictView());
     const from = rt.scenes.length;
     m.show(passedView());
@@ -518,24 +518,23 @@ describe("처형 화면 (DAY-06, 22-12)", () => {
     advance(2399);
     expect(lastScene().seats[4]?.show).toBe(true);
     advance(2);
-    expect(lastScene().seats[4]).toEqual({ show: true, ghost: true });
-    expect(seatTag(m.container, 4)).not.toBeNull();
-    expect((rt.scenes.slice(from) as SceneLook[]).every((s) => s.seats[4]?.show === true)).toBe(true);
+    expect(lastScene().seats[4]).toBeUndefined();
+    expect(seatTag(m.container, 4)).toBeNull();
     expect(lastScene().seats[3]?.show).toBe(true);
     expect(lastScene().seats[3]?.fadeAt).toBeUndefined();
   });
 
-  it("연출이 끝난 뒤 새 view 가 와도(타이머 이후 같은 단계의 갱신) 산 사람 화면에 도윤은 ghost 로 남는다", () => {
+  it("처형 중 같은 단계의 갱신이 와도 연출이 끝난 탈락자는 생존자 화면에서 빠져 있다", () => {
     const m = enter();
     advance(5500);
     m.show(passedView());
-    expect(lastScene().seats[4]).toEqual({ show: true, ghost: true });
-    expect(seatTag(m.container, 4)).not.toBeNull();
+    expect(lastScene().seats[4]).toBeUndefined();
+    expect(seatTag(m.container, 4)).toBeNull();
     advance(10_000);
-    expect(lastScene().seats[4]).toEqual({ show: true, ghost: true });
+    expect(lastScene().seats[4]).toBeUndefined();
   });
 
-  it("재접속 첫 화면이 처형 단계(A1): 알림·채팅 줄·연출이 없고 처형된 사람은 ghost 로 남는다. 유언 카드는 등장 모션 없이 바로 보인다(is-still)", () => {
+  it("처형 단계 재접속에서는 유언 카드를 바로 보여 주고 생존자의 장면에 탈락자를 싣지 않는다", () => {
     const { container } = mount(passedView({ phaseEndsAt: NOW + 6600 - 1000 }));
     // 진입 후 1.0초에 처음 그림 → 카드는 이미 서 있고(모션 없음) 큰 글·줄은 만들지 않는다(재접속은 이벤트 없음)
     expect(willCard(container)?.classList.contains("is-still")).toBe(true);
@@ -543,7 +542,7 @@ describe("처형 화면 (DAY-06, 22-12)", () => {
     expect(announceText(container)).toBe("");
     expect(container.querySelectorAll(".mv-chat__sys").length).toBe(0);
     expect(rt.scenes.every((s) => (s as SceneLook).seats[4]?.fadeAt === undefined)).toBe(true);
-    expect(lastScene().seats[4]).toEqual({ show: true, ghost: true });
+    expect(lastScene().seats[4]).toBeUndefined();
   });
 
   it("보통의 도착(진입 직후)은 등장 모션이 있다: is-still 이 없다", () => {
@@ -593,7 +592,7 @@ describe("처형 화면 (DAY-06, 22-12)", () => {
     expect(lastScene().seats[4]?.fadeAt).toBeDefined();
     expect(m.container.querySelector("[data-ghost]")).toBeNull();
     advance(6000);
-    expect(lastScene().seats[4]).toEqual({ show: true, ghost: true });
+    expect(lastScene().seats[4]).toBeUndefined();
     expect(m.container.querySelector("[data-role-chip]")).toBeNull();
   });
 });

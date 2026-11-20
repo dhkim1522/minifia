@@ -40,11 +40,13 @@ export interface CharacterHandle {
   setYaw(yaw: number): void;
   setDim(on: boolean): void;
   /** 유령 그림 켜기/끄기(0083-2) — opts 는 불투명도·밝기 배율. 시험 가짜 객체 호환을 위해 optional (08-10) */
-  setGhost?(on: boolean, opts?: { opacity?: number; tint?: number }): void;
+  setGhost?(on: boolean, opts?: { opacity?: number; tint?: number; animalForm?: boolean }): void;
+  setSeated?(on: boolean, firstPerson: boolean): void;
+  setGaze?(yaw: number, pitch: number, pointYaw?: number): void;
   /** 의상 바꾸기 — 고른 의상·결과 화면 직업 의상. 시험 가짜 호환을 위해 optional */
   applyOutfit?(id: string): void;
   applyAnimal?(animal: AnimalId | undefined): void;
-  setOpacity?(alpha: number): void;
+  setOpacity?(alpha: number, allowLiving?: boolean): void;
   /** 손가락 유지 자세·발밑 고리 — optional (08-10) */
   holdPose?(id: "point" | null): void;
   setRing?(color: string | null): void;
@@ -83,6 +85,8 @@ export interface WorldRenderer {
   readonly canvas: HTMLCanvasElement;
   resize(w: number, h: number): void;
   setView(target: { x: number; z: number }, offsetY: number, rig?: import("./camera").CameraRig): void;
+  setTableView?(view: import("./camera").TableCamera | null, offsetY: number): void;
+  setTableScene?(on: boolean): void;
   /** 전환 시간이 없으면 바로 적용한다. 초기 진입, 저감 모션, 정지 장면에서 사용한다. */
   setLighting(phase: LightingPhase, seconds?: number): void;
   /** 긴장 단계 0·1·2 (결정 0049): 1 = 무대 점광원이 초점 위로 선두 세기, 2 = 그에 더해 실내 emissive 절반. 시험 가짜 렌더러 호환을 위해 optional (08-10) */
@@ -98,7 +102,7 @@ export interface WorldRenderer {
   addCharacter(seat: number, c: CharacterHandle): void;
   removeCharacter(seat: number): void;
   setMarker(kind: MarkerKind, at: { x: number; z: number } | null, scale: number, opacity: number): void;
-  project(p: { x: number; y: number; z: number }): { sx: number; sy: number };
+  project(p: { x: number; y: number; z: number }): { sx: number; sy: number; visible?: boolean };
   groundAt(sx: number, sy: number): { x: number; z: number };
   bodyAt?(sx: number, sy: number): number | null;
   render(): void;

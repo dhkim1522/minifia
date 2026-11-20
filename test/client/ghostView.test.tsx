@@ -169,13 +169,13 @@ describe("유령 화면 — 서버가 보낸 관전 정보로 그려진다 (GHOS
     }
   });
 
-  it("같은 판의 산 사람 view(spectate 없음)는 data-ghost-view·직업 칩·data-ghost-seat 가 모두 0개이고 탈락 좌석은 is-ghost 이름표만 있다", () => {
+  it("같은 판의 생존자 화면에는 관전 UI와 탈락 좌석 이름표가 없다", () => {
     const { container } = mount(makeView({ mySeat: 0, dead: [4] }));
     expect(container.querySelectorAll("[data-ghost-view]").length).toBe(0);
     expect(container.querySelectorAll("[data-role-chip]").length).toBe(0);
     expect(container.querySelectorAll("[data-ghost-seat]").length).toBe(0);
-    expect(container.querySelectorAll(".mv-tag.is-ghost").length).toBe(1);
-    expect(container.querySelector('[data-seat="4"] .mv-tag')?.classList.contains("is-ghost")).toBe(true);
+    expect(container.querySelectorAll(".mv-tag.is-ghost")).toHaveLength(0);
+    expect(container.querySelector('[data-seat="4"] .mv-tag')).toBeNull();
   });
 
   it("내 alive 가 false 여도 서버가 spectate 를 안 보냈으면 유령 분기를 그리지 않는다(받아서 감추지도 않는다)", () => {
@@ -351,16 +351,16 @@ describe("산 사람 화면에는 유령의 흔적이 없다 (결정 0021, T-08-
   const living = (phase: PhaseId) => makeView({ phase, count: 6, mySeat: 0, dead: [3, 4], candidate: 2 });
   const aliveSeats = [0, 1, 2, 5];
 
-  it("단계 전수(낮 시작·토론·지목·변론·찬반·처형): [data-ghost-view]·[data-role-chip]·[data-ghost-seat] 0개, 유령 문구 0건, 탈락 좌석 이름표에만 is-ghost(data-ghost) 1개씩", () => {
+  it("주요 낮 단계에서 생존자 화면에는 관전 UI와 탈락 이름표가 없다", () => {
     for (const phase of ALL) {
       const { container } = mount(living(phase));
       expect(container.querySelectorAll("[data-ghost-view]"), phase).toHaveLength(0);
       expect(container.querySelectorAll("[data-ghost-enter]"), phase).toHaveLength(0);
       expect(container.querySelectorAll("[data-role-chip]"), phase).toHaveLength(0);
       expect(container.querySelectorAll("[data-ghost-seat]"), phase).toHaveLength(0);
-      expect(container.querySelectorAll(".mv-head[data-ghost]"), phase).toHaveLength(2);
-      expect(container.querySelectorAll(".mv-tag.is-ghost"), phase).toHaveLength(2);
-      for (const seat of [3, 4]) expect(container.querySelector(`[data-seat="${seat}"] .mv-head`)?.getAttribute("data-ghost"), phase).toBe("true");
+      expect(container.querySelectorAll(".mv-head[data-ghost]"), phase).toHaveLength(0);
+      expect(container.querySelectorAll(".mv-tag.is-ghost"), phase).toHaveLength(0);
+      for (const seat of [3, 4]) expect(container.querySelector(`[data-seat="${seat}"] .mv-head`), phase).toBeNull();
       for (const seat of aliveSeats) expect(container.querySelector(`[data-seat="${seat}"] .mv-head`)?.hasAttribute("data-ghost"), phase).toBe(false);
       expect(container.querySelectorAll(".mv-rolechip"), phase).toHaveLength(0);
       const text = container.textContent ?? "";
@@ -371,20 +371,15 @@ describe("산 사람 화면에는 유령의 흔적이 없다 (결정 0021, T-08-
     }
   });
 
-  it("이름표 roster 와 장면 표 = 산 좌석 + 탈락 좌석, 탈락 좌석만 ghost true·outfit 키 없음(직업 단서 없음)", () => {
+  it("생존자의 이름표와 장면에는 생존 좌석이 들어간다", () => {
     for (const phase of ALL) {
       rt.scenes.length = 0;
       const { container } = mount(living(phase));
       const seats = [...container.querySelectorAll<HTMLElement>("[data-seat].mf-world__tag")].map((t) => Number(t.dataset.seat));
-      expect(seats, phase).toEqual([0, 1, 2, 3, 4, 5]);
+      expect(seats, phase).toEqual(aliveSeats);
       const scene = lastScene().seats;
-      expect(Object.keys(scene).map(Number).sort((a, b) => a - b), phase).toEqual([0, 1, 2, 3, 4, 5]);
+      expect(Object.keys(scene).map(Number).sort((a, b) => a - b), phase).toEqual(aliveSeats);
       for (const seat of aliveSeats) expect(scene[seat]?.ghost, phase).toBe(false);
-      for (const seat of [3, 4]) {
-        expect(scene[seat]?.ghost, phase).toBe(true);
-        expect("outfit" in scene[seat]!, phase).toBe(false);
-        expect("costume" in scene[seat]!, phase).toBe(false);
-      }
       cleanup();
     }
   });
@@ -400,13 +395,10 @@ describe("산 사람 화면에는 유령의 흔적이 없다 (결정 0021, T-08-
     }
   });
 
-  it("가짜 렌더러가 받은 모든 장면 표의 탈락 좌석에는 직업 단서(outfit·costume)가 한 번도 실리지 않는다", () => {
+  it("생존자 렌더러가 받은 모든 장면에서 기존 탈락 좌석은 빠진다", () => {
     mount(living("discussion"));
     for (const look of rt.scenes as SceneLook[]) {
-      for (const seat of [3, 4]) {
-        expect(look.seats[seat]?.ghost).toBe(true);
-        expect("outfit" in look.seats[seat]!).toBe(false);
-      }
+      for (const seat of [3, 4]) expect(look.seats[seat]).toBeUndefined();
     }
   });
 

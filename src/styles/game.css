@@ -23,6 +23,19 @@
 
 /* 키보드(7페이즈 규칙 그대로): 패널은 키보드 바로 위로 --mf-kb-lift 만큼 올라가고 아래 여백이 22 → 8 로 줄어든다. 행동 줄은 그리지 않는다. */
 .mf-game__panel--kb { bottom: var(--mf-kb-lift, 0px); padding-bottom: 8px; }
+.mf-table-controls { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.mf-table-controls button { position: relative; min-width: 0; min-height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 3px 5px; border: 1px solid var(--noir-silver); border-radius: var(--radius-sm); background: var(--noir-inset); color: var(--gray-50); font: var(--type-label); cursor: pointer; }
+.mf-table-controls button[aria-pressed="true"] { border-color: var(--gray-50); background: var(--overlay-ink-strong); }
+.mf-table-controls button:disabled { opacity: .46; cursor: default; }
+.mf-table-controls button:focus-visible { outline: 2px solid var(--gray-50); outline-offset: 1px; }
+.mf-table-controls .mf-player-portrait { flex: none; width: 20px; height: 20px; }
+.mf-table-controls__name { max-width: 100%; text-align: center; overflow-wrap: anywhere; line-height: 1.12; }
+.mf-table-controls__count { position: absolute; inset: 1px 1px auto auto; display: inline-flex; align-items: center; border-radius: var(--radius-pill); padding: 0 3px; color: var(--gray-50); background: var(--crimson-700); }
+@media (max-width: 359px) {
+  .mf-table-controls button { padding: 2px 3px; }
+  .mf-table-controls .mf-player-portrait { width: 18px; height: 18px; }
+  .mf-table-controls__name { word-break: break-all; }
+}
 
 /* iOS 가 키보드를 위해 화면을 위로 밀면 헤더 계열이 그만큼 내려와 보이는 영역 맨 위에 머문다. */
 .mf-game__scrim, .mf-game__header, .mf-game .mv-toast { transform: translateY(var(--mf-vv-top, 0px)); }

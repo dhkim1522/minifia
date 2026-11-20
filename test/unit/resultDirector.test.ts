@@ -4,7 +4,7 @@ import { ringSlots } from "../../shared/game/gather";
 import type { RoleId } from "../../shared/game/roles";
 import type { GameWinner, PublicPlayer, RoomView } from "../../shared/protocol";
 import { mapOf } from "../../shared/game/maps";
-import { BAR_SEATS_FX, snapToWalkable } from "../../shared/game/map";
+import { BAR_MAP, BAR_SEATS_FX, lineWalkable, snapToWalkable } from "../../shared/game/map";
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import * as director from "../../src/game/resultDirector";
 import { castOf, CLAP_MAX, finalState, holdSnap, markTimes, RESULT_TIMELINE, resultPanelHeight, SAT_RADIUS_FX, satSlots, slotsFor, stateAt, teamOf, walkSnap } from "../../src/game/resultDirector";
@@ -64,13 +64,11 @@ describe("castOf · slotsFor", () => {
     expect(slotsFor(castOf(viewOf(JOBS, [1])))).toEqual(slots); // 생사와 무관
   });
 
-  it("재즈 바의 결과는 생사나 참가자 수와 관계없이 같은 의자를 쓴다", () => {
+  it("재즈 바의 결과는 탈락을 포함한 판 시작 인원에 해당하는 의자를 쓴다", () => {
     const four = slotsFor(castOf(viewOf(JOBS.slice(0, 4), [1])), "bar");
     const eight = slotsFor(castOf(viewOf([...JOBS, "citizen", "citizen"], [3])), "bar");
-    for (const [seat, spot] of BAR_SEATS_FX.entries()) {
-      if (seat < 4) expect(four[seat]).toEqual(spot);
-      expect(eight[seat]).toEqual(spot);
-    }
+    expect(Object.values(four)).toEqual([0, 2, 4, 5].map((index) => BAR_SEATS_FX[index]));
+    expect(Object.values(eight)).toEqual(BAR_SEATS_FX);
   });
 
   it("참가자 수 2~8 어디서나 자리가 모두 다르다", () => {
@@ -238,6 +236,20 @@ describe("walkSnap — 모임 걷기 구간", () => {
       expect(end.z).toBeCloseTo(slots[seat]![1] / 100, 6);
       expect(e.v).toBeGreaterThan(0);
     }
+  });
+
+  it("재즈 바 결과는 테이블을 돌아 자기 의자에 닿고 중앙 무대 배우는 바로 착석한다", () => {
+    const barSlots = slotsFor(cast, "bar");
+    const ents = walkSnap(barSlots, { 0: { x: 0.75, z: -3.25 }, 1: { x: 0, z: 0 } }, T0, "bar");
+    const [walking, fromStage] = ents;
+    expect(walking!.p.length).toBeGreaterThan(4);
+    for (let i = 0; i + 3 < walking!.p.length; i += 2) {
+      const [x, z, nextX, nextZ] = walking!.p.slice(i, i + 4);
+      expect(lineWalkable(BAR_MAP, { x: x!, z: z! }, { x: nextX!, z: nextZ! })).toBe(true);
+    }
+    expect(walking!.p.slice(-2)).toEqual(barSlots[0]);
+    expect(segmentEndsAt(walking!) - T0).toBeLessThanOrEqual(RESULT_TIMELINE.gatherMs);
+    expect(fromStage).toEqual({ s: 1, p: barSlots[1], t0: T0, v: 0 });
   });
 });
 

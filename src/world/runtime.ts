@@ -14,8 +14,9 @@ import type { MapId } from "../../shared/protocol";
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
 import { NETWORK_TEXT } from "../net/copy";
-import { BAR_FOLLOW_SHARE, BAR_TABLE_CAMERA, BAR_WALK_CAMERA, barNameTagFoot, barSeatAt, barSeatYaw, barTableZoom, cameraScale, clampTarget, DEFAULT_CAMERA, DEFAULT_TARGET, followStep, gatherGroupZoom, gatherView, NAMETAG_GAP, NAMETAG_MAX_W, PAN_BOX, RESIZE_SETTLE_MS, stageOffsetY } from "./camera";
-import { figForSeat, GHOST_SCALE } from "./characterData";
+import { BAR_FOLLOW_SHARE, BAR_TABLE_CAMERA, BAR_WALK_CAMERA, barNameTagFoot, barSeatAt, barSeatYaw, barTableZoom, cameraScale, clampTarget, DEFAULT_CAMERA, DEFAULT_TARGET, eyeTableCamera, followStep, gatherGroupZoom, gatherView, NAMETAG_GAP, NAMETAG_MAX_W, PAN_BOX, RESIZE_SETTLE_MS, stageOffsetY, tableAim, tableEyeAt, tableYaw, WIDE_TABLE_CAMERA } from "./camera";
+import type { V3 } from "./camera";
+import { figForSeat } from "./characterData";
 import type { OutfitId } from "./characterData";
 import { admitEmote, EMOTE_RENDER_MAX, emoteDurationMs } from "./emoteCap";
 import type { PlayingEmote } from "./emoteCap";
@@ -223,7 +224,7 @@ export interface WorldRuntimeDeps {
   /** 카메라 줌이 렌더러에 새로 보내질 때 소수 셋째 자리로 불린다 — E2E 훅 window.__mfPin.zoom 용(09.1.1-13). 제품은 넘기지 않는다 */
   onZoom?: (zoom: number) => void;
   /** 카메라 시점이 바뀌었거나 배율이 바뀔 때 불린다(window.__mfCamera, 21-09 L33). mode 는 지금 실제로 그리는 시점, scale 은 px/단위(소수 둘째) */
-  onCamera?: (state: { mode: "follow" | "fixed"; scale: number }) => void;
+  onCamera?: (state: { mode: "follow" | "fixed"; scale: number; projection?: "eye" | "wide" }) => void;
   /**
    * 프레임마다 이름표 쓰기 다음에 한 번 불린다(15-05). project(x, z) 는 월드 바닥점(발끝)의 화면 좌표(host 기준 px)를 돌려준다 —
    * 이 콜백 안에서 DOM 에 직접 쓸 수 있다(React 상태를 프레임마다 바꾸지 않는다). 투영할 수 없으면 null
@@ -254,6 +255,8 @@ export interface WorldRuntime {
   tap(clientX: number, clientY: number): { x: number; z: number } | null;
   /** 이름표가 아닌 화면상의 캐릭터 몸에 맞은 유효 좌석을 돌려준다. */
   suspectAt(clientX: number, clientY: number): number | null;
+  tableSeatAt(clientX: number, clientY: number): number | null;
+  panTable(deltaX: number): void;
   /**
    * 월드 단위 목적지로 걷는다 — tap 이 바닥 교점을 얻은 뒤와 같은 경로(링을 바로 띄우고 목적지를 돌려준다).
    * 서버로 보내는 일과 notifyMoveSent 는 부른 쪽이 탭과 똑같이 한다
@@ -327,6 +330,9 @@ interface Actor {
   /** 걷는 선분의 방향(travelYaw). 구간이 끝나도 남겨 두어 돌던 중이면 마저 돈다. 멈춘 뒤에는 새로 정하지 않는다 */
   yawGoal: number | null;
   barSeat: number | undefined;
+  gazeYaw: number;
+  gazePitch: number;
+  pointYaw: number;
   headY: number;
   dim: boolean;
   /** 지금 손가락 자세(holdPose("point"))를 유지하나 */
@@ -430,6 +436,10 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   let zoomBackFrom = 1;
   let zoomBackStart = 0;
   let cameraSent = "";
+  let tableView: {
+    seat: number; mode: "eye" | "wide"; lighting: LightingPhase; center: number;
+    focus: number | undefined; focusAt: number | undefined; yaw: number; pitch: number; panning: boolean;
+  } | null = null;
   /** 이 좌석을 그리나: 장면이 없으면 view 의 모든 좌석, 있으면 표에서 show 인 좌석만 */
   const isShown = (seat: number): boolean => look === null || look.seats[seat]?.show === true;
   /**
@@ -691,7 +701,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     deps.onCostumes(map, dimmed);
   }
 
-  /** 유령 그림으로 그리는 좌석 목록·그림 준비 여부·몸 방향이 바뀌었으면 프레임 끝에서 한 번 알린다 */
+  /** 반투명 몸으로 그리는 유령 좌석과 몸 방향이 바뀌었으면 프레임 끝에서 알린다 */
   let ghostsSent = "";
   function emitGhosts(): void {
     if (deps.onGhosts === undefined) return;
@@ -700,11 +710,11 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     ghosts.sort((x, y) => x.seat - y.seat);
     const seats = ghosts.map((a) => a.seat);
     const facing = ghosts.map((a) => Math.round(a.yaw * 100) / 100);
-    const ready = kit?.ghostReady?.() === true;
+    const ready = kit !== null;
     const sig = JSON.stringify([seats, ready, facing]);
     if (sig === ghostsSent) return;
     ghostsSent = sig;
-    deps.onGhosts({ seats, ready, scale: GHOST_SCALE, facing });
+    deps.onGhosts({ seats, ready, scale: 1, facing });
   }
 
   /** 동작이 쓰는 표정의 머리 병합을 표정마다 따로 유휴 시간에 미리 만든다(O-10). requestIdleCallback 이 없으면 첫 사용 때 병합한다 */
@@ -813,6 +823,9 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       yaw: spawnYaw(map.spawns, seat),
       yawGoal: null,
       barSeat: undefined,
+      gazeYaw: 0,
+      gazePitch: 0,
+      pointYaw: 0,
       headY: 0,
       dim: false,
       pointing: false,
@@ -1080,6 +1093,80 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     a.handle.setNotes?.(want, { animate: !(instant || first) });
   }
 
+  function tablePosition(seat: number, serverNow: number): { x: number; z: number; slot: number } | null {
+    const included = look?.seats[seat];
+    if (!included?.show || included.ghost || included.fadeAt !== undefined) return null;
+    const segment = store.segOf(seat);
+    if (!segment || segmentEndsAt(segment) > serverNow) return null;
+    const position = positionAt(segment, serverNow);
+    const slot = barSeatAt(position);
+    return slot === undefined ? null : { ...position, slot };
+  }
+
+  function aimTable(
+    r: WorldRenderer, table: SceneLook["table"], local: ReturnType<typeof tablePosition>,
+    serverNow: number, dt: number, immediate: boolean, offsetY: number,
+  ): void {
+    if (!table || !local) {
+      r.setTableView?.(null, offsetY);
+      tableView = null;
+      return;
+    }
+    const eye = tableEyeAt(local);
+    const center = tableAim(eye, { x: -local.x, y: 1.11, z: -local.z });
+    let other = table.focus === undefined ? null : tablePosition(table.focus, serverNow);
+    if (other?.slot === local.slot) other = null;
+    // 맞은편이 비었거나 선택한 사람이 사라지면, 실제로 앉아 있는 가장 먼 상대를 본다.
+    if (!other) {
+      let furthest = 0;
+      for (const actor of actors.values()) {
+        if (actor.seat === deps.mySeat()) continue;
+        const candidate = tablePosition(actor.seat, serverNow);
+        if (!candidate) continue;
+        const distance = (candidate.x - local.x) ** 2 + (candidate.z - local.z) ** 2;
+        if (distance > furthest) {
+          other = candidate;
+          furthest = distance;
+        }
+      }
+    }
+    const aim = other ? tableAim(eye, { x: other.x, y: 1.11, z: other.z }) : center;
+    const yaw = tableYaw(aim.yaw, center.yaw);
+    const lighting = look?.lighting ?? "talk";
+    if (tableView?.seat !== local.slot || tableView.mode !== table.mode || tableView.lighting !== lighting) {
+      tableView = { seat: local.slot, mode: table.mode, lighting, center: center.yaw,
+        focus: table.focus, focusAt: table.focusAt, yaw, pitch: aim.pitch, panning: false };
+    } else {
+      if (tableView.focus !== table.focus || tableView.focusAt !== table.focusAt) {
+        tableView.focus = table.focus;
+        tableView.focusAt = table.focusAt;
+        tableView.panning = false;
+      }
+      if (!tableView.panning) {
+        const blend = immediate ? 1 : 1 - Math.exp(-13 * dt);
+        tableView.yaw = mix(tableView.yaw, yaw, blend);
+        tableView.pitch = mix(tableView.pitch, aim.pitch, blend);
+      }
+    }
+    r.setTableView?.(table.mode === "eye" ? eyeTableCamera(eye, tableView.yaw, tableView.pitch) : WIDE_TABLE_CAMERA, offsetY);
+  }
+
+  function aimSeatedActor(
+    a: Actor, at: { x: number; z: number }, point: number | undefined,
+    target: V3 | null, dt: number, immediate: boolean,
+  ): void {
+    const dx = target ? target.x - at.x : 0;
+    const dz = target ? target.z - at.z : 0;
+    const direction = Math.atan2(dx, dz) - a.yaw;
+    const yaw = target ? Math.atan2(Math.sin(direction), Math.cos(direction)) : 0;
+    const pitch = target ? Math.atan2(1.32 - target.y, Math.hypot(dx, dz)) : 0;
+    const blend = immediate ? 1 : 1 - Math.exp(-12 * dt);
+    a.gazeYaw = mix(a.gazeYaw, Math.max(-1.08, Math.min(1.08, yaw)), blend);
+    a.gazePitch = mix(a.gazePitch, Math.max(-0.18, Math.min(0.18, pitch)), blend);
+    a.pointYaw = mix(a.pointYaw, target && point !== undefined ? Math.max(-1.33, Math.min(1.33, yaw)) : 0, blend);
+    a.handle.setGaze?.(a.gazeYaw, a.gazePitch, a.pointYaw);
+  }
+
   function drawFrame(r: WorldRenderer): void {
     const now = Date.now();
     const gapMs = now - lastFrameAt;
@@ -1093,6 +1180,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     if (epoch !== lastEpoch) {
       lastEpoch = epoch;
       resync = true;
+      tableView = null;
       own.reset(store.moveSeqOf(deps.mySeat()));
       clearAckTimer();
       clearRing(); // 알림 없이 거둔다 — 새 연결의 서버 위치가 진실이다
@@ -1121,6 +1209,16 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     const mySeat = deps.mySeat();
     const lightNow = look?.lighting ?? deps.lighting ?? "talk";
     const suspectTargets = deps.suspectTargets?.();
+    const table = compactBar ? look?.table : undefined;
+    const localTable = table === undefined ? null : tablePosition(mySeat, sNow);
+    const voice = table?.voice;
+    const voiceAge = voice === undefined ? Infinity : sNow - voice.at;
+    const speakerPosition = voice && voiceAge >= -100 && voiceAge < 1800 ? tablePosition(voice.seat, sNow) : null;
+    const chosen = table?.focus === undefined ? null : tablePosition(table.focus, sNow);
+    const react = table?.focusAt !== undefined && sNow - table.focusAt >= -100 && sNow - table.focusAt < 1200;
+    const viewer = localTable ? tableEyeAt(localTable) : null;
+    const tableFurnished = compactBar && lightNow !== "trial";
+    r.setTableScene?.(tableFurnished);
     for (const a of actors.values()) {
       const server = segFor(a.seat);
       if ((server === undefined || !isShown(a.seat)) && a.exit === null) {
@@ -1146,8 +1244,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         a.sceneDim = wantSceneDim;
         refreshDim(a);
       }
-      // 탈락자는 누구든 같은 유령 그림(0083-2): 켤 때 불투명도 0(모션 줄이기면 바로 0.88)에서 inMs 동안 올린다.
-      // 밝기는 조명 단계 배율(밤 < 저녁 ≤ 낮) × 끊김·진 팀 어둠 0.6 — 어두운 장면에서는 밝기만 낮추고 색은 그대로
+      // 탈락자는 동물과 공개 의상은 유지하고 몸을 반투명하게 띄운다.
+      // 밝기는 조명 단계와 연결 상태를 따른다.
       const ghostTint = ghostTintOf(lightNow) * (a.dim ? 0.6 : 1);
       const ghostFlipped = wantGhost !== a.ghost;
       if (wantGhost && !a.ghost) {
@@ -1156,14 +1254,14 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         a.ghostAt = now;
         a.ghostTint = ghostTint;
         a.fadeOpacity = start;
-        a.handle.setGhost?.(true, { opacity: start, tint: ghostTint });
+        a.handle.setGhost?.(true, { opacity: start, tint: ghostTint, animalForm: true });
       } else if (!wantGhost && a.ghost) {
         a.ghost = false;
         a.fadeOpacity = 1;
         a.handle.setGhost?.(false);
       } else if (a.ghost && ghostTint !== a.ghostTint) {
         a.ghostTint = ghostTint;
-        a.handle.setGhost?.(true, { tint: ghostTint });
+        a.handle.setGhost?.(true, { tint: ghostTint, animalForm: true });
       }
       // 의심 포스트잇(24-05): 장면의 받은 종이 목록을 마지막으로 보낸 것과 비교해 달라졌을 때만 핸들에 건넨다.
       // 유령 좌석은 빈 목록(모션 없음 — 핸들의 setGhost 도 떼지만 순서와 무관하게 맞춘다). 처음 받는 목록·유령 전환 프레임·모션 줄이기는 즉시(animate 거짓)
@@ -1195,12 +1293,14 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       const dz = at.z - a.pos.z;
       const moving = !resync && dx * dx + dz * dz > MOVE_EPS * MOVE_EPS;
       a.barSeat = compactBar && !wantGhost ? barSeatAt(at) : undefined;
+      const posed = a.barSeat !== undefined && !moving;
+      const aim = pointAt ?? emotePlaying.find((p) => p.seat === a.seat && p.until > now)?.target;
       if (moving) walkingSeats.add(a.seat);
       // 방향: 걷는 선분의 방향으로 짧은 쪽으로 돌되 한 프레임에 YAW_TURN_RATE × dt 까지만(모션 줄이기면 바로). 복귀 프레임은 건드리지 않는다
       if (resync) {
         a.yawGoal = null;
         if (a.barSeat !== undefined) {
-          a.yaw = barSeatYaw(a.barSeat);
+          a.yaw = tableFurnished ? Math.atan2(-at.x, -at.z) : barSeatYaw(a.barSeat);
           a.handle.setYaw(a.yaw);
         }
       } else {
@@ -1208,9 +1308,9 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         if (target !== null) a.yawGoal = target;
         else {
           // 서 있는 채 가리킨다: 대상 쪽을 본다(걷는 중에는 걷는 방향이 먼저)
-          const aim = pointAt ?? emotePlaying.find((p) => p.seat === a.seat && p.until > now)?.target;
           const tp = aim === undefined ? undefined : actors.get(aim)?.pos;
-          if (tp !== undefined && (tp.x !== at.x || tp.z !== at.z)) a.yawGoal = Math.atan2(tp.x - at.x, tp.z - at.z);
+          if (posed && tableFurnished) a.yawGoal = Math.atan2(-at.x, -at.z);
+          else if (tp !== undefined && (tp.x !== at.x || tp.z !== at.z)) a.yawGoal = Math.atan2(tp.x - at.x, tp.z - at.z);
           else if (a.barSeat !== undefined) a.yawGoal = barSeatYaw(a.barSeat);
         }
         if (a.yawGoal !== null) {
@@ -1222,6 +1322,20 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         }
       }
       a.pos = { x: at.x, z: at.z };
+      a.handle.setSeated?.(posed, posed && localTable !== null && table?.mode === "eye" && a.seat === mySeat);
+      const picked = aim === undefined ? null : tablePosition(aim, sNow);
+      let headTarget: V3 | null = null;
+      if (posed && tableFurnished) {
+        if (picked) headTarget = { ...picked, y: 1.32 };
+        else if (chosen && a.seat === mySeat) headTarget = { ...chosen, y: 1.32 };
+        else if (react && a.seat === table?.focus) headTarget = viewer;
+        else if (speakerPosition && voice) {
+          const delay = 75 + ((a.barSeat ?? 0) * 43) % 156;
+          if (a.seat === voice.seat) headTarget = a.seat === mySeat ? null : viewer;
+          else if (reduced || voiceAge >= delay) headTarget = voice.seat === mySeat && viewer ? viewer : { ...speakerPosition, y: 1.32 };
+        }
+      }
+      aimSeatedActor(a, at, picked ? aim : undefined, headTarget, dt, reduced || resync || !posed || !tableFurnished);
 
       // 등장·퇴장 연출: 크기·높이는 캐릭터에, 불투명도는 이름표에
       let scale = 1;
@@ -1240,10 +1354,10 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         alpha = e;
         if (p >= 1) a.enter = null;
       }
-      // 처형 연출(fadeAt): 떠오르며 흐려져 끝점(0.26·높이 0.35)에 선다. 연출이 끝나 좌석이 ghost 가 되면 같은 자리에 유령 그림이 나타난다. ghost 좌석은 연출 없이 유령으로 선다
+      // 처형 연출은 몸을 띄워 흐리게 한다. 관전자의 장면은 이후 같은 캐릭터를 반투명한 유령으로 이어 그린다.
       let rise = 0;
       let fade = 1;
-      let tagFade = 1; // 이름표는 몸처럼 0.6 까지만 흐려지고, 몸이 끝점으로 더 흐려지는 동안 불투명으로 돌아온다(유령 이름표는 불투명 is-ghost, 끝에 깜빡이지 않게)
+      let tagFade = 1; // 유령 이름표로 이어지는 동안 읽기를 유지한다.
       const fadeAt = wantGhost ? undefined : seatLook?.fadeAt;
       if (fadeAt !== undefined && a.exit === null) {
         const f = executionFade(now - fadeAt, reduced);
@@ -1252,16 +1366,16 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         tagFade = fade >= GHOST_OPACITY ? fade : GHOST_OPACITY + ((1 - GHOST_OPACITY) * (GHOST_OPACITY - fade)) / (GHOST_OPACITY - EXEC_END_OPACITY);
       }
       // 결과 화면의 반투명 좌석(쉬었던 사람, 11-12): 장면 표의 opacity 와 처형 연출 불투명도 중 낮은 쪽을 몸에 쓴다. 이름표(alpha)는 연출만 따른다
-      // 유령 그림은 등장 올림(0 → GHOST_SPRITE.opacity, 모션 줄이기면 바로)을 몸 불투명도 자리에 쓴다
+      // 유령 몸은 나타날 때 투명도를 올리고 모션을 줄이면 즉시 표시한다.
       const ghostIn = a.ghost ? (reduced ? GHOST_SPRITE.opacity : GHOST_SPRITE.opacity * Math.min(1, (now - a.ghostAt) / GHOST_SPRITE.inMs)) : fade;
       const bodyFade = Math.min(ghostIn, seatLook?.opacity ?? 1);
       if (bodyFade !== a.fadeOpacity) {
         a.fadeOpacity = bodyFade;
-        a.handle.setOpacity?.(bodyFade);
+        a.handle.setOpacity?.(bodyFade, fadeAt !== undefined || seatLook?.opacity !== undefined || bodyFade === 1);
       }
       alpha = Math.min(alpha, tagFade);
       const standY = look === null ? 0 : compactBar ? (at.x * at.x + at.z * at.z <= BAR_STAGE_RADIUS ** 2 ? BAR_STAGE_HEIGHT : 0) : stageLiftY(at, mapId);
-      const baseY = a.barSeat === undefined ? standY : BAR_SEAT_HEIGHT;
+      const baseY = posed ? BAR_SEAT_HEIGHT - 0.30 : standY;
       const y = lift + baseY + (a.ghost ? ghostFloatY(now / 1000, reduced) : 0) + rise;
       a.handle.root.scale.setScalar(a.base * scale);
       a.handle.root.position.set(at.x, y, at.z);
@@ -1341,18 +1455,19 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     }
     offsetCur ??= offsetGoal;
     r.setView(cam, offsetCur, rig);
+    aimTable(r, table, localTable, sNow, dt, reduced || resync, offsetCur);
     if (zoomCur !== zoomSent) {
       zoomSent = zoomCur;
       r.setZoom?.(zoomCur);
       deps.onZoom?.(Math.round(zoomCur * 1000) / 1000);
     }
     if (deps.onCamera !== undefined) {
-      const mode = fixed !== null ? "fixed" : "follow";
+      const mode = fixed !== null || tableView !== null ? "fixed" : "follow";
       const scale = Math.round(zoomCur * cameraScale(s, rig) * 100) / 100;
-      const key = `${mode}|${scale}`;
+      const key = `${mode}|${scale}|${tableView?.mode ?? ""}`;
       if (key !== cameraSent) {
         cameraSent = key;
-        deps.onCamera({ mode, scale });
+        deps.onCamera({ mode, scale, ...(tableView ? { projection: tableView.mode } : {}) });
       }
     }
 
@@ -1421,7 +1536,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       if (timed) renderMs = performance.now() - a;
     }
     const b = timed ? performance.now() : 0;
-    writeTags(r, s.w, rect, compactFixed);
+    writeTags(r, s.w, rect, compactFixed, tableView?.mode, speakerPosition ? voice?.seat : undefined);
     if (timed) tagsMs = performance.now() - b;
     if (deps.onProject !== undefined) deps.onProject(projectGround(r), now);
     for (const a of gone) {
@@ -1453,7 +1568,10 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
    * 이름표: 머리 꼭대기 투영 좌표를 장치 픽셀에 반올림해 놓는다(밀지 않는다). 내 이름표가 맨 위, 나머지는 발끝 화면 y 가
    * 큰 쪽이 위이고, 다른 이름표와 겹친 것 가운데 맨 앞 하나에만 래퍼 data-front="true" 를 붙인다(면이 overlay-ink-strong).
    */
-  function writeTags(r: WorldRenderer, width: number, stage: { top: number; bottom: number }, compactFixed: boolean): void {
+  function writeTags(
+    r: WorldRenderer, width: number, stage: { top: number; bottom: number }, compactFixed: boolean,
+    tableMode?: "eye" | "wide", speaker?: number,
+  ): void {
     const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
     const snap = (v: number): number => Math.round(v * dpr) / dpr;
     const mine = deps.mySeat();
@@ -1465,19 +1583,26 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       if (a.tagW === null) a.tagW = a.tag.offsetWidth;
       live.push(a);
     }
-    const boxes: TagBox[] = [];
+    let boxes: TagBox[] = [];
     for (const a of live) {
       const tag = a.tag;
       if (tag === null) continue;
       const feet = r.project({ x: a.pos.x, y: 0, z: a.pos.z });
-      const tagFoot = a.barSeat === undefined ? undefined : barNameTagFoot(a.pos, a.barSeat);
+      const tagFoot = tableMode !== undefined || a.barSeat === undefined ? undefined : barNameTagFoot(a.pos, a.barSeat);
       const anchor = r.project(tagFoot ?? { x: a.pos.x, y: a.headY, z: a.pos.z });
+      const hidden = tableMode !== undefined && (
+        (tableMode === "eye" && a.seat === mine) || anchor.visible === false || anchor.sx < 12 || anchor.sx > width - 12
+        || anchor.sy >= stage.bottom
+      );
+      const visibility = hidden ? "hidden" : "";
+      if (tag.style.visibility !== visibility) tag.style.visibility = visibility;
+      if (hidden) continue;
       const w = a.tagW !== null && a.tagW > 0 ? a.tagW : NAMETAG_MAX_W;
-      const framed = compactFixed && !a.ghost && a.exit === null;
+      const framed = (compactFixed || tableMode !== undefined) && !a.ghost && a.exit === null;
       // 긴 이름이 화면에서 잘리거나 맞은편 이름표를 덮지 않게 각자의 반폭에 둔다.
       const half = width / 2;
       const gutter = Math.min(w / 2 + 12, half);
-      const ownHalf = a.barSeat !== undefined && gutter * 2 <= half;
+      const ownHalf = tableMode === undefined && a.barSeat !== undefined && gutter * 2 <= half;
       const lane = ownHalf && anchor.sx >= half ? half : 0;
       const laneWidth = ownHalf ? half : width;
       const x = snap(framed ? Math.min(lane + laneWidth - gutter, Math.max(lane + gutter, anchor.sx)) : anchor.sx);
@@ -1499,6 +1624,19 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       }
     }
     const bySeat = new Map(live.map((a) => [a.seat, a]));
+    if (tableMode === "eye") {
+      const focus = look?.table?.focus;
+      const priority = (box: TagBox): number => box.seat === focus ? 0 : box.seat === speaker || box.turn ? 1 : 2;
+      const ordered = boxes.sort((a, b) => priority(a) - priority(b) || Math.abs(a.x - width / 2) - Math.abs(b.x - width / 2));
+      boxes = [];
+      for (const box of ordered) {
+        const overlaps = boxes.some(other => Math.abs(other.bottom - box.bottom) < 31
+          && Math.abs(other.x - box.x) < (other.w + box.w) / 2 + 5);
+        const tag = bySeat.get(box.seat)?.tag;
+        if (overlaps && tag) tag.style.visibility = "hidden";
+        else boxes.push(box);
+      }
+    }
     for (const { seat, z, front } of rankTags(boxes)) {
       const a = bySeat.get(seat);
       if (a === undefined || a.tag === null) continue;
@@ -1525,6 +1663,21 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     const seat = renderer.bodyAt?.(clientX - rect.left, clientY - rect.top);
     const actor = seat == null ? undefined : actors.get(seat);
     return actor && actor.exit === null && !actor.ghost && targets.has(actor.seat) ? actor.seat : null;
+  }
+
+  function tableSeatAt(clientX: number, clientY: number): number | null {
+    if (disposed || renderer === null || tableView === null || look?.table === undefined || inputBlocked(status)) return null;
+    const rect = host.getBoundingClientRect();
+    const seat = renderer.bodyAt?.(clientX - rect.left, clientY - rect.top);
+    if (seat == null || seat === deps.mySeat() || !tablePosition(seat, deps.serverNow())) return null;
+    const actor = actors.get(seat);
+    return actor && actor.exit === null && !actor.ghost ? seat : null;
+  }
+
+  function panTable(deltaX: number): void {
+    if (disposed || tableView?.mode !== "eye" || look?.table?.mode !== "eye" || inputBlocked(status) || !Number.isFinite(deltaX)) return;
+    tableView.yaw = tableYaw(tableView.yaw - deltaX * 0.0047, tableView.center);
+    tableView.panning = true;
   }
 
   function tap(clientX: number, clientY: number): { x: number; z: number } | null {
@@ -1588,6 +1741,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     setScene(l) {
       look = l;
     },
+    tableSeatAt,
+    panTable,
     deny(seat) {
       const a = actors.get(seat) ?? null;
       if (a === null || a.exit !== null) return;

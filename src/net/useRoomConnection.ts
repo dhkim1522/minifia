@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { phaseKey } from "../../shared/game/audience";
 import type { ClientMessage, RemovedReason, RoomView, ServerMessage } from "../../shared/protocol";
 import { getPreview } from "./api";
 import type { ClockSample } from "./clock";
@@ -14,6 +15,7 @@ export type ConnectionStatus = LinkStatus;
  *  chat(새 줄 모양)·chatReject·chatLog(07-11, 자유 채팅)도 같다 — 줄은 구독자(채팅 저장소)가 쌓고 연결 상태·view 는 바꾸지 않는다.
  *  resultLog(11-03·11-07, 결과 공개)도 같다 — ended 에서만 오고 구독자(결과 기록 저장소)가 쌓는다. */
 export type RoomEvent = Extract<ServerMessage, { t: "error" | "chat" | "chatReject" | "chatLog" | "world" | "typing" | "emote" | "resultLog" }>;
+type RoomEventMeta = { epoch: number; phase?: string };
 
 export interface RoomConnection {
   status: ConnectionStatus;
@@ -25,8 +27,8 @@ export interface RoomConnection {
   epoch: number;
   removedReason: RemovedReason | null;
   /** chat·chatReject·chatLog·error·world·typing·emote 서버 프레임 구독. 돌려준 함수로 해제한다. 참조는 렌더 사이에 안정적이다.
-   *  meta.epoch 는 프레임을 받은 시점의 연결 epoch(새 연결의 첫 state 마다 +1) — state 가 snap 보다 먼저 오므로 snap 은 새 값을 받는다. */
-  onEvent(listener: (e: RoomEvent, meta: { epoch: number }) => void): () => void;
+   *  meta.epoch 는 프레임을 받은 시점의 연결 epoch, meta.phase 는 토론의 공개 발언을 받은 시점의 단계 키다. */
+  onEvent(listener: (e: RoomEvent, meta: RoomEventMeta) => void): () => void;
   /** 서버로 입력을 보낼 수 있는지(열려 있고 view 가 있음). 끊긴 동안은 거짓 */
   canSend: boolean;
   /** 보냈으면 true. 끊겨 있어 버려졌으면 false */
@@ -90,7 +92,7 @@ export function useRoomConnection(code: string, token: string, options?: RoomCon
   const restartRef = useRef<(() => void) | null>(null);
   const optionsRef = useRef(options);
   optionsRef.current = options;
-  const listenersRef = useRef(new Set<(e: RoomEvent, meta: { epoch: number }) => void>());
+  const listenersRef = useRef(new Set<(e: RoomEvent, meta: RoomEventMeta) => void>());
 
   useEffect(() => {
     let disposed = false;
@@ -178,6 +180,7 @@ export function useRoomConnection(code: string, token: string, options?: RoomCon
       const url = roomSocketUrl(window.location, code);
       const create = optionsRef.current?.createSocket;
       const ws = create ? create(url) : new WebSocket(url);
+      let phase: string | undefined;
       const prev = socketRef.current;
       socketRef.current = ws; // 먼저 바꿔 두어 이전 소켓의 close 가 무시되게 한다
       if (prev) prev.close();
@@ -193,6 +196,7 @@ export function useRoomConnection(code: string, token: string, options?: RoomCon
         if (disposed || socketRef.current !== ws) return;
         const msg = parseServerMessage(e.data);
         if (msg?.t === "state") {
+          phase = phaseKey({ phase: msg.view.phase, day: msg.view.day?.n, round: msg.view.round });
           // 첫 pong 은 첫 state 보다 늦다. 표본이 없는 동안은 view.serverNow 로 거친 오프셋을 먼저 정해 둔다
           // (한쪽 방향 지연만큼만 틀린다). 안 그러면 시계가 빠른 폰에서 역할 카드가 눌리기도 전에 앞면으로 열린다.
           if (samples.length === 0) setOffset(msg.view.serverNow - Date.now());
@@ -207,7 +211,10 @@ export function useRoomConnection(code: string, token: string, options?: RoomCon
         } else if (msg?.t === "chat" || msg?.t === "chatReject" || msg?.t === "chatLog" || msg?.t === "error" || msg?.t === "world" || msg?.t === "typing" || msg?.t === "emote" || msg?.t === "resultLog") {
           // world·typing·채팅 줄은 연결 상태·view 를 바꾸지 않는다(CONN-04). 끝난 연결(replaced·removed)의 늦은 프레임은 구독자에게 보내지 않는다.
           if ((msg.t === "world" || msg.t === "typing" || msg.t === "emote" || msg.t === "chat" || msg.t === "chatReject" || msg.t === "chatLog" || msg.t === "resultLog") && isTerminal(linkRef.current.status)) return;
-          const meta = { epoch: linkRef.current.epoch };
+          const meta: RoomEventMeta = {
+            epoch: linkRef.current.epoch,
+            ...(msg.t === "chat" && msg.ch === "all" && msg.k === undefined && phase?.endsWith(":discussion") ? { phase } : {}),
+          };
           for (const listener of [...listenersRef.current]) listener(msg, meta);
         }
       });
@@ -305,7 +312,7 @@ export function useRoomConnection(code: string, token: string, options?: RoomCon
     return true;
   }, []);
   const retry = useCallback(() => restartRef.current?.(), []);
-  const onEvent = useCallback((listener: (e: RoomEvent, meta: { epoch: number }) => void): (() => void) => {
+  const onEvent = useCallback((listener: (e: RoomEvent, meta: RoomEventMeta) => void): (() => void) => {
     listenersRef.current.add(listener);
     return () => {
       listenersRef.current.delete(listener);

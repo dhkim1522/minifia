@@ -180,6 +180,12 @@ describe("startGame 의 맵 결정 (D-21)", () => {
     const b = startGame({ ...lobby(), mapChoice: choice }, HOST, 1000, seededRandInt(5));
     expect(b.ok && b.state.map).toBe("bar");
   });
+  it("재즈 바는 라운드가 시작되면 논리 좌석 사이에 빈 번호가 있어도 물리 의자를 고정한다", () => {
+    const state = lobby();
+    const seats = [0, 2, 4, 7];
+    const result = startGame({ ...state, players: state.players.map((p, i) => ({ ...p, seat: seats[i]! })) }, HOST, 1000, seededRandInt(5));
+    expect(result.ok && result.state.barChairs).toEqual({ 0: 0, 2: 2, 4: 4, 7: 5 });
+  });
   it("PLAYABLE_MAPS 가 하나라 난수 호출이 늘지 않는다 — 시작 뒤 난수 상태가 assignRoles 만 부른 것과 같다", () => {
     const state = lobby(5);
     const ids = [...state.players].sort((a, b) => a.seat - b.seat).map((p) => p.id);

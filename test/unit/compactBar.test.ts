@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BAR_RUNOFF_SPOTS, layoutFor } from "../../shared/game/gather";
-import { BAR_MAP, BAR_ROOM_HALF, BAR_SEATS_FX, BAR_SPAWNS, STAGE_SPOT, UNIT, cellCenterFx, lineWalkable, routeFx, snapToWalkable, walkableCells } from "../../shared/game/map";
+import { BAR_MAP, BAR_ROOM_HALF, BAR_SEATS_FX, BAR_SPAWNS, STAGE_SPOT, UNIT, barChairAssignment, cellCenterFx, lineWalkable, routeFx, snapToWalkable, walkableCells } from "../../shared/game/map";
 import { canMoveIn } from "../../shared/game/movement";
 import { stickNote } from "../../shared/game/postit";
 import type { RoomState } from "../../shared/game/room";
@@ -30,16 +30,38 @@ describe("작은 재즈 바", () => {
     }
   });
 
-  it("4·8인 모두 같은 좌석을 쓰고 죽은 사람의 자리는 비워 둔다", () => {
-    const players = BAR_SEATS_FX.map((_, seat) => ({ id: `p${seat}`, seat, alive: seat !== 3 }));
+  it("4~8인 모두 정면 자리를 포함해 한 바퀴에 분산한다", () => {
+    const patterns = [[0, 2, 4, 5], [0, 1, 2, 4, 5], [0, 1, 2, 3, 6, 7], [0, 1, 2, 3, 5, 6, 7], [0, 1, 2, 3, 4, 5, 6, 7]];
+    for (const pattern of patterns) {
+      const roster = Array.from({ length: pattern.length }, (_, seat) => seat).reverse();
+      expect(Object.values(barChairAssignment(roster))).toEqual(pattern);
+    }
+  });
+
+  it("논리 좌석에 빈 번호가 있고 탈락·재접속을 거쳐도 판의 물리 의자를 유지한다", () => {
+    const players = [0, 2, 5, 7].map((seat) => ({ id: `p${seat}`, seat, connected: seat !== 5, alive: seat !== 2 }));
+    const barChairs = barChairAssignment(players.map((p) => p.seat));
     const world = players.reduce((state, pl) => spawnPlayer(state, pl.id, pl.seat, 0, BAR_MAP), emptyWorld());
     const state = { phase: "discussion", day: 2, map: "bar", players } as RoomState;
-    const four = layoutFor({ ...state, players: state.players.slice(0, 4) }, world, 0)!;
-    const eight = layoutFor(state, world, 0)!;
+    const four = layoutFor(state, world, 0)!; // 기존 저장에는 barChairs가 없다
     expect(four.key).toBe("2:bar-table");
-    expect(Object.values(four.slots)).toEqual(BAR_SEATS_FX.slice(0, 3));
-    expect(eight.slots.p3).toBeUndefined();
-    for (const id of Object.keys(four.slots)) expect(four.slots[id]).toEqual(eight.slots[id]);
+    expect(four.slots).toEqual({ p0: BAR_SEATS_FX[0], p5: BAR_SEATS_FX[4], p7: BAR_SEATS_FX[5] });
+    const restored = JSON.parse(JSON.stringify({
+      ...state, barChairs, day: 3, players: players.map((p) => ({ ...p, connected: true })),
+    })) as RoomState;
+    expect(layoutFor(restored, world, 0)?.slots).toEqual(four.slots);
+  });
+
+  it("유언자는 자기 의자에서 중앙 무대로 이동하고 처형 때 이미 도착했으면 다시 옮기지 않는다", () => {
+    const players = [0, 1, 2, 3].map((seat) => ({ id: `p${seat}`, seat }));
+    const barChairs = barChairAssignment(players.map((p) => p.seat));
+    const state = { phase: "defense", day: 2, map: "bar", players, barChairs, verdict: { passed: true, candidate: 1 } } as RoomState;
+    const own = BAR_SEATS_FX[2];
+    const world = { ...emptyWorld(), segs: { p1: restSegment(...own, 0) } };
+    expect(layoutFor(state, world, 0)?.moves).toEqual([{ playerId: "p1", dest: STAGE_SPOT }]);
+    expect(routeFx(BAR_MAP, p(own), STAGE_SPOT)).toEqual([...own, 0, 0]);
+    const executed = { ...state, phase: "execution", players: state.players.map((player) => ({ ...player, alive: player.seat !== 1 })) } as RoomState;
+    expect(layoutFor(executed, { ...world, segs: { p1: restSegment(0, 0, 0) } }, 0)?.moves).toEqual([]);
   });
 
   it("좌석에 고정된 바 토론은 원거리 산 상대 선택을 허용하고, 광장과 유령의 이동은 기존대로다", () => {

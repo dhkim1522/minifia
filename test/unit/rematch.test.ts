@@ -161,7 +161,7 @@ describe("rematch 게이트 (D-12)", () => {
 });
 
 describe("rematch 허용 목록 리터럴 (D-15, 누설 L39)", () => {
-  const ALLOWED_ROOM = "code,createdAt,everConnected,expiresAt,hostId,map,mapChoice,nextJoinSeq,phase,phaseEndsAt,players,round,startedAt,testBotVote,testMode,testRole";
+  const ALLOWED_ROOM = "barChairs,code,createdAt,everConnected,expiresAt,hostId,map,mapChoice,nextJoinSeq,phase,phaseEndsAt,players,round,startedAt,testBotVote,testMode,testRole";
   const ALLOWED_PLAYER = "connId,connected,id,joinSeq,look,nickname,nicknameKey,role,seat,token";
 
   it("4명 모두 준비 → round+1 의 assigning, 모두 역할을 받고, 방과 사람 행의 키 집합이 허용 목록과 정확히 같다", () => {
@@ -187,6 +187,17 @@ describe("rematch 허용 목록 리터럴 (D-15, 누설 L39)", () => {
     expect(next.hostId).toBe("p0");
     expect(next.nextJoinSeq).toBe(4);
     expect(r.removedIds).toEqual([]);
+  });
+
+  it("재즈 바의 다시 하기는 이번 판에 준비한 참가자만 새 의자에 배정한다", () => {
+    const players = [dirtyPlayer(0), dirtyPlayer(1), ready(2), ready(3), dirtyPlayer(4), ready(5)];
+    const previousChairs = { 0: 0, 1: 1, 2: 2, 3: 3, 4: 6, 5: 7 };
+    const ended = endedRoom(players, { mapChoice: "bar", barChairs: previousChairs });
+    const result = rematch(ended, "p0", 1, NOW, seededRandInt(9));
+    if (!result.ok) throw new Error("rematch failed");
+    expect(result.state.players.map((p) => p.seat)).toEqual([0, 2, 3, 5]);
+    expect(result.state.bench?.map((p) => p.seat)).toEqual([1, 4]);
+    expect(result.state.barChairs).toEqual({ 0: 0, 2: 2, 3: 4, 5: 5 });
   });
 
   it("이전 판의 게임 필드가 어느 이름으로도 남지 않는다", () => {

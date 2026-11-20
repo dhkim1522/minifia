@@ -7,6 +7,8 @@
 
 /* 입력 면: 맵 전체가 입력이다. 확대·더블탭·길게 눌러 메뉴·글자 선택·당겨서 새로 고침을 모두 막는다. */
 .mf-world__input { z-index: var(--z-world); touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
+.mf-world[data-table-camera="eye"] .mf-world__input { cursor: grab; }
+.mf-world[data-table-camera="eye"] .mf-world__input:active { cursor: grabbing; }
 
 /* 이름표 층: 캔버스와 같은 크기, 입력을 가로채지 않는다. 안쪽 이름표의 z-index 는 순위(0~7)다: 내 이름표가 맨 위, 나머지는 발 y 가 큰 쪽이 위. */
 .mf-world__tags { z-index: var(--z-tags); pointer-events: none; }

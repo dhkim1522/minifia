@@ -56,6 +56,7 @@ export interface GamePanelProps {
   panelRef?: RefObject<HTMLElement | null>;
   suspect?: RoomChatDockProps["suspect"];
   notice?: ReactNode;
+  tableControls?: ReactNode;
   /** 전날 결과가 잠깐 보이는 동안에는 밤 선택을 같은 자리에 겹쳐 놓지 않는다. */
   pauseNightEvent?: boolean;
 }
@@ -64,7 +65,7 @@ export interface GamePanelProps {
  * 단계별 선택은 중앙에 보여 주고 채팅과 상시 도구는 화면 아래에 둔다.
  * 눌림은 서버 view(me.endDiscussion·me.verdictVote)가 기준이고, 내가 누른 즉시 바뀌는 것은 내 눌림 표시 하나뿐이다. 숫자는 서버가 센 값만 그린다(누가 눌렀는지·무엇을 골랐는지는 서버가 보내지 않는다).
  */
-export function GamePanel({ view, offset = 0, send, canSend, binding, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef, suspect, notice, pauseNightEvent = false }: GamePanelProps) {
+export function GamePanel({ view, offset = 0, send, canSend, binding, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef, suspect, notice, tableControls, pauseNightEvent = false }: GamePanelProps) {
   const playtest = view.playtest === true;
   const voteOpensAt = playtest && view.phase === "discussion" ? view.day?.voteOpensAt : undefined;
   const [openedVoteAt, setOpenedVoteAt] = useState<number>();
@@ -163,7 +164,7 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, kbOpen = f
   const showChat = chatChannelOk && (!playtest || playtestChat);
   const canReact = !chatLocked && (!playtest || discussion);
   const showRoleTool = showNoteRow || showWillRow || penOn;
-  const panelEmpty = !showChat && !showRoleTool && !notice;
+  const panelEmpty = !showChat && !showRoleTool && !notice && !tableControls;
 
   const pressEnd = (): void => {
     if (!canSend) return;
@@ -232,6 +233,7 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, kbOpen = f
         data-world-panel=""
         {...(veiled ? { "data-will-hide-panel": "true" } : {})}
       >
+        {tableControls}
         {notice}
         {showChat ? (
           <RoomChatDock

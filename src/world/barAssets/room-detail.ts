@@ -3,9 +3,9 @@ import {
   Mesh, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, PlaneGeometry, RGBAFormat,
   SRGBColorSpace, Vector2,
 } from "three";
-import type { Matrix4, Scene, Texture } from "three";
+import type { Matrix4, Object3D, Texture } from "three";
 import { BAR_COUNTER, BAR_ROOM_HALF } from "../../../shared/game/map";
-import { Bundle, makeGlowTexture, tf, under } from "../../../src/world/maps/bar";
+import { Bundle, makeGlowTexture, tf, under } from "../maps/bar";
 
 const northWall = -BAR_ROOM_HALF;
 const windowX = 0.42;
@@ -70,7 +70,7 @@ function surround(
   }
 }
 
-function addWindow(root: Scene, joinery: Bundle, casing: Bundle, metal: Bundle): void {
+function addWindow(root: Object3D, joinery: Bundle, casing: Bundle, metal: Bundle): void {
   const art = new Mesh(new PlaneGeometry(1.60, 1.30), new MeshBasicMaterial({
     map: nightView, toneMapped: false,
   }));
@@ -196,7 +196,7 @@ function addWallPanels(joinery: Bundle, casing: Bundle, metal: Bundle): void {
   }
 }
 
-export function addRoomDetail(root: Scene, wood: Texture | null): void {
+export function addRoomDetail(root: Object3D, wood: Texture | null): void {
   const joinery = new Bundle();
   const casing = new Bundle();
   const metal = new Bundle();

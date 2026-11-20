@@ -22,6 +22,7 @@ import type { AnimalId } from "./animals";
 import { pickFreeAnimal } from "./animalRoster";
 import { hostSuccessor } from "./continuity";
 import { resolveLookConflicts } from "./look";
+import { barChairAssignment } from "./map";
 import { decideMap } from "./maps";
 import { enterNomination } from "./nomination";
 import type { NoteRow } from "./postit";
@@ -235,6 +236,8 @@ export interface RoomState {
   earlyFrom?: { phase: PhaseId; day: number; endsAt: number };
   /** 서버 전용 결정값(결정 D-21). startGame 이 mapChoice 로 정해 싣는다 — 시작 전에는 어떤 view·프레임에도 싣지 않는다(L42). 대기실 복귀가 버린다. */
   map?: MapId;
+  /** 라운드 시작 때 고정한 재즈 바의 논리 좌석 → 물리 의자. 좌석 번호나 공개 위치 프레임은 바꾸지 않는다. */
+  barChairs?: Partial<Record<number, number>>;
   /** 서버 전용(결정 0022). 방을 만들 때만 정해지는 테스트 방 표시 — true 일 때만 키가 있다. 테스트 방 방장 도구의 문이다. */
   testMode?: true;
   playtest?: true;
@@ -473,7 +476,7 @@ export function beginGame(
   const map = decideMap(state.mapChoice ?? "random", randInt);
   // 키워드는 맨 끝 난수 두 번이다(D-29) — 역할 → 맵 순서와 기존 시드 시험은 그대로. 고르는 함수가 없으면(스위치 끔) 들어온 상태의 keyword 도 지운다(다시 하기가 옛 값을 끌고 오지 않게).
   // 의심 포스트잇(notes)도 같은 구조 분해로 뺀다 — 새 판에 어제 판의 종이가 따라오지 않게(벨트, D-08).
-  const { keyword: _prevKeyword, notes: _prevNotes, ...rest } = state;
+  const { keyword: _prevKeyword, notes: _prevNotes, barChairs: _prevChairs, ...rest } = state;
   const keyword = pickKeyword !== undefined ? pickKeyword(randInt) : undefined;
   // 옷장 조작이 없는 실험방은 좌석별 외형과 기본 코트로 인물을 구분한다.
   // 동물로 구분되는 방에서는 직접 고른 옷만 입는다.
@@ -483,6 +486,7 @@ export function beginGame(
   return {
     ...rest,
     ...(keyword !== undefined ? { keyword } : {}),
+    ...(map === "bar" ? { barChairs: barChairAssignment(seated.map((p) => p.seat)) } : {}),
     startedAt: now,
     map,
     phase: "assigning",

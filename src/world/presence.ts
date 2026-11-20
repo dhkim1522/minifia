@@ -1,6 +1,6 @@
 // 장면 상태 순수 모듈 — GHOST-01·MAP-04·DAY-04·05, 08-UI-SPEC 카메라·단계 조명·유령.
 // 순수: three·DOM 이 없고 입력은 서버 view 와 화면 연출 시각뿐이다. 결정 0002 — 화면은 받은 것만 그린다.
-// 탈락자는 누구든 같은 유령 그림 하나다(18.1 0083-2): 산 viewer·유령 viewer 모두 연출(fadeAt) 뒤 ghost 로 남고 의상 키가 없다(직업 단서 없음, L13)
+// 탈락자는 유령 시점에서만 반투명 캐릭터로 보인다. 공개 처형 중에는 퇴장 연출을 마칠 때까지 그린다.
 // 위치는 서버가 새로 보내지 않는다 — 런타임이 클라이언트 월드 저장소가 마지막으로 받은 구간(WorldStore.lastSegOf)에서 세운다.
 // 읽는 것은 공개 정보(players·alive·day.points·day.candidate)와 본인 유령 여부(spectate·내 alive)뿐이다.
 import { isAlive } from "../../shared/game/alive";
@@ -30,11 +30,11 @@ export interface Tension {
 /** 화면에 그릴 좌석 한 곳. 표에 있는 좌석만 그린다(없는 좌석은 그리지 않는다) */
 export interface SeatLook {
   show: true;
-  /** 유령으로 그리는지(유령 그림·떠다님). 탈락 좌석은 처형 연출 중에만 ghost 아님이고 연출 뒤에는 ghost(유령 그림)다 */
+  /** 탈락자가 관전하는 화면의 반투명 캐릭터·떠다님 */
   ghost: boolean;
   /** 지금 이 좌석이 가리키는 대상 좌석(지목 단계, 공개 정보 + 내 낙관적 선택) */
   pointAt?: number;
-  /** 처형 연출 시작 시각(ms). 산 사람 viewer 는 연출 끝(GHOST_FADE_END_MS)에 이 키가 빠지고 좌석이 ghost 로 남는다 */
+  /** 처형 연출 시작 시각(ms). 생존자의 장면에서는 연출 종료 후 좌석을 거둔다. */
   fadeAt?: number;
   /**
    * 고른 look 위에 그리는 직업 의상. GameMap은 산 마피아의 본인 좌석에만, 결과 화면은 공개된 생존자에만 넣는다.
@@ -52,6 +52,8 @@ export interface SeatLook {
 
 export interface SceneLook {
   camera: CameraMode;
+  /** 재즈 바 착석 화면과 공개 채팅에서 발생한 짧은 시선 신호. */
+  table?: { mode: "eye" | "wide"; focus?: number; focusAt?: number; voice?: { seat: number; at: number } };
   lighting: LightingStage;
   tension: 0 | 1 | 2;
   focusSeat?: number;
@@ -61,7 +63,7 @@ export interface SceneLook {
   /** 암살 현장 분필 자리(월드 단위). 서버 공개 값 day.chalk 를 UNIT 으로 나눈 것이고 유령·산 사람 viewer 가 같은 자리를 본다(결정 0061-14) */
   chalk?: { x: number; z: number };
   /**
-   * "의심" 포스트잇(24-05, 결정 0089-11): 받은 좌석 → 붙인 좌석 배열(day.suspects 순서 = 아래→위, 공개 값). 그리는 산 좌석만 싣고 비어 있으면 키가 없다.
+   * "의심" 포스트잇: 받은 좌석 → 쌓인 순서. 화면에 그리는 생존 좌석만 싣는다.
    * 보이는 3장 자르기는 캐릭터 핸들 리그가 한다 — 여기는 전체 목록이다
    */
   notes?: Readonly<Record<number, readonly number[]>>;
@@ -75,8 +77,8 @@ function isGhostViewer(view: RoomView): boolean {
 }
 
 /**
- * 그릴 좌석 표. 산 viewer 는 산 좌석 + 탈락 좌석(처형 연출 중이면 ghost 아님 + fadeAt, 연출 뒤·그 밖은 ghost),
- * 유령 viewer 는 모든 좌석이고 탈락 좌석은 ghost 다. 어느 쪽이든 의상 키가 없다 — 탈락자의 모습은 직업과 무관하다(0083-2).
+ * 생존자에게는 생존 좌석과 공개 처형 연출을 그린다. 탈락자에게는 탈락 좌석을 반투명 캐릭터로 그린다.
+ * 이 표에는 직업 의상 키가 없다.
  * 밤은 서버가 산 사람에게 본인만 보내는 단계라(결정 0074 D-05) 산 viewer 의 탈락 좌석을 넣지 않는다 — 역할마다 겉보기가 달라지지 않게(0074-4).
  * fading = 좌석 → 처형 연출 시작 시각(화면이 처형 이벤트를 본 시각). now 를 생략하면 표에 있는 연출은 아직 진행 중으로 본다.
  */
@@ -86,13 +88,12 @@ export function visibleSeats(view: RoomView, fading?: ReadonlyMap<number, number
   // 밤·산 시민 편(시민·경찰·의사): 내 좌석 하나뿐이다. 서버가 이 밤에 남의 위치를 한 번도 보내지 않으므로(09-03·09-09, 결정 0061-3)
   // 장면 표도 그 사실을 따른다 — 받은 위치를 화면에서만 숨기는 방식이 아니다(결정 0002·0021, T-09-21). 세 역할이 같은 값이다.
   const nightCitizen = view.phase === "night" && !ghostViewer && view.me.role !== "mafia";
-  const hidesDead = view.phase === "night";
   for (const p of view.players) {
     if (nightCitizen && p.seat !== view.me.seat) continue;
     const dead = !isAlive(p);
     const startedAt = fading?.get(p.seat);
     const fadingNow = dead && startedAt !== undefined && (now === undefined || now - startedAt < GHOST_FADE_END_MS);
-    if (dead && !ghostViewer && !fadingNow && hidesDead) continue;
+    if (dead && !ghostViewer && !fadingNow) continue;
     seats[p.seat] = {
       show: true,
       ghost: dead && (ghostViewer || !fadingNow),
@@ -178,7 +179,7 @@ export function sceneLook(view: RoomView, opts: { stageH: number; fading?: Reado
   const notes: Record<number, readonly number[]> = {};
   for (const [to, froms] of suspectStacks(view)) {
     const look = seats[to];
-    if (look && !look.ghost && froms.length > 0) notes[to] = froms;
+    if (look && !look.ghost && froms.length > 0) notes[to] = froms.map((_, index) => index);
   }
   for (const [seat, target] of Object.entries(pointing)) {
     const look = seats[Number(seat)];

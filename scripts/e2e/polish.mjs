@@ -695,12 +695,7 @@ export async function measureChatOpen(page, draft) {
   };
 }
 
-// ---- C 탈락자는 누구든 같은 유령 그림 (18.1-09, 18.1-17 0083-2: 훅 window.__mfGhosts) ----
-
-/** 산 사람 화면이 탈락자 유령을 그리지 않는 단계(밤 — 서버가 본인만 보내는 단계, 18.1-02 선택) */
-export const LIVE_GHOST_ABSENT_PHASES = Object.freeze(["night"]);
-/** 유령이 걷기 전·후 산 사람 화면의 유령 자리가 같다고 보는 허용 오차(월드 단위) */
-export const GHOST_STILL_TOL = 0.05;
+// ---- C 탈락자의 반투명 캐릭터와 관전 시야 ----
 
 const isSeatNum = (n) => Number.isInteger(n) && n >= 0;
 /** 유령 훅 사본 { seats: number[], ready: boolean } 모양인가 */
@@ -708,19 +703,17 @@ const isGhostsHook = (g) => g !== null && typeof g === "object" && Array.isArray
 
 /**
  * C1·C2 판정(산 사람 화면 유령). m = readLiveGhost 의 값 { hook, seats: [{ seat, shown, ghostTags, chips }], ghosts: { seats, ready } | null, roleChips, ghostSeats }.
- * ctx = { deadSeats, phase }. 밤(LIVE_GHOST_ABSENT_PHASES)이 아니면 C1 = 탈락 좌석마다 마지막 자리(shown)에 actor 가 있고 `.mv-tag.is-ghost` 이름표가 정확히 1개이며
- * 유령 훅(__mfGhosts)의 seats 에 그 좌석이 있고 ready(그림을 불러옴)다 — 사람 모양으로 남으면 seats 에 없다. 밤이면 기대가 반대 — shown null·유령 이름표 0·훅 seats 에 없음.
+ * 공개 퇴장 연출 뒤 생존자의 화면에는 탈락한 몸·이름표·유령 표시가 없다.
  * C2 = [data-role-chip]·[data-ghost-seat] 이 0개(신분 단서 없음, 결정 0021) — 단계와 무관.
  */
-export function liveGhostChecks(m, { deadSeats, phase } = {}) {
+export function liveGhostChecks(m, { deadSeats } = {}) {
   const L = {
-    C1: "탈락 좌석이 유령 그림으로 남는다(마지막 자리 actor·is-ghost 이름표 1·유령 훅 seats 에 있고 ready, 밤은 그리지 않음)",
+    C1: "생존자 화면에 탈락 좌석의 몸·이름표·유령 표시가 없다",
     C2: "산 사람 화면에 직업 칩·죽은 자리 표식이 0개다",
   };
   const ok =
     m !== null && typeof m === "object" && m.hook === true && Array.isArray(m.seats) && isGhostsHook(m.ghosts) && Array.isArray(deadSeats) && deadSeats.length > 0 && deadSeats.every(isSeatNum);
   if (!ok) return ["C1", "C2"].map((id) => noMeasure(id, L[id], "월드 훅·유령 훅·탈락 좌석 읽기"));
-  const absent = LIVE_GHOST_ABSENT_PHASES.includes(phase);
   const bad1 = [];
   for (const seat of deadSeats) {
     const r = m.seats.find((x) => x && x.seat === seat);
@@ -728,18 +721,9 @@ export function liveGhostChecks(m, { deadSeats, phase } = {}) {
       bad1.push(`좌석 ${seat} 측정값 없음(읽기 없음)`);
       continue;
     }
-    const drawn = r.shown !== null && r.shown !== undefined;
-    const inHook = m.ghosts.seats.includes(seat);
-    if (absent) {
-      if (drawn) bad1.push(`좌석 ${seat} ${phase} 단계인데 유령 actor 가 있음`);
-      if (r.ghostTags !== 0) bad1.push(`좌석 ${seat} ${phase} 단계인데 유령 이름표 ${r.ghostTags}개`);
-      if (inHook) bad1.push(`좌석 ${seat} ${phase} 단계인데 유령 훅 seats 에 있음`);
-    } else {
-      if (!drawn) bad1.push(`좌석 ${seat} 마지막 자리 actor 없음(shown null)`);
-      if (r.ghostTags !== 1) bad1.push(`좌석 ${seat} 유령 이름표(.mv-tag.is-ghost) ${r.ghostTags}개 (기대 1)`);
-      if (!inHook) bad1.push(`좌석 ${seat} 가 유령 훅 seats 에 없음(유령 그림이 아님)`);
-      if (!m.ghosts.ready) bad1.push("유령 그림을 불러오지 못함(ready 거짓)");
-    }
+    if (r.shown != null) bad1.push(`좌석 ${seat} 화면에 몸이 남음`);
+    if (r.tags !== 0) bad1.push(`좌석 ${seat} 이름표 ${r.tags}개`);
+    if (m.ghosts.seats.includes(seat)) bad1.push(`좌석 ${seat} 유령 훅에 있음`);
   }
   const bad2 = [];
   if (!isNum(m.roleChips) || !isNum(m.ghostSeats)) bad2.push("칩·표식 수 측정값 없음");
@@ -757,7 +741,7 @@ export function liveGhostChecks(m, { deadSeats, phase } = {}) {
  * 산 좌석이 유령 훅 seats 에 있으면(사람이 유령으로 그려짐) 실패.
  */
 export function ghostViewChecks(m, { jobs = {}, seats } = {}) {
-  const label = "유령 화면: 탈락 좌석 전원이 직업 칩 1개·유령 이름표·유령 그림이다(직업과 무관)";
+  const label = "유령 화면: 탈락 좌석 전원이 직업 칩 1개와 유령 이름표·반투명 캐릭터를 갖는다";
   const list = seats ?? Object.keys(jobs).map(Number);
   const ok = m !== null && typeof m === "object" && Array.isArray(m.seats) && isGhostsHook(m.ghosts) && list.length > 0;
   if (!ok) return [noMeasure("C3", label, "유령 화면 읽기·유령 훅")];
@@ -777,20 +761,6 @@ export function ghostViewChecks(m, { jobs = {}, seats } = {}) {
   return [row("C3", label, bad)];
 }
 
-/** GH12(뜻 바뀜, C-6): 유령이 걷는 동안 산 사람 화면의 유령 자리(shown)가 그대로다 — 서버가 유령 구간을 보내지 않으므로 마지막 자리에 서 있는다 */
-export function ghostStillChecks(before, after) {
-  const label = "유령이 걷는 동안 산 사람 화면의 유령 자리(shown)가 바뀌지 않는다";
-  if (before === null && after === null) return noMeasure("GH12", label, "걷기 전·후 유령 자리");
-  const bad = [];
-  if (before === null || after === null) bad.push(before === null ? "걷기 전에 유령 자리가 없음" : "걷기 뒤 유령 자리가 사라짐");
-  else if (![before.x, before.z, after.x, after.z].every(isNum)) bad.push("자리 값이 숫자가 아님");
-  else {
-    const d = Math.hypot(after.x - before.x, after.z - before.z);
-    if (d > GHOST_STILL_TOL) bad.push(`자리가 ${fmt(d)} 만큼 옮겨짐 (허용 ${GHOST_STILL_TOL}, (${fmt(before.x)},${fmt(before.z)}) → (${fmt(after.x)},${fmt(after.z)}))`);
-  }
-  return row("GH12", label, bad);
-}
-
 /**
  * 산 사람/유령 화면 유령 읽기(테스트 훅이 켜진 문맥에서만 값이 있다): 좌석마다 window.__mfWorld.shown(seat) 와 그 좌석 이름표의 `.mv-tag.is-ghost`·직업 칩 수,
  * 페이지 전체 [data-role-chip]·[data-ghost-seat] 수, window.__mfGhosts 사본(없으면 null). 닉네임·글자는 읽지 않는다(T-18.1-19).
@@ -807,6 +777,7 @@ export function readLiveGhost(page, seats) {
         return {
           seat,
           shown: sh ? { x: sh.x, z: sh.z } : null,
+          tags: tag ? 1 : 0,
           ghostTags: tag ? tag.querySelectorAll(".mv-tag.is-ghost").length : 0,
           chips: tag ? tag.querySelectorAll("[data-role-chip]").length : 0,
         };

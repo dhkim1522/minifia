@@ -72,7 +72,7 @@ describe("첫날 실험방 HTTP·소켓", () => {
         expect(view.players.every((player) => player.look === undefined || player.look === "coat")).toBe(true);
       }
       const gathered = framesOf(host).filter((f) => f.t === "world" && f.k === "snap").at(-1);
-      expect(gathered?.ents.map(({ p }) => p.slice(-2))).toEqual(BAR_SEATS_FX.slice(0, 4));
+      expect(gathered?.ents.map(({ p }) => p.slice(-2))).toEqual([0, 2, 4, 5].map((index) => BAR_SEATS_FX[index]));
       const lockedRole = mark(host);
       send(host, { t: "move", x: 300, z: 100 });
       expect((await settle(host, lockedRole)).some((f) => f.t === "world")).toBe(false);

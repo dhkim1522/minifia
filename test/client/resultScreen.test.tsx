@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { phaseKey } from "../../shared/game/audience";
-import { ringSlots } from "../../shared/game/gather";
+import { BAR_SEATS_FX, barChairAssignment } from "../../shared/game/map";
 import type { RoleId } from "../../shared/game/roles";
 import type { GameWinner, MapId, RoomView, SummaryRow } from "../../shared/protocol";
 import { PLAYABLE_MAPS } from "../../shared/game/maps";
@@ -15,6 +15,12 @@ import { LOG_H } from "../../src/game/chatUi";
 import { RESULT_TABS_SHOWN } from "../../src/game/resultText";
 import { GATHER_CENTER } from "../../src/world/camera";
 import { openPlaza } from "../helpers/playable";
+
+function barSeats(count: number) {
+  const seats = Array.from({ length: count }, (_, seat) => seat);
+  const chairs = barChairAssignment(seats);
+  return seats.map((seat) => BAR_SEATS_FX[chairs[seat]!]);
+}
 
 // 결과 화면(11-05, 결정 D-1·D-11): 3D 무대(WorldStage) 위의 한 장면. WorldStage 는 받은 props 를 쥐고 tagProps 의 직업 칩만 그리는 가짜다
 // (캔버스·런타임·의상 적용은 worldStage.test 몫). RoomScreen 의 연결 훅은 반환값을 시험이 정하는 가짜다.
@@ -258,10 +264,10 @@ describe("결과 화면: 3D 무대 위 한 장면의 최종 상태 (D-1, A-5)", 
     expect(chips(r.container).map((c) => c.dataset.roleChip)).toEqual(["citizen", "police", "doctor", "mafia", "citizen"]);
   });
 
-  it("스토어에 한 점 구간 snap 이 들어가 모두 ringSlots(n) 의 자기 자리에 선다", () => {
+  it("결과 화면의 한 점 구간이 재즈 바 참가자를 인원별 의자에 둔다", () => {
     renderRoom(makeView({ count: 6 }));
     const store = stage.props!.store;
-    const table = ringSlots(6);
+    const table = barSeats(6);
     for (let seat = 0; seat < 6; seat++) {
       const at = store.positionOf(seat, NOW + 5000)!;
       expect(at.x).toBeCloseTo(table[seat]![0] / 100, 6);
@@ -514,16 +520,16 @@ describe("결과 시간표 연출 (A-1)", () => {
 
   it("모임 걷기: 스토어의 마지막 위치에서 자리까지 1200ms 안에 도착하는 구간, 위치가 없는 사람은 자리에서 시작한다", () => {
     const r = reveal({ count: 5 }, (store) => {
-      store.applyFrame({ t: "world", k: "snap", at: NOW, ents: [{ s: 0, p: [500, -400], t0: NOW, v: 0 }, { s: 1, p: [-300, 100], t0: NOW, v: 0 }] }, 1);
+      store.applyFrame({ t: "world", k: "snap", at: NOW, ents: [{ s: 0, p: [125, 375], t0: NOW, v: 0 }, { s: 1, p: [-300, 100], t0: NOW, v: 0 }] }, 1);
     });
     const store = stage.props!.store;
-    const table = ringSlots(5);
+    const table = barSeats(5);
     const p0 = store.positionOf(0, NOW)!;
-    expect(p0.x).toBeCloseTo(5, 6);
-    expect(p0.z).toBeCloseTo(-4, 6);
+    expect(p0.x).toBeCloseTo(1.25, 6);
+    expect(p0.z).toBeCloseTo(3.75, 6);
     const mid = store.positionOf(0, NOW + 600)!;
-    expect(mid.x).toBeLessThan(5); // 출발(5)에서 자리(0)로 걷는 중간이다
-    expect(mid.x).toBeGreaterThan(table[0]![0] / 100);
+    expect(mid.z).toBeLessThan(p0.z);
+    expect(mid.z).toBeGreaterThan(table[0]![1] / 100);
     const end = store.positionOf(0, NOW + 1200)!;
     expect(end.x).toBeCloseTo(table[0]![0] / 100, 6);
     expect(end.z).toBeCloseTo(table[0]![1] / 100, 6);
@@ -639,7 +645,7 @@ describe("결과 시간표 연출 (A-1)", () => {
     expect(scene().pin).not.toBeNull();
     expect(dimCount()).toBe(1);
     expect(announce(r.container)).toBeNull();
-    const table = ringSlots(5);
+    const table = barSeats(5);
     const p0 = stage.props!.store.positionOf(0, NOW + 2000)!;
     expect(p0.x).toBeCloseTo(table[0]![0] / 100, 6);
     expect(p0.z).toBeCloseTo(table[0]![1] / 100, 6);
@@ -1186,7 +1192,7 @@ describe("쉬었던 사람(sat) 표시 (11-12, D-13, UI-SPEC A-5)", () => {
   it("sat 는 참가자 링에 들지 않는다: 참가자 5명의 링 자리는 그대로이고 sat 는 그 바깥에 선다", () => {
     renderRoom(makeView({ count: 5, sat: [5], me: 1 }));
     const store = stage.props!.store;
-    const ring = ringSlots(5);
+    const ring = barSeats(5);
     for (let seat = 0; seat < 5; seat++) {
       const p = store.positionOf(seat, Date.now())!;
       expect(p.x).toBeCloseTo(ring[seat]![0] / 100, 1);

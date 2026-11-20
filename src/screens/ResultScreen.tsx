@@ -221,7 +221,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
 
   // 위치: 모두 자기 둘레 자리로. 연출이면 스토어의 마지막 위치에서 걷는 구간(1200ms), 아니면 한 점 구간이다. 런타임이 만들어지기 전(레이아웃 효과)에 먹여 첫 프레임부터 맞다.
   // 서버 상태가 아니라 이 폰의 연출이다 — 서버 시각 기준(t0 = 지금 + offset)으로 만들어 런타임이 서버 구간과 똑같이 그린다. 새 연결(epoch)이면 다시 먹인다
-  const slots = useMemo(() => ({ ...slotsFor(cast, view.map), ...satSlots(satSeats, mapId) }), [cast, satSeats, mapId, view.map]);
+  const slots = useMemo(() => ({ ...slotsFor(cast, mapId), ...satSlots(satSeats, mapId) }), [cast, satSeats, mapId]);
   const offsetRef = useRef(offset);
   offsetRef.current = offset; // 시계 보정이 흔들려도 snap 을 다시 먹이지 않는다(먹일 때만 읽는다)
   const feed = useCallback(
@@ -231,13 +231,13 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
       if (walk) {
         const starts: Record<number, { x: number; z: number } | undefined> = {};
         for (const seat of Object.keys(slots).map(Number)) starts[seat] = store.positionOf(seat, t0) ?? undefined;
-        ents = walkSnap(slots, starts, t0);
+        ents = walkSnap(slots, starts, t0, mapId);
       } else {
         ents = holdSnap(slots, t0);
       }
       store.applyFrame({ t: "world", k: "snap", at: t0, ents }, Math.max(store.currentEpoch(), epoch));
     },
-    [store, slots, epoch],
+    [store, slots, epoch, mapId],
   );
   useLayoutEffect(() => {
     feed(reveal && markRef.current < tl.flipStartMs);

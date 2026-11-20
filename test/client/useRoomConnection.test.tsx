@@ -525,6 +525,24 @@ describe("useRoomConnection: 이벤트 구독 (chat·error 프레임, Pitfall 6)
     expect(hook.result.current.view).toBe(before);
   });
 
+  it("공개 발언에는 소켓에서 받은 현재 토론 단계 키를 전달한다", () => {
+    const { sockets, hook } = setup();
+    const socket = sockets[0]!;
+    openWithState(socket);
+    const listener = vi.fn();
+    act(() => {
+      hook.result.current.onEvent(listener);
+      socket.message({ t: "state", view: { ...view, phase: "discussion", map: "bar", round: 2, day: { n: 3, roles: [] } } });
+      socket.message({ t: "chat", ch: "all", seat: 1, seq: 1, text: "토론 중이에요", at: 5 });
+      socket.message({ t: "chat", ch: "ghost", seat: 2, seq: 2, text: "관전 중이에요", at: 6 });
+      socket.message({ t: "state", view: { ...view, phase: "nomination", map: "bar", round: 2, day: { n: 3, roles: [] } } });
+      socket.message({ t: "chat", ch: "all", seat: 1, seq: 3, text: "지목 중이에요", at: 7 });
+    });
+    expect(listener.mock.calls.map(([, meta]) => meta)).toEqual([
+      { epoch: 1, phase: "2:3:discussion" }, { epoch: 1 }, { epoch: 1 },
+    ]);
+  });
+
   it("t 가 chatx 같은 알 수 없는 프레임은 리스너에 가지 않는다", () => {
     const { sockets, hook } = setup();
     openWithState(sockets[0]!);

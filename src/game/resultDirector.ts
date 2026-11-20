@@ -4,7 +4,7 @@
 // 직업 의상 대응은 jobOutfit.ts 의 jobOutfit 한 곳을 재사용한다 — 새 표를 만들지 않는다. 직업 의상은 판이 끝났을 때 살아 있던 사람만 입는다(탈락자는 유령 그림, 0083-2).
 import { ringSlots } from "../../shared/game/gather";
 import { isAlive } from "../../shared/game/alive";
-import { BAR_SEATS_FX, snapToWalkable } from "../../shared/game/map";
+import { BAR_SEATS_FX, STAGE_SPOT, UNIT, barChairAssignment, routeFx, snapToWalkable } from "../../shared/game/map";
 import { mapOf } from "../../shared/game/maps";
 import type { RoleId } from "../../shared/game/roles";
 import type { GameWinner, MapId, RoomView, WorldSeg } from "../../shared/protocol";
@@ -94,9 +94,11 @@ export function castOf(view: RoomView & { result: NonNullable<RoomView["result"]
 /** 재즈 바는 자기 의자, 광장은 좌석 오름차순대로 둘레 자리에 선다. */
 export function slotsFor(cast: readonly CastMember[], mapId?: MapId): Record<number, readonly [number, number]> {
   const table = ringSlots(cast.length);
+  const chairs = mapId === "bar" ? barChairAssignment(cast.map((c) => c.seat)) : undefined;
   const out: Record<number, readonly [number, number]> = {};
   cast.forEach((c, i) => {
-    out[c.seat] = (mapId === "bar" ? BAR_SEATS_FX[c.seat] : table[i]) ?? [0, 265];
+    const chair = chairs?.[c.seat];
+    out[c.seat] = (chair === undefined ? table[i] : BAR_SEATS_FX[chair]) ?? [0, 265];
   });
   return out;
 }
@@ -193,8 +195,14 @@ export function markTimes(n: number): number[] {
  * 모임 걷기 snap 의 구간들: 시작 위치(월드 단위, 스토어에 있던 마지막 위치)에서 자리까지 gatherMs 안에 도착한다.
  * 시작 위치가 없거나 이미 자리면 한 점 구간(자리 그대로). p 는 고정소수점 정수, v 는 도착이 gatherMs 를 넘지 않게 올림한 고정소수점 거리/초다. 모두 같은 t0 다
  */
-export function walkSnap(slots: Record<number, readonly [number, number]>, starts: Readonly<Record<number, { x: number; z: number } | undefined>>, t0: number): WorldSeg[] {
+export function walkSnap(
+  slots: Record<number, readonly [number, number]>,
+  starts: Readonly<Record<number, { x: number; z: number } | undefined>>,
+  t0: number,
+  mapId?: MapId,
+): WorldSeg[] {
   const seconds = RESULT_TIMELINE.gatherMs / 1000;
+  const map = mapId === "bar" ? mapOf(mapId) : undefined;
   return Object.keys(slots)
     .map(Number)
     .sort((a, b) => a - b)
@@ -202,10 +210,16 @@ export function walkSnap(slots: Record<number, readonly [number, number]>, start
       const [sx, sz] = slots[s]!;
       const from = starts[s];
       if (from === undefined) return { s, p: [sx, sz], t0, v: 0 };
-      const x0 = Math.round(from.x * 100);
-      const z0 = Math.round(from.z * 100);
-      const dist = Math.hypot(sx - x0, sz - z0);
+      const x0 = Math.round(from.x * UNIT);
+      const z0 = Math.round(from.z * UNIT);
+      if (map !== undefined && x0 === STAGE_SPOT.x && z0 === STAGE_SPOT.z) return { s, p: [sx, sz], t0, v: 0 };
+      const p = map === undefined ? [x0, z0, sx, sz] : routeFx(map, { x: x0, z: z0 }, { x: sx, z: sz });
+      if (p.at(-2) !== sx || p.at(-1) !== sz) return { s, p: [sx, sz], t0, v: 0 };
+      let dist = 0;
+      for (let i = 0; i + 3 < p.length; i += 2) {
+        dist += Math.hypot(p[i + 2]! - p[i]!, p[i + 3]! - p[i + 1]!);
+      }
       if (dist === 0) return { s, p: [sx, sz], t0, v: 0 };
-      return { s, p: [x0, z0, sx, sz], t0, v: Math.max(1, Math.ceil(dist / seconds)) };
+      return { s, p, t0, v: Math.max(1, Math.ceil(dist / seconds)) };
     });
 }

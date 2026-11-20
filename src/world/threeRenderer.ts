@@ -4,14 +4,15 @@ import { ACESFilmicToneMapping, Group, MeshBasicMaterial, PCFShadowMap, Plane, P
 import type { Object3D } from "three";
 import type { MapId } from "../../shared/protocol";
 import { DEFAULT_CAMERA, DEFAULT_TARGET } from "./camera";
-import type { CameraRig } from "./camera";
+import type { CameraRig, TableCamera } from "./camera";
+import { createSeatedBarArt } from "./barAssets/seated-bar";
 import { buildBarScene } from "./maps/bar";
 import { buildPlazaScene } from "./maps/plaza";
 import type { MapScene } from "./maps/types";
 import { DEFAULT_BUDGET_STEP, LADDER, pixelRatioFor, UnsupportedRendererError } from "./renderer";
 import type { CharacterHandle, LightingPhase, MarkerKind, RendererStatusEvent, RendererStats, WorldRenderer } from "./renderer";
 import { isSoftwareRenderer } from "./status";
-import { configureCamera, createCamera } from "./threeCamera";
+import { configureCamera, configureTableCamera, createCamera, createTableCamera } from "./threeCamera";
 
 interface Opts {
   host: HTMLElement;
@@ -81,19 +82,30 @@ async function build(opts: Opts): Promise<WorldRenderer> {
 
   // 씬 그래프(맵·캐릭터)는 렌더러보다 오래 산다: recreate 가 새 렌더러에 같은 씬·카메라를 다시 물린다(가정 A2)
   // 맵 id 별 장면 빌더(결정 0050-2: 맵은 목록에 등록하면 늘어난다). 이름 bar 는 두 맵 공통의 "맵 장면"이다
-  const bar: MapScene = opts.mapId === "plaza" ? buildPlazaScene(budget) : buildBarScene(budget, { compact: opts.compactBar });
+  const compact = opts.mapId !== "plaza" && opts.compactBar === true;
+  const bar: MapScene = opts.mapId === "plaza" ? buildPlazaScene(budget) : buildBarScene(budget, { compact, omitCenterSeats: compact });
   if ("woodReady" in bar) await bar.woodReady;
   const scene = bar.root;
+  const seatedArt = compact ? createSeatedBarArt(bar) : null;
+  if (seatedArt) {
+    bar.setCenterTable?.(true);
+    seatedArt.applyBudget(budget.props === "full");
+  }
   const characters = new Group();
   scene.add(characters);
   const seats = new Map<number, CharacterHandle>();
   const camera = createCamera();
+  const tableCamera = createTableCamera();
+  let tableView: TableCamera | null = null;
+  let tableOffsetY = 0;
+  const activeCamera = () => tableView === null ? camera : tableCamera;
 
   let size = { w: opts.width, h: opts.height };
   let target = { x: DEFAULT_TARGET.x, z: DEFAULT_TARGET.z };
   let offsetY = 0;
   let zoom = 1;
   let rig = DEFAULT_CAMERA;
+  let lightingPhase: LightingPhase = "talk";
   let disposed = false;
   let lastTick = performance.now() / 1000;
   const listeners = new Set<(e: RendererStatusEvent) => void>();
@@ -105,6 +117,7 @@ async function build(opts: Opts): Promise<WorldRenderer> {
     gl.setPixelRatio(pixelRatioFor(budget, globalThis.devicePixelRatio || 1));
     gl.setSize(size.w, size.h, false);
     configureCamera(camera, target, size, offsetY, zoom, rig);
+    if (tableView !== null) configureTableCamera(tableCamera, tableView, size, tableOffsetY);
   };
   /** 새 렌더러를 현재 상태(크기·시점·노출)에 맞추고 그림자를 다시 굽게 한다 */
   const configureGl = (): void => {
@@ -133,10 +146,23 @@ async function build(opts: Opts): Promise<WorldRenderer> {
   const ray = new Raycaster();
   const screenPoint = new Vector2();
   const aimRay = (sx: number, sy: number): void => {
-    ray.setFromCamera(screenPoint.set((sx / size.w) * 2 - 1, 1 - (sy / size.h) * 2), camera);
+    ray.setFromCamera(screenPoint.set((sx / size.w) * 2 - 1, 1 - (sy / size.h) * 2), activeCamera());
   };
   // 한 손 터치가 몸의 가장자리를 살짝 비껴도 누를 수 있도록 한다.
   const bodyTapOffsets = [[0, 0], [-6, 0], [6, 0], [0, -6], [0, 6]] as const;
+  const blocksBody = (distance: number): boolean => {
+    if (!seatedArt?.table.visible) return false;
+    ray.far = Math.max(0, distance - 0.008);
+    const blocked = ray.intersectObjects(seatedArt.blockers, false).length > 0;
+    ray.far = Infinity;
+    return blocked;
+  };
+  function visibleMesh(mesh: Object3D, parent: Object3D): boolean {
+    for (let node: Object3D | null = mesh; node !== null && node !== parent; node = node.parent) {
+      if (!node.visible) return false;
+    }
+    return true;
+  }
   const floor = new Plane(new Vector3(0, 1, 0), 0);
   const loseExt = (): { loseContext(): void; restoreContext(): void } | null => {
     try {
@@ -160,6 +186,18 @@ async function build(opts: Opts): Promise<WorldRenderer> {
       rig = nextRig;
       configureCamera(camera, target, size, offsetY, zoom, rig);
     },
+    setTableView(view, off): void {
+      tableView = view;
+      tableOffsetY = off;
+      if (view !== null) configureTableCamera(tableCamera, view, size, off);
+    },
+    setTableScene(on): void {
+      if (!seatedArt || seatedArt.table.visible === on) return;
+      seatedArt.table.visible = on;
+      bar.setCenterTable?.(on);
+      seatedArt.setConversationLighting(on && (lightingPhase === "talk" || lightingPhase === "vote"));
+      gl.shadowMap.needsUpdate = true;
+    },
     setZoom(z: number): void {
       zoom = Number.isFinite(z) && z > 0 ? z : 1;
       configureCamera(camera, target, size, offsetY, zoom, rig);
@@ -177,7 +215,9 @@ async function build(opts: Opts): Promise<WorldRenderer> {
       bar.setPin(pin, dim);
     },
     setLighting(phase: LightingPhase, seconds = 0): void {
+      lightingPhase = phase;
       bar.setLighting(phase, seconds);
+      seatedArt?.setConversationLighting(seatedArt.table.visible && (phase === "talk" || phase === "vote"));
       gl.toneMappingExposure = bar.exposure;
       gl.shadowMap.needsUpdate = true; // 조명 단계가 바뀌면 그림자를 다시 굽는다
     },
@@ -206,9 +246,10 @@ async function build(opts: Opts): Promise<WorldRenderer> {
       (mk.ring.material as MeshBasicMaterial).opacity = opacity;
       (mk.outline.material as MeshBasicMaterial).opacity = 0.6 * opacity;
     },
-    project(p: { x: number; y: number; z: number }): { sx: number; sy: number } {
-      const v = new Vector3(p.x, p.y, p.z).project(camera);
-      return { sx: ((v.x + 1) / 2) * size.w, sy: ((1 - v.y) / 2) * size.h };
+    project(p) {
+      const v = new Vector3(p.x, p.y, p.z).project(activeCamera());
+      const projected = { sx: ((v.x + 1) / 2) * size.w, sy: ((1 - v.y) / 2) * size.h };
+      return tableView === null ? projected : { ...projected, visible: Math.abs(v.z) <= 1 && Math.abs(v.x) <= 1 && Math.abs(v.y) <= 1 };
     },
     groundAt(sx: number, sy: number): { x: number; z: number } {
       aimRay(sx, sy);
@@ -219,14 +260,14 @@ async function build(opts: Opts): Promise<WorldRenderer> {
       const byMesh = new Map<Object3D, number>();
       for (const [seat, character] of seats) {
         if (!character.root.visible) continue;
-        for (const mesh of character.bodyMeshes?.() ?? []) if (mesh.visible) byMesh.set(mesh, seat);
+        for (const mesh of character.bodyMeshes?.() ?? []) if (visibleMesh(mesh, character.root)) byMesh.set(mesh, seat);
       }
       const meshes = [...byMesh.keys()];
       for (const [dx, dy] of bodyTapOffsets) {
         aimRay(sx + dx, sy + dy);
         const [hit] = ray.intersectObjects(meshes, false);
         // 가까운 몸이 가리는 뒤쪽 사람을 고르지 않게 유효 좌석으로 거르기 전에 첫 교점을 사용한다.
-        if (hit) return byMesh.get(hit.object) ?? null;
+        if (hit) return blocksBody(hit.distance) ? null : byMesh.get(hit.object) ?? null;
       }
       return null;
     },
@@ -236,12 +277,13 @@ async function build(opts: Opts): Promise<WorldRenderer> {
       bar.update(now - lastTick, now);
       lastTick = now;
       gl.toneMappingExposure = bar.exposure;
-      gl.render(scene, camera);
+      gl.render(scene, activeCamera());
     },
     setBudget(next: number): void {
       if (disposed) return;
       budget = LADDER[clampStep(next)]!;
       bar.applyBudget(budget); // 점광원·소품·안개·빛 무리·그림자 맵 크기(재생성 없이)
+      seatedArt?.applyBudget(budget.props === "full");
       applySize();
       gl.shadowMap.needsUpdate = true; // 그림자 맵 크기·소품이 바뀌면 다시 굽는다
     },
@@ -261,7 +303,7 @@ async function build(opts: Opts): Promise<WorldRenderer> {
       gl = makeGl(canvas, opts.allowSoftware);
       attach(canvas);
       configureGl();
-      gl.render(scene, camera); // 같은 씬·카메라로 한 번 그려 자원을 다시 올린다
+      gl.render(scene, activeCamera()); // 같은 씬·카메라로 한 번 그려 자원을 다시 올린다
       gl.shadowMap.needsUpdate = true;
       emit({ t: "recreated" });
     },

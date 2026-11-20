@@ -478,29 +478,28 @@ describe("RoleCardSheet 의심 구역 (P24-19·20, D-27)", () => {
     expect(document.querySelector("h2.mf-sheet__title")?.textContent).toBe("의심 기록");
   });
 
-  it("줄 수는 그날 기록 수, 일차 안은 붙인 좌석 오름차순, from·to 는 좌석이다", () => {
+  it("받은 좌석 오름차순으로 묶고 부착자 표식을 내보내지 않는다", () => {
     renderRoleSheet(suspectView("citizen", LOG));
     const [d3, d2] = secs();
     expect(lines(d3!).length).toBe(3);
     expect(lines(d2!).length).toBe(2);
-    expect(lines(d3!).map((x) => `${x.getAttribute("data-suspect-from")}>${x.getAttribute("data-suspect-to")}`)).toEqual(["0>1", "1>0", "3>2"]);
-    expect(lines(d2!).map((x) => `${x.getAttribute("data-suspect-from")}>${x.getAttribute("data-suspect-to")}`)).toEqual(["0>3", "2>1"]);
+    expect(lines(d3!).map((x) => x.getAttribute("data-suspect-to"))).toEqual(["0", "1", "2"]);
+    expect(lines(d2!).map((x) => x.getAttribute("data-suspect-to"))).toEqual(["1", "3"]);
+    expect(document.querySelector("[data-suspect-from]")).toBeNull();
   });
 
-  it("접근성 이름으로 딱지를 붙인 사람과 받은 사람을 읽는다", () => {
-    renderRoleSheet(suspectView("citizen", LOG));
+  it("한 사람이 받은 여러 장을 합쳐 접근성 이름으로 읽는다", () => {
+    renderRoleSheet(suspectView("citizen", [...LOG, { n: 3, from: 2, to: 0 }]));
     const d3 = secs()[0]!;
-    expect(lines(d3).map((x) => x.getAttribute("aria-label"))).toEqual(["하윤 님에게 내가 붙인 의심딱지", "하윤 님이 지우 님에게 붙인 의심딱지", "도현 님이 민지 님에게 붙인 의심딱지"]);
-    expect(lines(d3)[0]!.className).toContain("mf-suspect__row--mine");
-    expect(lines(d3)[1]!.className).not.toContain("--mine");
+    expect(lines(d3).map((x) => x.getAttribute("aria-label"))).toEqual(["지우 님, 의심딱지 2장", "하윤 님, 의심딱지 1장", "민지 님, 의심딱지 1장"]);
   });
 
-  it("줄은 좌석 점 둘과 화살표를 갖고 닉네임은 글자 노드다", () => {
+  it("줄에는 받은 좌석 표시와 이름, 장수가 보인다", () => {
     renderRoleSheet(suspectView("citizen", LOG));
     const row = lines(secs()[0]!)[1]!;
-    expect(row.querySelectorAll(".mf-suspect__dot").length).toBe(2);
-    expect(row.querySelectorAll("svg").length).toBe(1);
-    expect(Array.from(row.querySelectorAll(".mf-suspect__nick")).map((x) => x.textContent)).toEqual(["하윤", "지우"]);
+    expect(row.querySelectorAll(".mf-suspect__dot").length).toBe(1);
+    expect(row.querySelector(".mf-suspect__nick")?.textContent).toBe("하윤");
+    expect(row.querySelector(".mf-suspect__total")?.textContent).toBe("1장");
   });
 
   it("2일차 의심 기록에는 이전 답이나 제시어가 나오지 않는다", () => {
@@ -544,14 +543,14 @@ describe("RoleCardSheet 의심 구역 (P24-19·20, D-27)", () => {
     renderRoleSheet(suspectView("citizen", eight, { n: 2, nicks, mySeat: 5 }));
     expect(lines().length).toBe(8);
     const last = lines()[7]!;
-    expect(last.getAttribute("aria-label")).toBe("여덟글자닉네임이다 님이 지우 님에게 붙인 의심딱지");
+    expect(last.getAttribute("aria-label")).toBe("여덟글자닉네임이다 님, 의심딱지 1장");
     expect(last.querySelector(".mf-suspect__nick")?.textContent).toBe("여덟글자닉네임이다");
   });
 
   it("닉네임의 마크업 글자는 텍스트 노드다(T-24-16)", () => {
     renderRoleSheet(suspectView("citizen", [{ n: 2, from: 1, to: 0 }], { n: 2, nicks: ["<b>x</b>", "<i>y</i>"] }));
     expect(document.querySelector("[data-suspect-list] b, [data-suspect-list] i")).toBeNull();
-    expect(lines()[0]!.textContent).toContain("<i>y</i>");
+    expect(lines()[0]!.textContent).toContain("<b>x</b>");
   });
 
   it("표식은 꺼진 장치 접두(data-record)와 부딪히지 않는다", () => {
@@ -571,6 +570,6 @@ describe("rolecard.css — 의심 기록", () => {
   it("구역 머리는 위에 붙고 의심 줄 닉네임은 한 줄 말줄임이다(P24-19·20)", () => {
     expect(/\.mf-suspect-log__head\s*\{[^}]*position:\s*sticky/.test(css)).toBe(true);
     expect(/\.mf-suspect__nick\s*\{[^}]*text-overflow:\s*ellipsis/.test(css)).toBe(true);
-    expect(/\.mf-suspect__row--mine\s*\{[^}]*night-700/.test(css)).toBe(true);
+    expect(/\.mf-suspect__total\s*\{[^}]*flex:\s*none/.test(css)).toBe(true);
   });
 });
