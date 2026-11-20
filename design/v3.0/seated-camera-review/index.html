@@ -10,6 +10,7 @@
   <main class="review">
     <header class="review-title">
       <h1>재즈 바 고정 좌석 시안</h1>
+      <select class="table-count" aria-label="테이블 인원"></select>
     </header>
     <details class="comparison-options" open>
       <summary>공간·캐릭터 비교</summary>
@@ -36,11 +37,12 @@
     <section class="view">
       <header class="view-title"><h2></h2><p></p></header>
       <div class="phone">
-        <header class="phase"><strong>토론</strong><span class="time" aria-hidden="true"></span><span>8명</span></header>
+        <header class="phase"><strong>토론</strong><span class="time" aria-hidden="true"></span><span class="phase-count"></span></header>
         <div class="world" role="group"></div>
-        <div class="quote" aria-live="polite">
+        <div class="quote">
           <img alt="" width="37" height="37">
-          <div><strong></strong><p></p></div>
+          <div class="speech-text" aria-live="polite"><strong></strong><p></p></div>
+          <button class="next-speaker" type="button">다음 발언</button>
         </div>
         <div class="participants" role="group" aria-label="테이블의 참가자"></div>
         <div class="actions">
@@ -48,8 +50,8 @@
           <span class="action-status" role="status"></span>
         </div>
         <div class="chat" aria-label="토론 채팅">
-          <p><b>지호</b> 난 창가 쪽에 있었어.</p>
-          <p><b>민준</b> 피아노 소리는 들었어?</p>
+          <p class="chat-line"><b></b><span></span></p>
+          <p class="chat-line"><b></b><span></span></p>
           <div class="chat-placeholder" aria-hidden="true">메시지 입력 <span>➤</span></div>
         </div>
       </div>

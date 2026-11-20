@@ -14,31 +14,42 @@ import { makeElephantDetail } from "./elephant-detail";
 import { makeFoxDetail } from "./fox-detail";
 import { makeBatDetail, makeLionDetail, makePigDetail, makeRabbitDetail, makeRamDetail } from "./mammal-detail";
 import { makeCrocodileDetail, makeFrogDetail, makeHedgehogDetail, makeParrotDetail, makePenguinDetail } from "./mixed-detail";
+import { occupiedSlots } from "./table-layout";
+import type { TableCount } from "./table-layout";
 
 export type ViewMode = "eye" | "shoulder" | "wide";
 type RoomArt = "original" | "polished" | "detailed";
 
-type ReviewPerson = { name: string; animal: AnimalId; line: string };
+type ReviewPerson = { slot: number; name: string; animal: AnimalId; line: string };
 
 const startingPeople = [
   { name: "지호", animal: "rabbit", line: "창가 쪽에 앉아 있었어." },
   { name: "민준", animal: "elephant", line: "그때 피아노 소리가 들렸어?" },
-  { name: "서연", animal: "fox", line: "아까 민준이 한 말이랑 달라." },
-  { name: "도윤", animal: "penguin", line: "서연이 얘기부터 들어보자." },
+  { name: "서연", animal: "fox", line: "내가 기억하는 거랑 조금 달라." },
+  { name: "도윤", animal: "penguin", line: "방금 한 얘기부터 다시 들어보자." },
   { name: "하린", animal: "lion", line: "창가 쪽은 불이 꺼져 있었어." },
   { name: "유진", animal: "frog", line: "난 노란 불빛만 기억나." },
-  { name: "현우", animal: "hedgehog", line: "두 사람이 본 게 다른가 봐." },
-  { name: "수아", animal: "parrot", line: "지호가 본 것도 들어보고 싶어." },
-] as const satisfies readonly ReviewPerson[];
+  { name: "현우", animal: "hedgehog", line: "서로 기억하는 게 다른가 봐." },
+  { name: "수아", animal: "parrot", line: "다른 사람 얘기도 들어보고 싶어." },
+] as const satisfies readonly Omit<ReviewPerson, "slot">[];
 
-export const previewSeat = 1;
+export function previewSeatOf(people: readonly ReviewPerson[]): number {
+  const nearestLeft = people.findIndex(person => ringAngles[person.slot]! < 0);
+  return nearestLeft < 0 ? 1 : nearestLeft;
+}
 
-export function seatedPeople(animal?: AnimalId): readonly ReviewPerson[] {
-  if (!animal) return startingPeople;
-  const previousSeat = startingPeople.findIndex(person => person.animal === animal);
-  return startingPeople.map((person, index) => {
+export function oppositeSeatOf(people: readonly ReviewPerson[]): number {
+  return people.findIndex(person => person.slot === oppositeSlot);
+}
+
+export function seatedPeople(count: TableCount, animal?: AnimalId): readonly ReviewPerson[] {
+  const people = occupiedSlots(count).map(slot => ({ ...startingPeople[slot]!, slot }));
+  if (!animal) return people;
+  const previewSeat = previewSeatOf(people);
+  const previousSeat = people.findIndex(person => person.animal === animal);
+  return people.map((person, index) => {
     if (index === previewSeat) return { ...person, animal };
-    if (index === previousSeat) return { ...person, animal: startingPeople[previewSeat].animal };
+    if (index === previousSeat) return { ...person, animal: people[previewSeat]!.animal };
     return person;
   });
 }
@@ -61,7 +72,7 @@ function copyDetailedHead(animal: AnimalId): Object3D {
   return master.clone();
 }
 
-const speaker = 2;
+const oppositeSlot = 2;
 const ringAngles = [0, -0.83, 3.09, 0.87, -1.64, 1.66, -2.39, 2.41];
 const places = ringAngles.map(a => new Vector3(Math.sin(a) * 2.04, 0, Math.cos(a) * 2.04));
 const coatColors = [
@@ -70,6 +81,7 @@ const coatColors = [
 const tableY = 0.79;
 const chairY = 0.43;
 const focusDuration = 0.32;
+const glanceDuration = 1200;
 const maxYaw = 66 * Math.PI / 180;
 const paper = "#a7916c";
 
@@ -117,7 +129,7 @@ function makeFurniture(root: Scene, finish: boolean, crafted: boolean): void {
     if (crafted) continue;
     const settingRadius = i === 0 ? 0.51 : 0.655;
     const placeSetting = tf(pos.x * settingRadius, tableY + 0.009, pos.z * settingRadius, 0, facing, 0);
-    porcelain.add(new PlaneGeometry(0.18, 0.117), i === speaker ? "#eac88b" : paper,
+    porcelain.add(new PlaneGeometry(0.18, 0.117), i === oppositeSlot ? "#eac88b" : paper,
       under(placeSetting, tf(-0.08, 0, 0, -Math.PI / 2, 0, 0.11)));
     if (finish) {
       porcelain.cyl(0.070, 0.061, 0.010, 20, "#524139", under(placeSetting, tf(0.20, 0.006, 0.025)));
@@ -173,13 +185,25 @@ function cameraSpot(mode: ViewMode): Vector3 {
   return new Vector3(1.65, 4.57, 5.72);
 }
 
-function aimAt(position: Vector3, i: number, height = 1.11): { yaw: number; pitch: number } {
-  const person = places[i] ?? places[speaker]!;
-  const x = i ? person.x - position.x : -position.x;
-  const z = i ? person.z - position.z : -position.z;
+type Aim = { yaw: number; pitch: number };
+
+function aimAt(position: Vector3, slot: number, height = 1.11): Aim {
+  const person = places[slot]!;
+  const x = slot ? person.x - position.x : -position.x;
+  const z = slot ? person.z - position.z : -position.z;
   return {
     yaw: MathUtils.clamp(Math.atan2(x, -z), -maxYaw, maxYaw),
     pitch: Math.atan2(height - position.y, Math.hypot(x, z)),
+  };
+}
+
+function headAim(origin: Vector3, target: Vector3, facing: number): Aim {
+  const x = target.x - origin.x;
+  const z = target.z - origin.z;
+  const relative = Math.atan2(x, z) - facing;
+  return {
+    yaw: MathUtils.clamp(Math.atan2(Math.sin(relative), Math.cos(relative)), -1.08, 1.08),
+    pitch: MathUtils.clamp(Math.atan2(origin.y - target.y, Math.hypot(x, z)), -0.18, 0.18),
   };
 }
 
@@ -187,7 +211,9 @@ export async function mountScene(
   host: HTMLElement, mode: ViewMode, people: readonly ReviewPerson[], onPick: (index: number) => void,
   { art, detailed, preview }: { art: RoomArt; detailed: boolean; preview: boolean },
 ): Promise<{
-  lookAt(index: number): void; mark(index: number | null): void;
+  lookAt(index: number, react?: boolean): void;
+  speak(index: number, listener: number): void;
+  mark(index: number | null): void;
 }> {
   const bar = buildBarScene(LADDER[1]!, { compact: true, omitCenterSeats: true });
   const root = bar.root;
@@ -207,13 +233,16 @@ export async function mountScene(
   const crafted = art === "detailed";
   makeFurniture(root, finish, crafted);
   if (finish) addFinishedRoom(bar, places, tableY, crafted);
-  if (crafted) addDetailedTable(root, places, tableY, speaker);
+  if (crafted) addDetailedTable(root, places, tableY, oppositeSlot);
 
   const viewer = cameraSpot("eye");
+  const opposite = oppositeSeatOf(people);
+  const previewSeat = previewSeatOf(people);
   const actors = people.map((person, i) => {
-    const character = createCharacter(i, "coat", { coat: coatColors[i]!, tie: i === speaker ? "#c88844" : "#a2a0b7" }, person.animal);
+    const { slot } = person;
+    const character = createCharacter(slot, "coat", { coat: coatColors[slot]!, tie: slot === oppositeSlot ? "#c88844" : "#a2a0b7" }, person.animal);
     const model = character.root;
-    const pos = places[i]!;
+    const pos = places[slot]!;
     model.position.set(pos.x, chairY - 0.30, pos.z);
     const facing = Math.atan2(-pos.x, -pos.z);
     character.setYaw(facing);
@@ -240,10 +269,13 @@ export async function mountScene(
     const headTop = new Box3().setFromObject(detail ?? head).max.y;
     const pickMeshes = character.bodyMeshes().filter(mesh => mesh.visible);
     detail?.traverse(part => { if (part instanceof Mesh) pickMeshes.push(part); });
-    const towardViewer = Math.atan2(viewer.x - pos.x, viewer.z - pos.z) - facing;
-    const glanceAtViewer = MathUtils.clamp(Math.atan2(Math.sin(towardViewer), Math.cos(towardViewer)), -0.54, 0.54);
-    return { character, head, left, right, headTop, pickMeshes, glanceAtViewer, glance: 0 };
+    const headCenter = head.localToWorld(new Vector3(0, HEAD_CENTER_Y, 0));
+    let restYaw = slot === oppositeSlot ? -0.095 : 0;
+    if (preview && i === previewSeat) restYaw = MathUtils.clamp(headAim(headCenter, viewer, facing).yaw, -0.54, 0.54);
+    return { character, head, left, right, headTop, pickMeshes, facing, headCenter, restYaw, yaw: restYaw, pitch: 0 };
   });
+  const gazeBySeat = actors.map(actor =>
+    actors.map((peer, i) => headAim(actor.headCenter, i === 0 ? viewer : peer.headCenter, actor.facing)));
 
   const renderer = new WebGLRenderer({ antialias: true });
   renderer.domElement.className = "scene-canvas";
@@ -275,19 +307,24 @@ export async function mountScene(
   const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
   const ray = new Raycaster();
   const ndc = new Vector2();
-  const currentAim = aimAt(camera.position, speaker);
+  const currentAim = aimAt(camera.position, oppositeSlot);
   const displayedAim = { ...currentAim };
   let desiredAim = currentAim;
   let fromAim = currentAim;
   let atTime = 0;
-  let focus = speaker;
+  let focus = opposite;
+  let turn: { speaker: number; listener: number; since: number } | null = null;
+  let localChoice: number | null = null;
+  let glanceUntil = 0;
+  let glanceTimer = 0;
+  let lastPoseAt = performance.now();
   let marked: number | null = null;
   let frame = 0;
   let visible = true;
   let lastDraw = -Infinity;
   let width = 0;
   let height = 0;
-  let drag: { id: number; x: number; y: number; aim: typeof currentAim | null } | null = null;
+  let drag: { id: number; x: number; y: number; aim: Aim | null } | null = null;
   const projected = new Vector3();
   const position = new Vector3();
   const targets = actors.flatMap((actor, i) => i === 0 ? [] : actor.pickMeshes);
@@ -325,6 +362,15 @@ export async function mountScene(
     tag.style.top = `${placement.top}px`;
   }
 
+  function gazeTarget(index: number, t: number): number | null | undefined {
+    if (index === 0 && localChoice !== null) return localChoice;
+    if (index === localChoice && t < glanceUntil) return 0;
+    if (!turn) return null;
+    if (index === turn.speaker) return turn.listener;
+    const delay = 75 + (people[index]!.slot * 43) % 156;
+    return reduceMotion.matches || t >= turn.since + delay ? turn.speaker : undefined;
+  }
+
   function draw(t: number): void {
     if (!width || !height) return;
     const elapsed = atTime ? Math.min((t - atTime) / (focusDuration * 1000), 1) : 1;
@@ -339,14 +385,22 @@ export async function mountScene(
     );
     camera.updateMatrixWorld();
 
+    const frameSeconds = MathUtils.clamp((t - lastPoseAt) / 1000, 0, 0.12);
+    lastPoseAt = t;
+    const blend = reduceMotion.matches ? 1 : 1 - Math.exp(-12 * frameSeconds);
+    const speaking = turn?.speaker ?? opposite;
     for (const [i, actor] of actors.entries()) {
+      const peer = gazeTarget(i, t);
+      if (peer !== undefined) {
+        const aim = peer === null ? null : gazeBySeat[i]![peer]!;
+        actor.yaw = MathUtils.lerp(actor.yaw, aim?.yaw ?? actor.restYaw, blend);
+        actor.pitch = MathUtils.lerp(actor.pitch, aim?.pitch ?? 0, blend);
+      }
       const rate = t * 0.0026;
-      const gesture = i === speaker && !reduceMotion.matches ? Math.sin(rate) * 0.05 : 0;
-      const glance = i === focus && i !== 0 ? actor.glanceAtViewer : 0;
-      actor.glance = MathUtils.lerp(actor.glance, glance, reduceMotion.matches ? 1 : 0.23);
-      actor.head.rotation.set(i === speaker ? -0.026 + gesture * 0.28 : 0.018,
-        actor.glance + (i === speaker ? -0.095 : 0) + (i === focus ? gesture * 2 : 0), 0);
-      actor.head.position.y = actorHeads[i]! + (i === speaker ? gesture * 0.22 : 0);
+      const gesture = i === speaking && !reduceMotion.matches ? Math.sin(rate) * 0.05 : 0;
+      actor.head.rotation.set(actor.pitch + (i === speaking ? -0.026 : 0.018) + gesture * 0.28,
+        actor.yaw + (i === focus ? gesture * 2 : 0), 0);
+      actor.head.position.y = actorHeads[i]! + gesture * 0.22;
       actor.left.rotation.set(-1.33 + gesture * 1.38, 0, 0.17);
       actor.right.rotation.set(-1.30, 0, -0.18);
     }
@@ -390,7 +444,7 @@ export async function mountScene(
   }).observe(host);
   updateSize();
 
-  function beginAim(next: { yaw: number; pitch: number }, immediate: boolean): void {
+  function beginAim(next: Aim, immediate: boolean): void {
     const now = performance.now();
     fromAim = { ...displayedAim };
     desiredAim = next;
@@ -442,20 +496,39 @@ export async function mountScene(
   renderer.domElement.addEventListener("lostpointercapture", cancelDrag);
 
   return {
-    lookAt(index) {
-      if (!people[index]) return;
+    lookAt(index, react = true) {
+      const person = people[index];
+      if (!person) return;
       focus = index;
+      if (react) {
+        localChoice = index === 0 ? null : index;
+        glanceUntil = performance.now() + glanceDuration;
+        window.clearTimeout(glanceTimer);
+        if (localChoice !== null && reduceMotion.matches) {
+          glanceTimer = window.setTimeout(() => draw(performance.now()), glanceDuration);
+        }
+      }
       const height = mode === "eye" && preview && index === previewSeat ? 1.28 : undefined;
-      beginAim(aimAt(camera.position, index, height), mode === "wide");
+      beginAim(aimAt(camera.position, person.slot, height), mode === "wide");
+    },
+    speak(index, listener) {
+      if (!people[index]) return;
+      const peer = people[listener] && listener !== index ? listener : index === opposite ? 0 : opposite;
+      const now = performance.now();
+      turn = { speaker: index, listener: peer, since: now };
+      localChoice = null;
+      window.clearTimeout(glanceTimer);
+      draw(now);
     },
     mark(index) {
       marked = index;
       actors.forEach((actor, i) => actor.character.setNotes(i === index ? [0] : [], { animate: false }));
       noteOnTable.visible = index !== null;
       if (index !== null) {
-        const pos = places[index]!;
+        const { slot } = people[index]!;
+        const pos = places[slot]!;
         noteOnTable.position.set(pos.x * 0.72, tableY + 0.014, pos.z * 0.72);
-        noteOnTable.rotation.z = ringAngles[index]!;
+        noteOnTable.rotation.z = ringAngles[slot]!;
       }
       draw(performance.now());
     },
