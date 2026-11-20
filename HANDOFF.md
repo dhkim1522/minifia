@@ -6,7 +6,7 @@
 
 - **v3.0 시험판**(`v3`)에 [B안 달빛 누아르](docs/decisions/0093-v3-noir-visual-redesign.md)를 두 맵의 3D 공간·조명, 캐릭터·유령·초상화·의상·배경 이미지, 홈부터 결과까지의 공통 UI에 적용했다. **22** 낮은 토론 → 찬반 → 지목 → 유언 → 처형(결정 0090). **23** 첫날 키워드와 정답 공개, 조기 진행, D1 판 기록(결정 0091). **24-01~07** 구현 완료.
 - [동물 12종](docs/decisions/0102-animal-characters.md)은 3D 모델·초상·의상을 공유한다. [공용 화면](docs/decisions/0100-home-art-and-discussion-controls.md)의 채팅은 하단에 두고, [단계의 선택과 결과](docs/decisions/0103-phase-events.md)는 중앙에서 진행한다.
-- **공개 v3** `2026-11-20T03:20:41Z+4a93ef88`. 재즈 바 고정 착석·눈높이·가리키기와 반투명 관전 캐릭터 배포. `/api/health`와 390px 지목·유령·유언 E2E 129건 통과. [첫날 실험방](https://minifia-v3.dhplay.workers.dev/?playtest=1).
+- **공개 v3** `2026-11-20T04:46:50Z+874bd0bf`. 홈·초대·로비·게임에 공용 동물 12종과 재즈 바 에셋 적용. 320px 공개 홈·정적 이미지 175개 일치, 옷장·지목·PC E2E 79건 통과. [공용 에셋 갱신](docs/decisions/0109-shared-character-art.md), [첫날 실험방](https://minifia-v3.dhplay.workers.dev/?playtest=1).
 - **v2.0 완료 처리(2026-11-07)**: 태그 `v2.0`, 문서는 `.planning/milestones/v2.0-*`. 열린 감사 항목 26개는 STATE.md 미룬 항목. main 은 v1.0 그대로, v3.0 실테스트 통과 뒤 반영.
 - **캐릭터·맵**의 B안 모델은 `src/world/character.ts`, `src/world/ghost3d.ts`, `src/world/maps/`에 있다. 시안은 `design/v3.0/redesign/b-noir.png`. 이미지 재생성은 [에셋 자동 검사](docs/screen-map.md#에셋-자동-검사) 참고.
 - **맵(결정 0050)**: 재즈 바 + 시계탑 광장(`PLAYABLE_MAPS`, 방장이 고름). 블록아웃 https://claude.ai/artifact/1hzgEyAufgnDPVMvPvxdhP (사본 `design/v2.0/blockout/`).
@@ -31,5 +31,5 @@
 
 - **다음 첫날 라이어게임**. [고정 좌석 및 유령 시야 결정](docs/decisions/0108-seated-bar-play.md). [인원별 배치](design/v3.0/seated-camera-review/seating-review.webp), [12종 얼굴 전후](design/v3.0/seated-camera-review/character-comparison.webp), [배경·소품 전후](design/v3.0/seated-camera-review/room-comparison.webp).
 
-1. **재즈 바 검수**. 390px 4~8인 좌석·시점, 320px 8인 지목·딱지·재접속을 확인했다. 8인 눈높이 62 draw call, 전체 94. 생존자와 관전자의 아침 화면을 대조했고 관전자 3D 불투명도 0.60을 확인했다. 처형된 유령은 아침까지 마지막 중앙 위치에서 시작한다. 실기기 GPU와 키보드는 확인 대기.
+1. **재즈 바 검수**. 390px 4~8인 좌석·시점, 320px 8인 지목·딱지·재접속을 확인했다. 320·390px 입장부터 결과까지 같은 동물 얼굴과 의상을 확인했다. 착석 중 앞 캐릭터가 상대 얼굴을 잠시 가릴 수 있다. 이전 로비 도구 배치를 검사하는 E2E 6건은 변경 전에도 실패했다. 실기기 GPU와 키보드는 확인 대기.
 2. **실기기**. 작은 폰의 키보드와 채팅·이름표, 소리 크기, 처음 온 사람이 채팅 없이 단서와 의심딱지를 쓸 수 있는지 팀에서 확인한다. 결과로 실험방의 기본 적용 범위를 판단한다. 24페이즈의 남은 모바일 전체 회귀와 실기기 항목을 확인한 뒤 main 반영을 판단한다.
