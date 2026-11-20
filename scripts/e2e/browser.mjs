@@ -1282,14 +1282,23 @@ export async function startGame(page, tracker, { onAssigning } = {}) {
     }
     if (caught) await onAssigning();
   }
-  await tracker.waitFor((v) => v.phase === "roleReveal", 8000, "역할 확인 도달");
+  const reveal = await tracker.waitFor((v) => v.phase === "roleReveal", 8000, "역할 확인 도달");
+  await waitForPhaseStart(page, reveal);
+}
+
+/** 서버가 정한 시작 시각부터 실제 단계 조작과 시간을 검사한다. */
+export async function waitForPhaseStart(page, view) {
+  if (!Number.isFinite(view?.phaseStartsAt)) return;
+  const waitMs = view.phaseStartsAt - Date.now();
+  if (waitMs > 0) await sleep(waitMs + 30);
+  await page.locator("[data-phase-intro]").waitFor({ state: "hidden", timeout: 4000 });
 }
 
 /**
  * 시트를 열어 둔 채 [다음 단계로 넘기기] 를 눌러 목표 단계까지 간다. 진행 신호를 「단계 또는 마감 시각이 바뀜」으로 잡고
  * 상한을 24 로 둔다(여유 있는 상한 — 단계는 한 번에 하나씩 넘어간다). 끝나면 시트를 닫는다.
  */
-export async function skipTo(page, tracker, phase) {
+export async function skipTo(page, tracker, phase, { waitForIntro = true } = {}) {
   await openTestSheet(page);
   for (let i = 0; i < 24; i++) {
     const before = tracker.last()?.phase;
@@ -1300,6 +1309,7 @@ export async function skipTo(page, tracker, phase) {
   }
   if (tracker.last()?.phase !== phase) throw new SetupError(`목표 단계 ${phase} 에 도달하지 못함 (지금 ${tracker.last()?.phase})`);
   await closeSheet(page);
+  if (waitForIntro) await waitForPhaseStart(page, tracker.last());
 }
 
 /**

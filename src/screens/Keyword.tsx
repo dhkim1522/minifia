@@ -29,6 +29,7 @@ export interface KeywordProps {
   /** 혼자 하기의 카드 예시와 미리 적힌 답. 무대의 타이머와 입력 포커스는 숨긴다. */
   timeless?: boolean;
   embedded?: boolean;
+  introActive?: boolean;
   /** 서버 오류 프레임 구독 — 금지어 거절을 입력줄이 받는다 */
   onEvent?: (listener: (e: RoomEvent, meta: { epoch: number }) => void) => () => void;
 }
@@ -63,7 +64,7 @@ const CARD_ENTER_MS = 420;
 // 키워드는 서버가 시민 편 본인에게만 보낸다(me.keyword). 마피아는 키 자체가 없으니 DOM 에도 단어가 없다. 입력줄 표식(data-answer-*)에는 역할·키워드 값이 없다(T-23-33).
 // 입력줄은 읽기 3초 동안 잠기고 풀리면 빛난다. 글이 있으면 입력칸 안에 전송을, 서버 접수 뒤에는 같은 자리에 체크를 보여 준다.
 // 글 규칙(잠금·20자소·거절·초안 저장)은 useKeywordAnswer, 서버가 정한 규칙을 표시·전송만 한다(결정 0002). 키보드가 열리면 같은 카드가 작아지고 보이는 영역 안에 놓인다.
-export function Keyword({ view, offset, epoch = 0, myRoleButton, send, canSend, onEvent, timeless = false, embedded = false }: KeywordProps) {
+export function Keyword({ view, offset, epoch = 0, myRoleButton, send, canSend, onEvent, timeless = false, embedded = false, introActive = false }: KeywordProps) {
   const Frame = embedded ? "section" : "main";
   const word = view.me.keyword;
   const genre = view.day?.keyword?.genre ?? "";
@@ -114,9 +115,9 @@ export function Keyword({ view, offset, epoch = 0, myRoleButton, send, canSend, 
     <Frame ref={rootRef} className={rootCls} data-keyword-screen="" data-kb-open={kbOpen ? "true" : undefined}>
       <div className="mf-reveal__dim" aria-hidden="true" />
       <header className="mf-reveal__header">
-        <GamePhaseHeader title={DAY_COPY.titles.keyword ?? ""} view={view} offset={offset} epoch={epoch} extra={myRoleButton} timeless={timeless} />
+        <GamePhaseHeader title={DAY_COPY.titles.keyword ?? ""} view={view} offset={offset} epoch={epoch} extra={myRoleButton} timeless={timeless || introActive} />
       </header>
-      <section className="mf-reveal__stage">
+      <section className="mf-reveal__stage" hidden={introActive}>
         <div className={cardCls} data-keyword-card="" data-compact={kbOpen ? "true" : undefined} role="group" aria-label={KEYWORD_COPY.cardName}>
           <p className="mf-keyword__genre" data-keyword-genre="">
             {KEYWORD_COPY.genre(genre)}

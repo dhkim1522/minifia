@@ -27,6 +27,11 @@
   box-shadow: none;
   mask-image: linear-gradient(transparent, black 7px);
 }
+@media (max-width: 359px) and (max-height: 600px) {
+  .mf-game[data-phase="discussion"]:not([data-kb-open="true"]) .mf-game__panel:has(.mf-table-controls > :nth-child(5)) .mf-room-chat .mv-chat__log {
+    max-height: calc(max(var(--mf-room-chat-short-log), var(--mf-room-h, 100dvh) - var(--mf-room-chat-viewport-allowance)) - 22px);
+  }
+}
 .mf-room-chat .mv-chat__name { line-height: 1.25; }
 .mf-room-chat .mv-chat__text { padding-block: 2px; line-height: 1.35; }
 .mf-room-chat .mv-chat.is-compact .mv-chat__log { padding-block: 2px; }

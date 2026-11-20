@@ -85,8 +85,8 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
   // 토론 끝내기 on / 지목 target(0..7, 취소 없음 — null 거부) / 찬반 agree. 단계·산 사람·자기 자신·변론자 검사는 서버 규칙(shared/game/{discussion,nomination,verdict}.ts)이 한다.
   z.strictObject({ t: z.literal("endDiscussion"), on: z.boolean() }),
   z.strictObject({ t: z.literal("point"), target: z.number().int().min(0).max(7) }),
-  // 의심 포스트잇(결정 0089-10, 24 D-04): 대상 좌석 하나뿐 — 행위자는 소켓 첨부 playerId 로만 정해진다(T-24-04). 단계·일차·거리·생존은 서버 규칙(shared/game/postit.ts)이 본다.
-  z.strictObject({ t: z.literal("suspect"), target: z.number().int().min(0).max(7) }),
+  // 행위자는 소켓 첨부 playerId 로 정해지고, remove는 해당 대상에 붙인 자기 표시만 뗀다.
+  z.strictObject({ t: z.literal("suspect"), target: z.number().int().min(0).max(7), remove: z.literal(true).optional() }),
   z.strictObject({ t: z.literal("verdict"), agree: z.boolean() }),
   // 귓속말(결정 0066-2): 대상 좌석과 본문뿐 — 행위자는 소켓 첨부 playerId 로만 정해진다. UTF-16 상한 200 은 프레임 크기 방어이고 정확한 판정(30자소·산 사람·하루 1번)은 shared/game/whisper.ts 가 한다.
   z.strictObject({ t: z.literal("whisper"), to: z.number().int().min(0).max(7), text: z.string().min(1).max(200) }),

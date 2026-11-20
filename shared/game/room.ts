@@ -170,6 +170,8 @@ export interface RoomState {
   everConnected?: boolean;
   phase: PhaseId;
   phaseEndsAt: number | null;
+  /** 화면 안내가 끝나고 해당 단계의 입력과 시간이 시작되는 서버 시각. */
+  phaseStartsAt?: number;
   /** 일차(1부터). dayAnnounce 진입 때 tick 의 진입 훅이 올린다. 없으면 아직 낮이 시작되지 않았다. 뷰에는 DayView.n 으로 실린다. */
   day?: number;
   /** 판 번호(1부터, 결정 D-26). 다시 하기(11-08)가 올린다. 없으면 1 — 옛 저장 방은 읽는 쪽 기본값(roundOf)으로 읽는다. 단계 키 '판:일차:단계'의 앞 부분이고 view.round 로 실린다. */

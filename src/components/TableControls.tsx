@@ -18,14 +18,14 @@ export function TableControls({ players, focus, pick, notes, onChoose }: TableCo
         const seat = player.seat;
         const count = notes.get(seat)?.length ?? 0;
         const disabled = pick !== undefined && (pick.disabled === true || !pick.seats.has(seat));
-        const name = pick?.label(player.nickname) ?? `${player.nickname} 님 바라보기`;
+        const name = pick?.label(player.nickname, player.seat) ?? `${player.nickname} 님 바라보기`;
         return (
           <button key={seat} type="button" className="mf-table-controls__seat"
             data-table-seat={seat} {...(pick !== undefined && pick.seats.has(seat) ? {
               "data-pick": seat,
               ...(pick.attr ? { [pick.attr]: seat } : {}),
             } : {})}
-            aria-label={count > 0 ? `${name}, 의심딱지 ${count}장` : name}
+            aria-label={count > 0 ? `${name}, 의심 고깔 ${count}개` : name}
             aria-pressed={pick ? pick.mine === seat : focus === seat} disabled={disabled} onClick={() => onChoose(seat)}>
             <PlayerPortrait seat={seat} animal={player.animal} />
             <span className="mf-table-controls__name">{player.nickname}</span>

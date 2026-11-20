@@ -139,7 +139,7 @@ export function RoomChatDock({ binding, kbOpen, quickReactions = false, discussi
               </button>
             ) : null}
           </div>
-          {suspect?.mode ? <p className="mf-room-chat__surface mf-playtest__feedback" data-suspect-guidance="" role="status">{suspect.targets.size === 0 ? SUSPECT_TEXT.tooFar : SUSPECT_TEXT.modeHint}</p> : null}
+          {suspect?.mode ? <p className="mf-room-chat__surface mf-playtest__feedback" data-suspect-guidance="" role="status">{suspect.targets.size === 0 ? SUSPECT_TEXT.tooFar : suspect.used ? SUSPECT_TEXT.editHint : SUSPECT_TEXT.modeHint}</p> : null}
           {reactionsOpen ? (
             <div id={surfaceId} ref={surfaceRef} className="mf-room-chat__surface mf-room-chat__reactions" data-playtest-surface="reaction" data-quick-reactions={quickReactions ? "" : undefined} tabIndex={-1}>
               <EmoteTray ids={reactions} columns={quickReactions ? 3 : 5} onPick={pickReaction} disabled={binding.sendDisabled === true || binding.emoteBlocked === true} playing={binding.emotePlaying ?? null} />

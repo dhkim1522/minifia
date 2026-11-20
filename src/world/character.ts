@@ -36,7 +36,7 @@ import { applyDetailedFace, detailedAnimalHead } from "./barAssets/animal-detail
 import type { HeadDensity } from "./barAssets/head-sculpt";
 import { MOVE_SPEED } from "../../shared/game/world";
 import { buildGhost3d, type Ghost3d } from "./ghost3d";
-import { createNoteRig, type NoteRig, noteKit } from "./postit";
+import { createNoteRig, type NoteRig } from "./postit";
 import { emoteCycles, REDUCED_Y_SCALE } from "./emoteCap";
 import { EMOTE_KEYS, EMOTES, EYE, type EmoteId, FACE_IDS, type FaceId, type Fig, FIGS, GHOST_SCALE, type KnownFaceId, MAFIA_FIG_INDEX, MOUTH, type Outfit, OUTFITS, type OutfitId, type PoseKey, SKIN } from "./characterData";
 
@@ -1038,14 +1038,10 @@ export interface WorldCharacter {
    */
   setPickMark(on: boolean, opts?: { color: string; animate: boolean; pulseOutline?: boolean }): void;
   bodyMeshes(): readonly Mesh[];
-  /**
-   * "의심" 포스트잇(결정 0089-11, 24 D-11): 이 사람이 받은 종이의 붙인 좌석 목록(오래된 것부터)을 몸통(body 그룹)의 자식 평면 메시로 맞춘다. 보이는 것은 마지막 3장(postit.ts).
-   * animate 거짓 = 처음 받은 프레임·모션 줄이기(즉시). 종이는 병합 지오메트리 경로 밖이라 옷·표정 바꾸기가 건드리지 않는다.
-   * 유령이 되는 순간 종이는 모션 없이 떨어지고(관절 메시만 숨기는 setGhost 때문에 따로 뗀다) 유령인 동안 받은 종이는 붙지 않는다. dispose 뒤는 무시.
-   * 공유 지오메트리·텍스처·재질(postit.ts noteKit)은 모든 캐릭터가 함께 쓰므로 해제하지 않는다
-   */
+  /** 머리 위에 받은 의심 고깔을 최대 세 개 쌓는다. animate 거짓이면 즉시 배치한다. */
   setNotes(fromSeats: readonly number[], opts: { animate: boolean }): void;
-  /** 받은 종이 수(total)와 몸에 붙어 있는(떨어지는 중 포함) 종이 메시 수(visible) */
+  setNoteView(yaw: number | undefined): void;
+  /** 받은 의심 수(total)와 붙어 있는 고깔 메시 수(visible) */
   noteCounts(): { total: number; visible: number };
   /**
    * 동작이 쓰는 표정(angry·sus·surprise·happy·cry)의 머리 병합을 현재 의상으로 미리 만들어 캐시에 둔다(10-03, O-10). 보이는 표정은 바꾸지 않는다.
@@ -1187,8 +1183,9 @@ export function createCharacter(
   const body = new Group();
   body.name = "body";
   root.add(body);
-  /** "의심" 종이 리그 — 처음 종이를 받을 때 만든다(종이가 없는 캐릭터는 키트도 만들지 않는다). body 의 자식이라 병합 지오메트리 경로와 별개다 */
+  /** 의심 고깔을 처음 받을 때 목 관절 아래에 별도의 리그를 붙인다. */
   let noteRig: NoteRig | null = null;
+  let noteView: number | undefined;
   const disc = new Mesh(shadowGeometry, shadowMaterial);
   disc.rotation.x = -Math.PI / 2;
   disc.position.y = 0.012;
@@ -1281,13 +1278,35 @@ export function createCharacter(
     geo.userData.face = face;
   }
 
+  function fitNoteCrown(): void {
+    if (!noteRig) return;
+    const geometry = meshes.head.geometry;
+    const positions = geometry.getAttribute("position");
+    // 머리 가운데만 재서 토끼 귀나 가장자리 장식에 고깔이 올라가지 않게 한다.
+    let crown = -Infinity;
+    const radius = species === "rabbit" ? 0.06 : 0.16;
+    for (let i = 0; i < positions.count; i++) {
+      if (Math.abs(positions.getX(i)) <= radius && Math.abs(positions.getZ(i)) <= 0.12) {
+        crown = Math.max(crown, positions.getY(i));
+      }
+    }
+    if (crown === -Infinity) {
+      if (geometry.boundingBox === null) geometry.computeBoundingBox();
+      crown = geometry.boundingBox?.max.y ?? 1;
+    }
+    noteRig.setBaseY(crown - 0.025);
+  }
+
   function refresh(js: readonly JointName[]): void {
     for (const j of js) {
       meshes[j].geometry = merged(j).geo;
       const shell = pickShells.get(j);
       if (shell) shell.geometry = meshes[j].geometry;
     }
-    if (js.includes("head")) detailExpression();
+    if (js.includes("head")) {
+      detailExpression();
+      fitNoteCrown();
+    }
     refreshGlass();
   }
   /**
@@ -1410,7 +1429,7 @@ export function createCharacter(
   return {
     root,
     update(dt, t, moving) {
-      noteRig?.update(dt * 1000); // 종이 붙음·떨어짐 모션(유령이 되면 비어 있어 아무 일도 없다)
+      noteRig?.update(dt * 1000);
       if (ghostOn && spriteShown() !== appliedSprite) applyGhost(); // 그림이 나중에 왔다(또는 사라졌다)
       if (ghostOn && appliedSprite && sprite) {
         // 유령 그림: 몸 자세는 재생하지 않는다. 동작을 받았으면 한 번 통통 튄다
@@ -1468,6 +1487,7 @@ export function createCharacter(
         }
       }
       applyPose(pose);
+      if (noteRig) noteRig.face(noteView === undefined ? 0 : noteView - pose.ry - groups.head.rotation.y);
       // 밤 선택 표시의 고리: 켠 동안만 배율을 정한다(꺼진 뒤 한 번 1 로 돌리는 것은 setPickMark). 고리가 나중에 붙어도 이 줄이 맞춘다
       if (pickOn && pulseOutline && pickMat) {
         const pulse = pickAnimate ? 0.58 + 0.42 * (0.5 - 0.5 * Math.cos(t * Math.PI * 2 / 1.2)) : 0.86;
@@ -1477,7 +1497,9 @@ export function createCharacter(
         if (ring) ring.scale.setScalar(pickAnimate ? pickRingScale(pickAge, t) : 1);
       }
       const headTop = detailedHead && species !== undefined && meshes.head.geometry.boundingBox ? 1 + meshes.head.geometry.boundingBox.max.y : GHOST_ART_H;
-      return { headY: (headTop + (ghostOn ? 0 : pose.y)) * CHAR_SCALE };
+      const noteTop = noteRig?.top();
+      const tagAnchor = noteTop === undefined ? headTop : Math.max(headTop, groups.head.position.y + noteTop);
+      return { headY: (tagAnchor + (ghostOn ? 0 : pose.y)) * CHAR_SCALE };
     },
     setYaw(yaw) {
       root.rotation.y = yaw;
@@ -1564,7 +1586,7 @@ export function createCharacter(
         transitionMat = null;
         ghostAlpha = GHOST_ART_OPACITY;
         ghostTint = 1;
-        noteRig?.clear(); // 관절 메시만 숨기므로 body 자식 종이를 따로 뗀다 — 모션 없이(P24-17)
+        noteRig?.clear();
       }
       if (opts?.animalForm !== undefined && opts.animalForm !== animalGhost) {
         animalGhost = opts.animalForm;
@@ -1663,12 +1685,13 @@ export function createCharacter(
       if (disposed || ghostOn) return;
       if (!noteRig) {
         if (fromSeats.length === 0) return;
-        noteRig = createNoteRig(noteKit(), body, { floorY: 0.02 / CHAR_SCALE });
+        noteRig = createNoteRig(groups.head);
+        fitNoteCrown();
       }
       noteRig.set(fromSeats, opts);
-      if (firstPerson) for (const child of body.children) {
-        if (child.name === "note") child.visible = false;
-      }
+    },
+    setNoteView(yaw) {
+      noteView = yaw;
     },
     noteCounts() {
       return noteRig ? noteRig.counts() : { total: 0, visible: 0 };
@@ -1685,7 +1708,7 @@ export function createCharacter(
       disposed = true;
       transitionMat?.dispose();
       transitionMat = null;
-      noteRig?.detach(); // 메시만 뗀다 — 공유 키트는 해제하지 않는다
+      noteRig?.detach();
       noteRig = null;
       if (ghostMat) {
         ghostMat.dispose();

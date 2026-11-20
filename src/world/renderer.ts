@@ -56,12 +56,10 @@ export interface CharacterHandle {
   setPickMark?(on: boolean, opts?: { color: string; animate: boolean; pulseOutline?: boolean }): void;
   /** 화면 탭에 맞는 관절 메시. 그림자·고리·장식용 메시를 제외한다. */
   bodyMeshes?(): readonly Object3D[];
-  /**
-   * "의심" 포스트잇(결정 0089-11): 이 사람이 받은 종이의 붙인 좌석 목록(오래된 것부터)을 몸통에 맞춘다. 보이는 것은 마지막 3장.
-   * animate 거짓 = 처음 받은 프레임·모션 줄이기(즉시). 유령에게는 붙지 않는다. optional(시험 가짜 호환 — runtime.ts 는 three 를 값으로 부르지 않아 동적으로 불러온 캐릭터 모듈이 구현한다)
-   */
+  /** 받은 의심 표시의 순서대로 머리에 최대 세 개의 고깔을 쌓는다. */
   setNotes?(fromSeats: readonly number[], opts: { animate: boolean }): void;
-  /** 받은 종이 수(total)와 지금 붙어 있는 종이 메시 수(visible). optional(시험 가짜 호환) */
+  setNoteView?(yaw: number | undefined): void;
+  /** 받은 의심 수(total)와 지금 붙어 있는 고깔 메시 수(visible). */
   noteCounts?(): { total: number; visible: number };
   dispose(): void;
 }

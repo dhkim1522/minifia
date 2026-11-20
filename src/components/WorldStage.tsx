@@ -74,7 +74,7 @@ export interface WorldPick {
   /** 지금 고른 좌석(aria-pressed) */
   mine?: number;
   /** 버튼의 접근성 이름. 닉네임을 받아 문장을 만든다("{닉네임} 님 가리키기") */
-  label(nickname: string): string;
+  label(nickname: string, seat?: number): string;
   onPick(seat: number): void;
   /** 이름표 층(role=group)의 접근성 이름 */
   group: string;
@@ -476,7 +476,7 @@ export function WorldStage(props: WorldStageProps) {
                   data-pick={p.seat}
                   {...(pick.attr !== undefined ? { [pick.attr]: p.seat } : {})}
                   data-call={extra.call ? "" : undefined}
-                  aria-label={pick.label(p.nickname)}
+                  aria-label={pick.label(p.nickname, p.seat)}
                   aria-pressed={pick.mine === p.seat}
                   aria-disabled={props.canSend && pick.disabled !== true ? undefined : true}
                   // 버튼을 눌러도 채팅 입력칸의 포커스(키보드)를 뺏지 않는다

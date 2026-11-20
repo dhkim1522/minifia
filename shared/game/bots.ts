@@ -363,9 +363,10 @@ export function planBotSteps(state: RoomState, now: number, randInt: RandInt): B
   if (!hasConnectedHuman(state)) return [];
   if (state.phaseEndsAt === null) return [];
   const limit = state.phaseEndsAt - BOT_END_MARGIN_MS;
+  const startsAt = Math.max(now, state.phaseStartsAt ?? now);
   const all: BotStep[] = [];
   for (const bot of state.players.filter((p) => isBot(p) && isAlive(p)).sort(bySeat)) {
-    const planned = planFor(state, bot, now, randInt);
+    const planned = planFor(state, bot, startsAt, randInt);
     planned.forEach((step, i) => {
       if (step.at >= limit) return;
       // typing 은 바로 다음 단계(짝 chat)가 마감 여유 안일 때만 남긴다(09-24).

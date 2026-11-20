@@ -71,7 +71,7 @@ export function NameTag({ name, color, me, away, mine, done, doneLabel, blink, c
         </span>
       ) : null}
       {suspect !== undefined && suspectChipShown(suspect, me === true) ? (
-        <span className="mv-suspect-count" role="img" data-suspect-count={String(suspect)} aria-label={`의심딱지 ${suspect}장`}>
+        <span className="mv-suspect-count" role="img" data-suspect-count={String(suspect)} aria-label={`의심 고깔 ${suspect}개`}>
           <V2Icon name="postit" size={14} />
           <span className="mv-suspect-count__n">{suspect}</span>
         </span>

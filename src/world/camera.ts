@@ -102,6 +102,7 @@ export type TableCamera = {
 };
 
 export const TABLE_PAN_LIMIT = 66 * Math.PI / 180;
+export const TABLE_EYE_FOV = 58 * Math.PI / 180;
 
 /** 좌석 중심에서 탁자 쪽으로 8cm, 보는 사람 오른쪽으로 4cm 옮긴 눈높이. */
 export function tableEyeAt(seat: { x: number; z: number }): V3 {
@@ -115,6 +116,15 @@ export function tableAim(position: V3, target: V3): { yaw: number; pitch: number
   const x = target.x - position.x;
   const z = target.z - position.z;
   return { yaw: Math.atan2(x, -z), pitch: Math.atan2(target.y - position.y, Math.hypot(x, z)) };
+}
+
+/** 상대 머리와 장식이 헤더 아래에 들어오는 데 필요한 최소 상향 각도. */
+export function tableHeadPitch(eye: V3, head: V3, width: number, roomAbove: number): number {
+  const focalLength = width / (2 * Math.tan(TABLE_EYE_FOV / 2));
+  // 짧은 휴대폰에서는 눈이 참가자 조작줄에 가리지 않도록 위쪽 틈을 좁힌다.
+  const headerGap = Math.min(24, Math.max(8, (roomAbove - 80) * 0.32 + 8));
+  const above = Math.max(0, roomAbove - headerGap);
+  return tableAim(eye, head).pitch - Math.atan2(above, focalLength);
 }
 
 export function tableYaw(yaw: number, center: number): number {

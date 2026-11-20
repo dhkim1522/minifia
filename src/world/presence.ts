@@ -53,7 +53,7 @@ export interface SeatLook {
 export interface SceneLook {
   camera: CameraMode;
   /** 재즈 바 착석 화면과 공개 채팅에서 발생한 짧은 시선 신호. */
-  table?: { mode: "eye" | "wide"; focus?: number; focusAt?: number; voice?: { seat: number; at: number } };
+  table?: { mode: "eye" | "wide"; centerTable?: boolean; focus?: number; focusAt?: number; voice?: { seat: number; at: number } };
   lighting: LightingStage;
   tension: 0 | 1 | 2;
   focusSeat?: number;

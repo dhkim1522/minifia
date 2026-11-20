@@ -3144,7 +3144,7 @@ export const HOST_MARKERS = ["data-host-band", "data-host-line", "data-host-time
  * me.will·me.note(유언·쪽지, 결정 0061-9·10)·day.chalk(암살 분필, 결정 0061-14). 실제 판의 state 프레임에는 이 키들이 나온다(emcee-leak 이 처음 걸렸다) — e2eContract 가 "view.test.ts 집합 + 이 셋" 임과
  * 그 셋이 shared/protocol.ts 의 MyInfo·DayView 에 선언된 키임을 고정한다. 14페이즈가 새 키를 더하면 여전히 VK1 이 잡는다.
  */
-export const VIEW_TOP_KEYS = new Set(["code", "phase", "round", "phaseEndsAt", "phaseDurationMs", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day", "spectate", "result", "mapChoice", "map"]);
+export const VIEW_TOP_KEYS = new Set(["code", "phase", "round", "phaseStartsAt", "phaseEndsAt", "phaseDurationMs", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day", "spectate", "result", "mapChoice", "map"]);
 export const VIEW_ME_KEYS = new Set(["seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "chat", "endDiscussion", "verdictVote", "whisperUsed", "ballot", "nightTally", "nightSure", "keyword", "answer", "suspectTo", "will", "note"]);
 export const VIEW_DAY_KEYS = new Set(["n", "roles", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdictCount", "turn", "runoff", "showdown", "keyword", "suspects", "suspectLog", "chalk"]);
 /** 밤 역할별 사회자 줄(src/game/hostLine.ts HOST_LINES 의 night.mafia·police·doctor 사본) — 다른 역할 화면에 있으면 누설이다. e2eContract 가 같음을 고정한다. */

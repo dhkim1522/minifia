@@ -1,4 +1,4 @@
-// 산 사람은 첫날 답안 발표의 현재 발표자와 허용된 낮 토론의 상대에게 하루 한 장 붙인다.
+// 산 사람은 첫날 답안 발표의 현재 발표자와 낮 토론의 상대에게 하루 한 장 붙이고 뗄 수 있다.
 // 바에서는 고정 좌석의 상대를 모두 고를 수 있다. 광장은 이전의 가까운 대상 거리 판정을 쓴다.
 // 서버·클라이언트 공용 순수 모듈 — three·DOM·시각 함수를 import 하지 않는다. 시각은 인자로만 받고 입력 상태를 바꾸지 않는다.
 // 판정·투표·단계 마감과 무관한 서버 기록이다: stickNote 는 RoomState.notes 외의 키를 바꾸지 않는다.
@@ -11,7 +11,7 @@ import type { Segment, WorldState } from "./world";
 
 /** 붙일 수 있는 단계(D-02): 낮 토론 하나. dayAnnounce 는 걷기를 허용하지만 2초뿐이라 뺀다. */
 export const NOTE_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["discussion"]);
-/** 첫날은 키워드 문제가 근거를 대신하므로 둘째 날부터(D-22). 서버·화면이 같은 상수를 쓴다. */
+/** 봇이 토론 중에 의심 표시를 붙이기 시작하는 날. */
 export const NOTE_FIRST_DAY = 2;
 /** 붙일 수 있는 거리(고정소수점, 2.4 단위 = CHAR_RADIUS 의 약 6.9배, D-25). 서버 구간 기준이고 걷는 중 지연을 감안한 값이다. */
 export const NOTE_REACH_FX = 240;
@@ -22,9 +22,8 @@ export const NOTE_MAX_VISIBLE = 3;
 /** 한 사람의 요청 간격(ms). 간격 안은 오류 없이 버린다 — 옮기기 연타가 쓰기·방송을 늘리지 않게(결정 0076). */
 export const SUSPECT_MIN_GAP_MS = 600;
 
-/** 이 단계·일차에 붙일 수 있는가. 서버 stickNote 와 화면 suspectVisible 이 같은 함수를 쓴다(D-22). */
-export const noteAllowedNow = (phase: PhaseId, day: number | undefined, playtest?: boolean): boolean =>
-  NOTE_PHASES.has(phase) && (playtest === true || (day ?? 1) >= NOTE_FIRST_DAY);
+/** 토론 중 표시를 붙이고 옮기고 뗄 수 있다. 발표 중에는 현재 발표자만 허용한다. */
+export const noteAllowedNow = (phase: PhaseId): boolean => NOTE_PHASES.has(phase);
 
 /**
  * 두 구간의 시각 now 위치가 붙일 거리 안인가. 정수 제곱 비교라 삼각함수·제곱근이 없고 서버와 폰이 같은 값을 얻는다.
@@ -45,6 +44,7 @@ export interface NoteRow {
   n: number;
   from: number;
   to: number;
+  removed?: true; // 떼면 현재 쌓임에서 빠지고 그날 마지막으로 표시한 대상은 기록에 남는다.
 }
 
 export type StickResult = { ok: true; state: RoomState } | { ok: false; error: "BAD_MESSAGE" };
@@ -52,14 +52,14 @@ export type StickResult = { ok: true; state: RoomState } | { ok: false; error: "
 const REJECT: StickResult = { ok: false, error: "BAD_MESSAGE" };
 
 /**
- * 의심 붙이기. 검사 순서가 계약이다: ① 단계·일차 ② 행위자(방에 있고 산 사람) ③ 대상(정수·방에 앉은 산 사람·자기 자신 아님)
+ * 의심 붙이기·떼기. 검사 순서가 계약이다: ① 단계 ② 행위자(방에 있고 산 사람) ③ 대상(정수·방에 앉은 산 사람·자기 자신 아님)
  * ④ 거리(world.segs 는 플레이어 id 키) — 모든 실패가 같은 BAD_MESSAGE 하나다(거절 사유로 단계·거리·생존이 드러나지 않는다, D-26).
- * ⑤ 같은 n·from·to 가 이미 있으면 들어온 state 그대로(같은 객체 — 저장·방송을 건너뛰는 근거) ⑥ 같은 n·from 줄은 빼고 끝에 새 줄(옮기기, 쌓기 순서 최신이 위).
+ * 같은 표시를 붙이거나 떼는 중복 요청은 같은 state 를 돌려준다. 다른 대상에게 붙이면 같은 n·from 줄을 끝으로 옮긴다.
  * 결과는 { ...state, notes } 하나만 바꾼다. 연결이 끊긴 대상·봇에게도 붙는다(D-05).
  */
-export function stickNote(state: RoomState, world: Pick<WorldState, "segs">, actorId: string, toSeat: number, now: number): StickResult {
+export function stickNote(state: RoomState, world: Pick<WorldState, "segs">, actorId: string, toSeat: number, now: number, remove = false): StickResult {
   const presentation = keywordPresentationOf(state, now);
-  if (presentation !== undefined ? toSeat !== presentation.seat : !noteAllowedNow(state.phase, state.day, state.playtest)) return REJECT;
+  if (presentation !== undefined ? toSeat !== presentation.seat : !noteAllowedNow(state.phase)) return REJECT;
   const actor = state.players.find((p) => p.id === actorId);
   if (!actor || !isAlive(actor)) return REJECT;
   if (!Number.isInteger(toSeat)) return REJECT;
@@ -68,7 +68,12 @@ export function stickNote(state: RoomState, world: Pick<WorldState, "segs">, act
   if (!withinNoteReach(world.segs[actor.id], world.segs[target.id], now, 100, (state.map ?? "bar") === "bar")) return REJECT;
   const n = state.day ?? 1;
   const notes = state.notes ?? [];
-  if (notes.some((x) => x.n === n && x.from === actor.seat && x.to === target.seat)) return { ok: true, state };
+  const mine = notes.find((x) => x.n === n && x.from === actor.seat);
+  if (remove) {
+    if (mine?.to !== target.seat || mine.removed === true) return { ok: true, state };
+    return { ok: true, state: { ...state, notes: notes.map((x) => x === mine ? { ...x, removed: true } : x) } };
+  }
+  if (mine?.to === target.seat && mine.removed !== true) return { ok: true, state };
   const next: NoteRow[] = [...notes.filter((x) => !(x.n === n && x.from === actor.seat)), { n, from: actor.seat, to: target.seat }];
   return { ok: true, state: { ...state, notes: next } };
 }

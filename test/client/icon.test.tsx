@@ -275,7 +275,7 @@ describe("옷장 자물쇠 CSS 자리 (18-05, v2.css)", () => {
   });
 });
 
-// 24-03: 의심 포스트잇 단추 아이콘 — 정사각 종이·접힌 모서리·글줄. 마피아 쪽지(note)와 다른 모양이다
+// 무대의 의심 고깔을 버튼에도 같은 실루엣으로 표시한다.
 describe("V2Icon postit (24-03, P24-3)", () => {
   it("24 격자 svg, 선 2px·둥근 끝이고 path 가 셋이다", () => {
     const { container } = render(<V2Icon name="postit" />);

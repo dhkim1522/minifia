@@ -215,7 +215,7 @@ function roleValueLeaks(view: RoomView, spectator = false): string[] {
 
 /** view 최상위에 올 수 있는 키(허용 목록). */
 const TOP_KEYS: ReadonlySet<string> = new Set([
-  "code", "phase", "round", "phaseEndsAt", "phaseDurationMs", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day", "spectate", "result", "mapChoice", "map",
+  "code", "phase", "round", "phaseStartsAt", "phaseEndsAt", "phaseDurationMs", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day", "spectate", "result", "mapChoice", "map",
 ]);
 
 /** 그 밤에 살아 있는 각 역할이 지금 고른 대상 seat(중복 없음·오름차순). */

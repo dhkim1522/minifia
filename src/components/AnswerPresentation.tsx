@@ -1,4 +1,5 @@
 import type { KeywordAnswerRow, RoomView } from "../../shared/protocol";
+import { SUSPECT_TEXT } from "../game/suspectView";
 import { Button } from "./Button";
 import { PlayerPortrait } from "./PlayerPortrait";
 import { V2Icon } from "./v2/V2Icon";
@@ -29,9 +30,9 @@ export function AnswerPresentation({ turn, player, mySeat, marked, canSuspect, o
         <div className="mf-answer-presentation__action">
           {turn.seat !== mySeat ? (
             <Button variant="secondary" compact className="mf-answer-presentation__suspect" data-answer-suspect="" aria-pressed={marked}
-              aria-label={marked ? `${name} 님에게 의심딱지를 붙였어요` : `${name} 님에게 의심딱지 붙이기`}
-              icon={<V2Icon name={marked ? "check" : "postit"} size={18} />} disabled={!canSuspect || marked} onClick={onSuspect}>
-              {marked ? "붙였어요" : "의심 붙이기"}
+              aria-label={SUSPECT_TEXT.target(name, marked)}
+              icon={<V2Icon name={marked ? "check" : "postit"} size={18} />} disabled={!canSuspect} onClick={onSuspect}>
+              {marked ? "고깔 벗기기" : "고깔 씌우기"}
             </Button>
           ) : null}
         </div>

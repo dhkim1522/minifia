@@ -7,7 +7,6 @@ import { ANIMAL_IDS } from "../../shared/game/animals";
 import { emoteDurationMs } from "../../src/world/emoteCap";
 import { CHAR_SCALE, characterKit, createCharacter, figForSeat, POSE_BLEND_MS, setGhostArt, WALK_PHASE_RATE, type WorldCharacter } from "../../src/world/character";
 import { EMOTE_KEYS, EMOTES, type EmoteId, FACE_IDS, FIGS, OUTFITS, SKIN, type OutfitId } from "../../src/world/characterData";
-import { noteKit } from "../../src/world/postit";
 import { detailedAnimalHead } from "../../src/world/barAssets/animal-detail";
 
 function meshes(root: Object3D, visibleOnly = true): Mesh[] {
@@ -1674,37 +1673,56 @@ describe("지목 유지 자세 위의 동작 (AVTR-05, 10-08)", () => {
   });
 });
 
-// ---------- 24-04: "의심" 종이 setNotes (결정 0089-11, P24-14·P24-15·P24-17) ----------
-
-describe("의심 종이 setNotes (24-04)", () => {
+describe("의심 고깔 setNotes", () => {
   const noteMeshes = (c: WorldCharacter): Mesh[] => {
-    const body = c.root.getObjectByName("body");
-    return ((body?.children ?? []) as Mesh[]).filter((o) => o.isMesh && o.name === "note");
+    const neck = c.root.getObjectByName("neck");
+    return ((neck?.children ?? []) as Mesh[]).filter((o) => o.isMesh && o.name === "note");
   };
-  it("setNotes 는 body 그룹의 자식 종이 메시를 붙이고 noteCounts 가 센다", () => {
+  it("머리에 고깔을 붙여 이름표를 올리고 자기 자리 시점에서는 목과 함께 숨긴다", () => {
     const c = createCharacter(0, "coat");
+    const headY = c.update(0, 0, false).headY;
     expect(noteMeshes(c)).toHaveLength(0);
     c.setNotes([1, 2], { animate: false });
     expect(noteMeshes(c)).toHaveLength(2);
     expect(c.noteCounts()).toEqual({ total: 2, visible: 2 });
+    expect(c.update(0, 0, false).headY).toBeGreaterThan(headY);
+    c.setSeated(true, true);
+    expect(noteMeshes(c)[0].parent?.visible).toBe(false);
+    c.setSeated(true, false);
+    expect(noteMeshes(c)[0].parent?.visible).toBe(true);
     // 병합 지오메트리 경로와 별개: 관절 메시·병합 지오메트리 수는 그대로다
     expect(c.ownedGeometryCount()).toBeLessThanOrEqual(14);
     c.setNotes([], { animate: false });
     expect(noteMeshes(c)).toHaveLength(0);
+    c.dispose();
   });
 
   it("update 가 모션을 진행한다(dt 는 초)", () => {
     const c = createCharacter(0, "coat");
     c.setNotes([4], { animate: true });
     const m = noteMeshes(c)[0];
-    expect(m.scale.x).toBeCloseTo(1.4, 6);
+    const start = m.position.y;
     c.update(0.1, 0, false);
-    expect(m.scale.x).toBeLessThan(1.4);
+    const middle = m.position.y;
+    expect(middle).toBeLessThan(start);
     c.update(0.3, 0, false);
-    expect(m.scale.x).toBeCloseTo(1, 6);
+    expect(m.position.y).toBeLessThan(middle);
+    c.dispose();
   });
 
-  it("유령이 되는 순간 종이는 모션 없이 사라지고, 유령인 동안 받은 종이는 붙지 않는다", () => {
+  it("토끼 귀 사이의 두상에 고깔을 씌우고 글자는 보는 쪽으로 돌린다", () => {
+    const c = createCharacter(0, "coat", undefined, "rabbit");
+    c.setNotes([1], { animate: false });
+    const hat = noteMeshes(c)[0];
+    expect(hat.position.y).toBeCloseTo(0.86, 1);
+    const initialYaw = hat.rotation.y;
+    c.setNoteView(Math.PI / 2);
+    c.update(0, 0, false);
+    expect(hat.rotation.y - initialYaw).toBeCloseTo(Math.PI / 2);
+    c.dispose();
+  });
+
+  it("유령이 되는 순간 고깔을 떼고 유령인 동안 받은 고깔을 그리지 않는다", () => {
     const c = createCharacter(0, "coat");
     c.setNotes([1, 2, 3], { animate: false });
     c.setGhost(true);
@@ -1713,21 +1731,29 @@ describe("의심 종이 setNotes (24-04)", () => {
     expect(noteMeshes(c)).toHaveLength(0);
     c.setGhost(false);
     expect(noteMeshes(c)).toHaveLength(0);
-  });
-
-  it("dispose 뒤에도 키트 공유 객체는 해제되지 않았고 종이는 떨어져 나갔다", () => {
-    const kit = noteKit();
-    const spies = [vi.spyOn(kit.geometry, "dispose"), vi.spyOn(kit.texture, "dispose"), vi.spyOn(kit.materialFor(1), "dispose"), vi.spyOn(kit.materialFor(2), "dispose")];
-    const c = createCharacter(0, "coat");
-    c.setNotes([1, 2], { animate: false });
     c.dispose();
-    expect(noteMeshes(c)).toHaveLength(0);
-    for (const sp of spies) expect(sp).not.toHaveBeenCalled();
-    c.setNotes([1], { animate: false }); // dispose 뒤 호출은 무시
-    expect(noteMeshes(c)).toHaveLength(0);
   });
 
-  it("다른 의상으로 applyOutfit 해도 종이가 남는다", () => {
+  it("고깔 지오메트리와 재질은 캐릭터끼리 공유하고 마지막 캐릭터가 해제될 때 정리한다", () => {
+    const a = createCharacter(0, "coat");
+    const b = createCharacter(1, "coat");
+    a.setNotes([1], { animate: false });
+    b.setNotes([2, 3], { animate: false });
+    const first = noteMeshes(a)[0];
+    const second = noteMeshes(b)[0];
+    expect(first.geometry).toBe(second.geometry);
+    expect(first.material).toBe(second.material);
+    const spies = [vi.spyOn(first.geometry, "dispose"), vi.spyOn(first.material as Material, "dispose")];
+    a.dispose();
+    expect(noteMeshes(a)).toHaveLength(0);
+    for (const sp of spies) expect(sp).not.toHaveBeenCalled();
+    b.dispose();
+    for (const sp of spies) expect(sp).toHaveBeenCalledOnce();
+    a.setNotes([1], { animate: false });
+    expect(noteMeshes(a)).toHaveLength(0);
+  });
+
+  it("의상과 표정이 바뀌어도 고깔이 남는다", () => {
     const c = createCharacter(0, "coat");
     c.setNotes([1, 2], { animate: false });
     const other = (Object.keys(OUTFITS) as OutfitId[]).find((id) => id !== "coat") as OutfitId;
@@ -1735,13 +1761,6 @@ describe("의심 종이 setNotes (24-04)", () => {
     expect(noteMeshes(c)).toHaveLength(2);
     c.setFace("sus");
     expect(noteMeshes(c)).toHaveLength(2);
-  });
-
-  it("종이의 재질은 몸 재질과 다른 공유 재질(좌석별)이다", () => {
-    const a = createCharacter(0, "coat");
-    const b = createCharacter(1, "coat");
-    a.setNotes([2], { animate: false });
-    b.setNotes([2], { animate: false });
-    expect(noteMeshes(a)[0].material).toBe(noteMeshes(b)[0].material);
+    c.dispose();
   });
 });

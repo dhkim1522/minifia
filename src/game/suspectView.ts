@@ -8,11 +8,14 @@ import type { Segment } from "../../shared/game/world";
 import type { RoomView } from "../../shared/protocol";
 
 export const SUSPECT_TEXT = {
-  ready: "의심딱지 붙이기",
-  moved: "의심딱지 옮기기",
+  ready: "의심 고깔 씌우기",
+  moved: "의심 고깔 옮기기 또는 벗기기",
   modeHint: "의심 가는 캐릭터를 눌러요",
+  editHint: "같은 사람을 눌러 벗기거나 다른 사람에게 옮겨요",
   tooFar: "조금 더 가까이 가 보세요",
-  target: (nickname: string): string => `${nickname} 님에게 의심딱지 붙이기`,
+  target: (nickname: string, marked = false): string => marked
+    ? `${nickname} 님의 의심 고깔 벗기기`
+    : `${nickname} 님에게 의심 고깔 씌우기`,
 } as const;
 
 /** 하루치 기록(기록 카드 한 구역). */
@@ -21,9 +24,9 @@ export interface SuspectDayRows {
   rows: NoteRow[];
 }
 
-/** [의심] 을 낼 수 있는가: 서버와 같은 noteAllowedNow(토론·둘째 날부터, D-22) + 내가 산 사람 + 나를 뺀 산 사람 ≥ 1. 유령에게는 만들지 않는다. */
+/** 낮 토론에서는 산 상대가 있는 생존자가 의심 표시를 편집할 수 있다. */
 export function suspectVisible(view: RoomView): boolean {
-  if (!noteAllowedNow(view.phase, view.day?.n, view.playtest)) return false;
+  if (!noteAllowedNow(view.phase)) return false;
   const me = view.players.find((p) => p.seat === view.me.seat);
   if (me === undefined || !isAlive(me)) return false;
   return view.players.some((p) => p.seat !== view.me.seat && isAlive(p));

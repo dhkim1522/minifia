@@ -3,7 +3,7 @@
 // day.mjs·avatar.mjs 와 같은 모양: helpers 를 받고 서로 import 하지 않는다.
 // helpers: { recorder, attempt, openGame, closeGame, allAt, untilGame, gameGH, GAME_HOST_NICK }.
 // 표식(data-keyword-*·data-answer-*·data-announce-label·data-early)에는 역할·키워드 값이 없다 — 키워드는 텍스트 노드로만 읽는다(T-23-43).
-import { chooseVerdict, installFakeViewport, openRoleCard, settle, skipDayToExecution, skipTo, sleep, watchSockets } from "./browser.mjs";
+import { chooseVerdict, installFakeViewport, openRoleCard, settle, skipDayToExecution, skipTo, sleep, waitForPhaseStart, watchSockets } from "./browser.mjs";
 import { OVERLAP_EPS, TAP_MIN } from "./lib.mjs";
 
 const isNum = (x) => typeof x === "number" && Number.isFinite(x);
@@ -563,12 +563,14 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       const expectedOrder = [...clockwise.slice(start), ...clockwise.slice(0, start)];
       const turns = pages.map(() => []);
       let markedSeat;
+      let markedBy;
 
       for (let order = 1; order <= total; order++) {
         const views = await Promise.all(pages.map(p => p.tracker.waitFor(v => v.day?.keyword?.presentation?.order === order, 7000, `답 발표 ${order}`)));
         const current = views[0].day.keyword.presentation;
-        const samples = await Promise.all(pages.map((p, i) => {
+        const samples = await Promise.all(pages.map(async (p, i) => {
           const turn = views[i].day.keyword.presentation;
+          await waitForPhaseStart(p.page, views[i]);
           return readPresentation(p.page, turn, views[i].players.find(row => row.seat === turn.seat)?.nickname, views[i].me.seat);
         }));
         for (let i = 0; i < pages.length; i++) {
@@ -581,16 +583,43 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
         await observer.page.locator("[data-answer-suspect]").click({ timeout: 1200 });
         await Promise.all(pages.map(p => p.tracker.waitFor(v => v.day?.suspects?.some(note => note.to === current.seat), 2500, "현재 발표자 의심딱지 부착")));
         markedSeat = current.seat;
+        markedBy = observer;
       }
 
       await Promise.all(pages.map(p => p.tracker.waitFor(v => v.phase === "discussion", 7500, "발표 → 첫 토론")));
       const presentations = await Promise.all(pages.map(async (p, i) => {
+        await waitForPhaseStart(p.page, p.tracker.last());
         await untilGame(p.page, v => v.phase === "discussion", 5000, "첫 토론 UI");
         return { who: p.who, turns: turns[i], ...await readDiscussionTools(p.page) };
       }));
       rec1(rec, `${id}/answers`, kw8AnswerTurns(presentations, expectedOrder));
       rec(`${id}/answers`, "KW8b", "발표 중 붙인 의심딱지가 첫 토론에 남는다", markedSeat !== undefined &&
         pages.every(p => p.tracker.last().day?.suspects?.some(note => note.to === markedSeat)));
+
+      const other = pages.find(p => p !== markedBy);
+      const sharedTarget = first.players.find(p => p.seat !== markedSeat && pages.every(x => x.tracker.last().me.seat !== p.seat))?.seat;
+      if (!markedBy || !other || sharedTarget === undefined) throw new Error("첫 토론 고깔 조작을 검사할 대상이 없음");
+      const chooseHat = async (actor, target, acceptedTarget) => {
+        await actor.page.locator("[data-suspect-btn]").click({ timeout: 4000 });
+        await actor.page.locator(`[data-table-seat="${target}"][data-pick]`).click({ timeout: 3000 });
+        await actor.tracker.waitFor(v => v.me.suspectTo === acceptedTarget, 3000, "내 고깔 변경");
+      };
+      await chooseHat(markedBy, sharedTarget, sharedTarget);
+      await chooseHat(other, sharedTarget, sharedTarget);
+      await Promise.all(pages.map(p => p.page.waitForFunction(
+        seat => window.__mfWorld?.suspectNotes()[seat]?.visible === 2,
+        sharedTarget, { timeout: 4000 },
+      )));
+      await sleep(650);
+      await chooseHat(markedBy, sharedTarget, undefined);
+      await Promise.all(pages.map(p => p.page.waitForFunction(
+        seat => window.__mfWorld?.suspectNotes()[seat]?.visible === 1,
+        sharedTarget, { timeout: 4000 },
+      )));
+      await sleep(650);
+      await chooseHat(markedBy, markedSeat, markedSeat);
+      rec(`${id}/discussion`, "KW8c", "첫 토론에서 같은 사람의 고깔은 포개지고 내 고깔만 떼었다가 다시 붙일 수 있다",
+        markedBy.tracker.last().me.suspectTo === markedSeat && other.tracker.last().me.suspectTo === sharedTarget);
 
       // 시민이 확인 직후 다시 들어와도 같은 판의 답안은 뜨지 않는다.
       await gp.reload({ waitUntil: "domcontentloaded" });
@@ -718,7 +747,8 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       rec(`${id}/keyword`, "KW12k", "참가자 둘이 제출하면 첫 발표로 넘어간다", first.day?.keyword?.presentation?.order === 1, `단계 ${first.phase}`);
 
       // 찬반: 봇 표가 다 들어온 뒤 사람 둘이 던지면 1.5초 안에 넘어가고, 유예 안 번복은 마감을 다시 늘린다
-      await ht.waitFor((v) => v.phase === "discussion", announcementMs + 6000, "발표 뒤 토론");
+      const discussion = await ht.waitFor((v) => v.phase === "discussion", announcementMs + 6000, "발표 뒤 토론");
+      await waitForPhaseStart(hp, discussion);
       await sleep(900);
       await skipTo(hp, ht, "verdict");
       await allAt(pages.map((p) => p.page), "verdict");
@@ -753,6 +783,7 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
 
       // 밤: 정답 공개를 지나 밤. 전원(사람 둘 + 봇 둘)이 고르면 1.5초 안에 넘어간다 — 마피아·시민 두 화면의 마감·표식이 같다
       await ht.waitFor((v) => v.phase === "night", 12_000, "정답 공개 → 밤");
+      await waitForPhaseStart(hp, ht.last());
       await Promise.all(pages.map((p) => untilGame(p.page, (x) => x.phase === "night", 6000, "밤 도착")));
       const seatOf = (t) => t.last().me.seat;
       const aliveOthers = (t) => t.last().players.filter((p) => p.seat !== seatOf(t) && p.alive !== false).map((p) => p.seat);

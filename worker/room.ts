@@ -48,6 +48,7 @@ import { resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from ".
 import type { RoleId } from "../shared/game/roles";
 import { RULES } from "../shared/game/ruleset";
 import { nextWakeAt, tick } from "../shared/game/tick";
+import { phaseIntroActive } from "../shared/game/phases";
 import { allRolesReady, castFirstBallot, confirmRole, keywordReadUntil } from "../shared/game/playtest";
 import { castTurnPoint, turnStartOf } from "../shared/game/nomination";
 import { castRunoffVote } from "../shared/game/runoff";
@@ -94,6 +95,11 @@ function jsonError(error: ApiErrorCode, status: number): Response {
 // 연결당 속도 제한: 1000ms 창에 20개를 넘으면 처리하지 않고 창마다 한 번만 알린다.
 const RATE_WINDOW_MS = 1000;
 const RATE_MAX_MESSAGES = 20;
+
+const PHASE_INPUT = new Set<ClientMessage["t"]>([
+  "roleReady", "firstBallot", "nightDone", "pick", "endDiscussion", "point", "suspect",
+  "verdict", "move", "typing", "emote", "badge", "whisper", "will", "note", "answer",
+]);
 // DO storage.delete(keys[]) 의 한 번 최대 키 수.
 const CHAT_DELETE_MAX = 128;
 // 착석을 먼저 보여 주고 역할 화면으로 전환할 여유.
@@ -331,6 +337,13 @@ export class Room extends DurableObject<Env> {
       return;
     }
 
+    if (this.room && phaseIntroActive(this.room.phaseStartsAt, Date.now()) && PHASE_INPUT.has(msg.t)) {
+      if (msg.t !== "move" && msg.t !== "typing" && msg.t !== "emote" && sender !== null) {
+        this.sendRejection(ws, sender.playerId, msg.t === "suspect" ? "BAD_MESSAGE" : "WRONG_PHASE");
+      }
+      return;
+    }
+
     switch (msg.t) {
       case "hello":
         await this.handleHello(ws, msg.token);
@@ -366,7 +379,7 @@ export class Room extends DurableObject<Env> {
         await this.handlePoint(ws, msg.target);
         return;
       case "suspect":
-        await this.handleSuspect(ws, msg.target);
+        await this.handleSuspect(ws, msg.target, msg.remove);
         return;
       case "verdict":
         await this.handleVerdict(ws, msg.agree);
@@ -918,20 +931,20 @@ export class Room extends DurableObject<Env> {
     return null;
   }
 
-  // 의심 포스트잇(24-01, 결정 0089-10): 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에는 대상 seat 뿐이다(T-24-04). 처리기는 판 규칙 스위치가 없다(늘 켜짐).
-  private async handleSuspect(ws: WebSocket, target: number): Promise<void> {
+  // 의심 표시를 붙이거나 뗀 사람은 소켓 첨부의 playerId 로 정한다.
+  private async handleSuspect(ws: WebSocket, target: number, remove?: true): Promise<void> {
     const att = this.attachmentOf(ws);
     if (!att || !this.room) {
       this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
       return;
     }
-    const error = await this.applySuspect(att.playerId, target, Date.now());
+    const error = await this.applySuspect(att.playerId, target, Date.now(), remove);
     if (error !== null) this.sendRejection(ws, att.playerId, error);
   }
 
   // 규칙 함수(stickNote)가 검사하고 서버 전용 RoomState.notes 에 보관한다. 종이는 공개 값이라 받아들이면 모든 소켓이 각자 view 를 받는다(persistAndBroadcast, applyPoint 선례).
-  // 같은 대상을 다시 누르면 같은 state 객체라 저장·방송이 없다. 마감이 바뀌지 않으므로 reschedule 이 필요 없다.
-  private async applySuspect(playerId: string, target: number, now: number): Promise<WsErrorCode | null> {
+  // 저장 상태가 달라진 요청만 모든 화면에 반영한다.
+  private async applySuspect(playerId: string, target: number, now: number, remove = false): Promise<WsErrorCode | null> {
     if (!this.room) return "BAD_MESSAGE";
     // 옮기기는 횟수 제한이 없어 받아들일 때마다 저장 1회 + 전원 방송이다(결정 0076 쓰기 예산) — 한 사람의 요청 간격(SUSPECT_MIN_GAP_MS) 안은 오류 없이 버린다.
     // 받아들임·거절 모두 시각을 기록한다(applyAnswer 와 같은 writeAt 맵 — 다시 하기가 비운다).
@@ -939,13 +952,13 @@ export class Room extends DurableObject<Env> {
     const last = this.writeAt.get(key);
     if (last !== undefined && now - last < SUSPECT_MIN_GAP_MS) return null;
     this.writeAt.set(key, now);
-    const result = stickNote(this.room, this.world, playerId, target, now);
+    const result = stickNote(this.room, this.world, playerId, target, now, remove);
     if (!result.ok) return result.error;
     if (result.state === this.room) return null;
     this.room = result.state;
     await this.persistAndBroadcast();
     const note = result.state.notes?.at(-1);
-    if (result.state.playtest === true && (result.state.map ?? "bar") === "plaza" && note !== undefined) {
+    if (!remove && result.state.playtest === true && (result.state.map ?? "bar") === "plaza" && note !== undefined) {
       this.broadcastEmote(result.state, "all", note.from, "point", note.to);
     }
     return null;
@@ -1914,6 +1927,7 @@ export class Room extends DurableObject<Env> {
   // 본문·닉네임을 로그에 남기지 않는다(결정 0058-8).
   private async applyChat(playerId: string, text: string, pk: string, now: number): Promise<ChatRejectWhy | null> {
     const room = this.room;
+    if (phaseIntroActive(room?.phaseStartsAt, now)) return "phase";
     if (!room) return "phase";
     if (pk !== phaseKey({ phase: room.phase, day: room.day, round: roundOf(room) })) return "phase";
     // 결과 단계(11-03, D-11)는 channelOf 가 아니라 여기서만 all 로 본다 — 동작·입력 중이 버려지는 규칙(channelOf null)은 건드리지 않는다.

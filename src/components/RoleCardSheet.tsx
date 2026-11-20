@@ -172,7 +172,7 @@ function RecordsPanel({ view }: { view: RoomView }): ReactElement {
                   className="mf-suspect__row"
                   data-suspect-row=""
                   data-suspect-to={to}
-                  aria-label={`${nick(to)} 님, 의심딱지 ${count}장`}
+                  aria-label={`${nick(to)} 님, 의심 고깔 ${count}개`}
                 >
                   <span className="mf-suspect__dot" style={{ background: playerColor(to, players.get(to)?.animal) }} aria-hidden="true" />
                   <span className="mf-suspect__nick mf-suspect__nick--to">{nick(to)}</span>

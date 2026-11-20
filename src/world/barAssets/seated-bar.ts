@@ -87,10 +87,12 @@ export function createSeatedBarArt(bar: BarScene): {
   addRoomDetail(room, woodMap);
   addSeatedRoomShell(root, true);
 
-  const key = new SpotLight("#ffcc98", 19, 8, Math.PI / 3.4, 0.75, 2);
+  const keyIntensity = 19;
+  const rimIntensity = 0.72;
+  const key = new SpotLight("#ffcc98", keyIntensity, 8, Math.PI / 3.4, 0.75, 2);
   key.position.set(-1.78, 2.88, 0.76);
   key.target.position.set(-0.22, 0.96, -1.25);
-  const rim = new DirectionalLight("#9cb7ff", 0.72);
+  const rim = new DirectionalLight("#9cb7ff", rimIntensity);
   rim.position.set(1.73, 2.15, -3.98);
   root.environment = tableReflection;
   root.add(table, room, ...chairs, key, key.target, rim);
@@ -99,7 +101,9 @@ export function createSeatedBarArt(bar: BarScene): {
     table,
     blockers,
     setConversationLighting(on) {
-      key.visible = rim.visible = on;
+      // 광원 수를 바꾸면 다음 프레임에 Three.js가 새 조명 셰이더를 컴파일한다.
+      key.intensity = on ? keyIntensity : 0;
+      rim.intensity = on ? rimIntensity : 0;
       root.environmentIntensity = on ? 0.47 : 0.24;
     },
     applyBudget(fullProps) {

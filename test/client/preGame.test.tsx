@@ -208,7 +208,8 @@ describe("RoomScreen: 배정 → 확인 사이에 무대가 다시 만들어지�
       expect(container.querySelector("[data-world-stage-fake]"), phase).toBe(stage);
       expect(probe.mounts, phase).toBe(1);
       const props = stageProps();
-      expect(props.scene?.table, phase).toEqual({ mode: "eye" });
+      const centersOnEntry = ["assigning", "dayAnnounce", "execution", "answerReveal", "morning"].includes(phase);
+      expect(props.scene?.table, phase).toEqual(centersOnEntry ? { mode: "eye", centerTable: true } : { mode: "eye" });
       expect(props.canWalk, phase).toBe(false);
       if (phase === "assigning" || phase === "roleReveal" || phase === "keyword") {
         expect(props.decorative, phase).toBe(true);

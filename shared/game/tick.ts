@@ -25,11 +25,12 @@ import { discussionMajorityAt, enterDiscussion, phaseDurationOf } from "./discus
 import { enterEnded, routeAfterExecution, routeAfterMorning } from "./endgame";
 import { enterExecution } from "./execution";
 import { closeKeyword, routeAfterRoleReveal, stepKeywordPresentation } from "./keywordAnswer";
+import { keywordPresentationOf } from "./keywordPresentation";
 import { enterNomination, stepNomination } from "./nomination";
 import { stepRunoff } from "./runoff";
 import { routeAfterDayAnnounce, stepShowdown } from "./showdown";
 import { enterMorning, enterNight } from "./night";
-import { PHASE_DEFS, nextPhaseOf } from "./phases";
+import { PHASE_DEFS, PHASE_INTRO_MS, PHASE_INTRO_SWITCH, nextPhaseOf, phaseHasIntro } from "./phases";
 import { RULES } from "./ruleset";
 import { firstPlaytestDay, stepFirstBallot } from "./playtest";
 import type { RoomState } from "./room";
@@ -111,7 +112,8 @@ export function tick(state: RoomState, now: number, randInt: RandInt = NO_RANDOM
       const resolved = onDeadline(current, deadline);
       const turnMs = phaseDurationOf(resolved.state) ?? PHASE_DEFS[current.phase].durationMs;
       if (resolved.stay && turnMs !== null) {
-        current = { ...resolved.state, phaseEndsAt: deadline + turnMs };
+        const { phaseStartsAt: _intro, ...turn } = resolved.state;
+        current = { ...turn, phaseEndsAt: deadline + turnMs };
         continue;
       }
       closing = resolved.state;
@@ -121,8 +123,9 @@ export function tick(state: RoomState, now: number, randInt: RandInt = NO_RANDOM
     const next = branch ?? nextPhaseOf(closing.phase);
     if (next === null) break;
     const duration = PHASE_DEFS[next].durationMs;
+    const { phaseStartsAt: _intro, ...previousPhase } = closing;
     const entered: RoomState = {
-      ...closing,
+      ...previousPhase,
       phase: next,
       phaseEndsAt: duration === null ? null : deadline + duration,
     };
@@ -130,7 +133,13 @@ export function tick(state: RoomState, now: number, randInt: RandInt = NO_RANDOM
     const hooked = hook ? hook(entered, randInt, deadline) : entered;
     // 진입 훅이 만든 상태(공개 단계의 표)로 길이를 구해 마감을 다시 정한다. 훅 입력의 임시 마감은 표 값이다.
     const length = phaseDurationOf(hooked);
-    current = { ...hooked, phaseEndsAt: length === null ? null : deadline + length };
+    const intro = PHASE_INTRO_SWITCH.on && length !== null && phaseHasIntro(next, keywordPresentationOf(hooked) !== undefined);
+    const startsAt = intro ? deadline + PHASE_INTRO_MS : deadline;
+    current = {
+      ...hooked,
+      ...(intro ? { phaseStartsAt: startsAt } : {}),
+      phaseEndsAt: length === null ? null : startsAt + length,
+    };
   }
   return current;
 }

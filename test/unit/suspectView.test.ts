@@ -62,7 +62,7 @@ describe("suspectVisible (D-22: 서버 noteAllowedNow 와 같은 조건)", () =>
     expect(suspectVisible(makeView())).toBe(true);
     expect(suspectVisible(makeView({ day: 5 }))).toBe(true);
   });
-  it("첫날은 거짓", () => expect(suspectVisible(makeView({ day: 1 }))).toBe(false));
+  it("첫날 토론에도 참", () => expect(suspectVisible(makeView({ day: 1 }))).toBe(true));
   it("찬반 단계는 거짓", () => expect(suspectVisible(makeView({ phase: "verdict" }))).toBe(false));
   it("내가 죽었으면 거짓", () => expect(suspectVisible(makeView({ dead: [0] }))).toBe(false));
   it("산 사람이 나뿐이면 거짓", () => expect(suspectVisible(makeView({ dead: [1, 2, 3, 4, 5] }))).toBe(false));

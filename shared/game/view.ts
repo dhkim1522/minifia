@@ -156,7 +156,7 @@ function buildDay(state: RoomState, presentation: KeywordPresentation | undefine
   // 새 일차 진입에서 n === day 필터로 종이가 비어 떨어진다. 판 규칙 스위치로 막지 않는다(늘 켜짐).
   const today = state.day ?? 1;
   const notes = state.notes ?? [];
-  const todayNotes = notes.filter((x) => x.n === today);
+  const todayNotes = notes.filter((x) => x.n === today && x.removed !== true);
   if (todayNotes.length > 0) day.suspects = todayNotes.map((x) => ({ to: x.to, from: x.from }));
   if (notes.length > 0) day.suspectLog = notes.map((x) => ({ n: x.n, from: x.from, to: x.to }));
   return day;
@@ -332,7 +332,7 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
 
   // 내가 오늘 붙인 의심 대상. 공개 차례와 토론의 생존자 본인에게 보낸다.
   if ((state.phase === "discussion" || presentation !== undefined) && isAlive(me)) {
-    const mine = (state.notes ?? []).find((x) => x.n === (state.day ?? 1) && x.from === me.seat);
+    const mine = (state.notes ?? []).find((x) => x.n === (state.day ?? 1) && x.from === me.seat && x.removed !== true);
     if (mine !== undefined) myInfo.suspectTo = mine.to;
   }
 
@@ -401,6 +401,7 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     ...(state.playtest === true ? { playtest: true as const } : {}),
     round: roundOf(state),
     phaseEndsAt: state.phaseEndsAt,
+    ...(state.phaseStartsAt !== undefined ? { phaseStartsAt: state.phaseStartsAt } : {}),
     phaseDurationMs: phaseDurationOf(state), // 단계 표 길이 — 파생은 한 곳(discussion.ts)
     serverNow: now,
     minPlayers: MIN_PLAYERS,

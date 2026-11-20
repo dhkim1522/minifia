@@ -201,6 +201,8 @@ async function main() {
     await sleep(RATE_PAUSE_MS);
     send(host, { t: "testSkip" });
     await waitAllPhase(clients, next, SKIP_WAIT_MS, `${current} 넘기기(${next})`);
+    const phaseStartsAt = lastView(host).phaseStartsAt;
+    if (Number.isFinite(phaseStartsAt) && phaseStartsAt > Date.now()) await sleep(phaseStartsAt - Date.now() + 30);
     order.push(next);
     current = next;
   };

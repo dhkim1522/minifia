@@ -5,12 +5,14 @@ import { isAlive } from "../../shared/game/alive";
 import { phaseKey } from "../../shared/game/audience";
 import { CHAT_MAX_GRAPHEMES } from "../../shared/game/chatRules";
 import { canMoveIn } from "../../shared/game/movement";
+import { PICK_TURN_MS } from "../../shared/game/phases";
 import { RULES } from "../../shared/game/ruleset";
 import { WILL_MAX_GRAPHEMES } from "../../shared/game/will";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { emitSignal } from "../audio/signals";
 import { AnswerPresentation } from "../components/AnswerPresentation";
 import { KillFx } from "../components/KillFx";
+import { PhaseIntro } from "../components/PhaseIntro";
 import { PhaseEvent } from "../components/PhaseEvent";
 import { PoliceResultCard } from "../components/PoliceResultCard";
 import { ResultAnnounce } from "../components/ResultAnnounce";
@@ -135,6 +137,7 @@ interface GameMapProps {
   headerAction?: ReactNode;
   /** 재즈 바의 착석·역할·라이어 화면을 같은 무대 위에 그린다. */
   opening?: ReactNode;
+  introAt?: number | undefined;
   ending?: Pick<ResultScreenProps, "view" | "resultLog" | "arrivedFrom" | "onExit">;
   /** 헤더 시간대 글자(0083-1, "낮 · 토론"). 튜토리얼만 false — 17·18 레이아웃을 건드리지 않는다. 기본 true */
   tod?: boolean;
@@ -205,7 +208,9 @@ function TurnBlock({ view, offset, line, compact, reducedMotion }: { view: RoomV
 // 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내 + 시간 링 + [역할 카드]), [테스트], 결과 알림, 아래 패널을 얹는다.
 // 낮 시작·낮 토론·찬반·지목·유언·처형이 이 화면 하나를 같은 장면 키로 그려 단계가 바뀌어도 맵이 다시 만들어지지 않는다.
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)·알림 글자는 React 텍스트 노드로만 그린다.
-export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, headerAction, opening, ending, tod = true, panelless, camera, testButton, announce = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onLeave, bottomExtra = 0, timeless = false }: GameMapProps) {
+export function GameMap({ view, store, chat, send, canSend: connected = true, offset = 0, roleCard, headerAction, opening, introAt, ending, tod = true, panelless, camera, testButton, announce = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onLeave, bottomExtra = 0, timeless = false }: GameMapProps) {
+  const introActive = introAt !== undefined;
+  const canSend = connected && !introActive;
   const toast = useTopToast();
   const { show } = toast;
   // 스테이지 측정과 키보드 올림은 대기실과 같은 훅이다. 토론은 키보드가 열리면 기록 칸만 줄인다.
@@ -213,7 +218,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 튜토리얼 지도 장면(panelless prop, 18-03)은 아래 패널이 없다: 스테이지가 띠 아래부터 화면 아래까지 넓어진다
   const playtest = view.playtest === true;
   const phase = phaseKey({ phase: view.phase, day: view.day?.n, round: view.round });
-  const tableKey = `${epoch}:${view.round ?? 1}`;
+  const tableKey = `${epoch}:${phase}`;
   const [tableChoice, setTableChoice] = useState<{ key: string; focus: number; focusAt: number }>();
   const [liveTableVoice, setLiveTableVoice] = useState<{ phase: string; epoch: number; seat: number; at: number }>();
   const me = view.players.find((p) => p.seat === view.me.seat);
@@ -285,7 +290,9 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   };
   const morningLetter = view.phase === "morning" ? letter : null;
   const morningPolice = view.phase === "morning" ? policeResult : null;
-  const shownAnnounce: DayFx["announce"] = morningPolice !== null
+  const nightWithoutExecution = view.phase === "night" && announce?.text === DAY_COPY.noExecution;
+  const nightIntroSummary = nightWithoutExecution && view.phaseStartsAt !== undefined ? DAY_COPY.noExecution : undefined;
+  const shownAnnounce: DayFx["announce"] = morningPolice !== null || nightIntroSummary !== undefined
     ? null
     : morningLetter !== null ? (letterLive ? morningLetter.announce : null) : announce;
   const killNonce = killFx?.nonce ?? 0;
@@ -318,16 +325,6 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     show(presentation === undefined ? SUSPECT_TEXT.tooFar : REJECT_TEXT, "postit", SUSPECT_NOTICE_MS, "data-suspect-notice");
     emitSignal({ kind: "deny" });
   }, [presentation, show]);
-  useEffect(() => {
-    if (speakerMarked) sendGuard.clear("suspect");
-  }, [speakerMarked, sendGuard]);
-  const canSuspectSpeaker = canSend && me !== undefined && meAlive && speaker !== undefined && isAlive(speaker) && !speakerMarked;
-  const suspectSpeaker = (): void => {
-    if (!canSuspectSpeaker || speaker === undefined || speaker.seat === view.me.seat) return;
-    if (view.phaseEndsAt !== null && Date.now() + offset >= view.phaseEndsAt) return;
-    if (send({ t: "suspect", target: speaker.seat }) === false) show(SEND_FAIL_TEXT);
-    else sendGuard.mark("suspect");
-  };
   const willBusy = useRef(false); // 유언·쪽지 저장 확인을 기다리는 중(useWill 이 쓴다)
   const pointSent = useRef<{ target: number; at: number } | null>(null);
   useEffect(() => {
@@ -465,6 +462,12 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const whisper = useWhisper({ view, send, canSend, rejected: whisperRejects, guard: sendGuard });
   // [의심](24-03, D-10): 모드·근처 판정(서버 구간)·보내기는 useSuspect 가 쥔다. 귓속말 모드와 동시에 켜지지 않는다(D-24) — 한쪽 단추가 먼저 다른 쪽을 끈다.
   const suspect = useSuspect({ view, store, offset, send, canSend, guard: sendGuard });
+  const canSuspectSpeaker = canSend && !suspect.coolingDown && me !== undefined && meAlive && speaker !== undefined && isAlive(speaker);
+  const suspectSpeaker = (): void => {
+    if (!canSuspectSpeaker || speaker === undefined || speaker.seat === view.me.seat) return;
+    if (view.phaseEndsAt !== null && Date.now() + offset >= view.phaseEndsAt) return;
+    if (suspect.change(speaker.seat) === false) show(SEND_FAIL_TEXT);
+  };
   // 받은 순간 위 알림 "{A} 님의 귓속말"(본문 없음). 라이브로 받은 줄만 번호가 바뀐다 — 재접속 복원 줄·내가 보낸 줄은 알림이 없다. 처음 마운트 때의 번호는 지난 일이다
   const whisperInNonce = liveWhisperIn?.nonce ?? 0;
   const seenWhisperIn = useRef(whisperInNonce);
@@ -481,12 +484,12 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         hit: "body",
         // 연결이 끊긴 동안은 버튼이 aria-disabled 이고 눌러도 보내지 않는다
         ...(canSend ? {} : { disabled: true as const }),
-        label: SUSPECT_TEXT.target,
+        label: (nickname, seat) => SUSPECT_TEXT.target(nickname, seat !== undefined && seat === view.me.suspectTo),
         onPick: (seat) => {
           suspect.pick(seat);
           panelRef.current?.querySelector<HTMLButtonElement>('[data-suspect-btn]')?.focus({ preventScroll: true });
         },
-        group: SUSPECT_TEXT.ready,
+        group: suspect.used ? SUSPECT_TEXT.moved : SUSPECT_TEXT.ready,
         attr: "data-suspect-tag",
       }
     : whisper.mode
@@ -719,13 +722,21 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const whisperPeer = whisper.target === null ? undefined : view.players.find((player) => player.seat === whisper.target);
   const tableVoice = tableOn && liveTableVoice?.phase === phase && liveTableVoice.epoch === epoch
     && view.players.some((p) => p.seat === liveTableVoice.seat && isAlive(p)) ? liveTableVoice : undefined;
-  const cameraFocus = presentation === undefined ? tableFocus : presentation.seat === view.me.seat ? undefined : presentation.seat;
-  const cameraFocusAt = presentation !== undefined && view.phaseEndsAt !== null && view.phaseDurationMs !== null
+  // 기존 중앙 공개 연출도 화면을 시작할 때 같은 의자에서 탁자 중앙을 본다.
+  const centerTable = introActive || view.phase === "assigning" || view.phase === "answerReveal" ||
+    view.phase === "execution" || view.phase === "morning" || (view.phase === "dayAnnounce" && presentation === undefined);
+  const nomination = view.phase === "nomination" && (turnStage === "turn" || turnStage === "done") ? view.day?.turn : undefined;
+  const phaseSeat = presentation?.seat ?? nomination?.order[nomination.i] ?? (view.phase === "defense" ? view.day?.candidate : undefined);
+  const phaseFocusAt = presentation !== undefined && view.phaseEndsAt !== null && view.phaseDurationMs !== null
     ? view.phaseEndsAt - view.phaseDurationMs
-    : tableFocusAt;
+    : nomination?.endsAt !== undefined ? nomination.endsAt - PICK_TURN_MS : view.phaseStartsAt;
+  const chooseManually = tableFocusAt !== undefined && (phaseSeat === undefined || (phaseFocusAt !== undefined && tableFocusAt >= phaseFocusAt));
+  const preferredSeat = chooseManually ? tableFocus : phaseSeat;
+  const cameraFocus = centerTable || preferredSeat === view.me.seat ? undefined : preferredSeat;
+  const cameraFocusAt = chooseManually ? tableFocusAt : phaseFocusAt;
 
   const chooseTableSeat = (seat: number): void => {
-    if (!tableOn || layerKind !== null) return;
+    if (!tableOn || introActive || layerKind !== null) return;
     if (pick) {
       if (canSend && !pick.disabled && pick.seats.has(seat)) pick.onPick(seat);
       return;
@@ -740,6 +751,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     if (camera) look.camera = camera;
     if (tableCameraOn) look.table = {
       mode: "eye",
+      ...(centerTable ? { centerTable: true } : {}),
       ...(cameraFocus !== undefined ? { focus: cameraFocus } : {}),
       ...(cameraFocusAt !== undefined ? { focusAt: cameraFocusAt } : {}),
       ...(tableVoice ? { voice: { seat: tableVoice.seat, at: tableVoice.at } } : {}),
@@ -757,10 +769,11 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     const ownRoleOutfit = role === "mafia" || (ownAnimalOf(view) !== undefined && (role === "police" || role === "doctor"));
     if (!inOpening && ownSeat && meAlive && view.spectate === undefined && ownRoleOutfit) ownSeat.costume = jobOutfit(role);
     return look;
-  }, [view, stageH, fading, mine, verdictZoom, camera, meAlive, inOpening, tableCameraOn, tableOn, cameraFocus, cameraFocusAt, tableVoice]);
+  }, [view, stageH, fading, mine, verdictZoom, camera, meAlive, inOpening, tableCameraOn, tableOn, centerTable, cameraFocus, cameraFocusAt, tableVoice]);
 
   return (
     <main ref={rootRef} className={inOpening ? "mf-root mf-pregame mf-pregame--seated" : "mf-root mf-game"} data-game-stage={inOpening || inEnding ? undefined : ""} data-phase={view.phase} data-night-dark={nightDark ? "true" : undefined} data-ghost-view={ghost ? "true" : undefined} data-ghost-enter={ghost && entering ? "true" : undefined} data-kb-open={kbLifted ? "true" : undefined} data-suspect-mode={inOpening || inEnding ? undefined : suspect.mode ? "on" : "off"} data-suspects={suspectsMirror}>
+      {introAt !== undefined ? <PhaseIntro key={introAt} view={view} startsAt={introAt} offset={offset} summary={nightIntroSummary} /> : null}
       {!inOpening && !inEnding ? <>
       {/* DOM 순서 = Tab 순서: 헤더 조작 → 맵 이름표 → 아래 패널 입력 */}
       <div className="mf-game__scrim" aria-hidden="true" />
@@ -769,7 +782,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           view={headerView}
           offset={offset}
           epoch={epoch}
-          timeless={timeless}
+          timeless={timeless || introActive}
           tod={tod && !playtest}
           extra={(
             <>
@@ -791,7 +804,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         {...(stageInsets ? { stageInsets } : {})}
         typingSeats={typingSeats}
         scene={scene}
-        canWalk={!inOpening && canWalk}
+        canWalk={!introActive && !inOpening && canWalk}
         underlay={
           inOpening || inEnding || playtest ? null : nightDark ? (
             <TensionVignette reducedMotion={reducedMotion} onCue={onTensionCue} />
@@ -802,7 +815,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         }
         {...(deny ? { deny } : {})}
         {...(surprise ? { surprise } : {})}
-        {...(pick ? { pick } : {})}
+        {...(pick && !introActive ? { pick } : {})}
         {...(tableOn ? { onTableSeat: chooseTableSeat } : {})}
         {...(stageTagProps ? { tagProps: stageTagProps } : {})}
         onNotice={(text) => show(text)}
@@ -826,8 +839,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         </div>
       ) : null}
       {/* 알약·막대·위 한 줄은 순차 지목·결선·마지막 3인에만 있다. 기본판 동시 투표(day.turn 없음)는 DOM 이 없다([data-turn-block] 0) */}
-      {blockMode !== null ? <TurnBlock view={view} offset={offset} line={topLine} compact={compactTurn} reducedMotion={reducedMotion} /> : null}
-      {finalTurn ? (
+      {!introActive && blockMode !== null ? <TurnBlock view={view} offset={offset} line={topLine} compact={compactTurn} reducedMotion={reducedMotion} /> : null}
+      {!introActive && finalTurn ? (
         <PhaseEvent kind="nomination-result" title={runoff !== undefined ? "결선 결과" : "지목 결과"} interactive={false}>
           {turnResult !== null ? <p className="mf-story__summary">{turnResult}</p> : null}
           {showdownResult.length > 0 ? (
@@ -846,9 +859,9 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
             {willReveal !== null ? <QuoteCard text={willReveal.text} visible still={willReveal.still} will announce={false} /> : <ResultAnnounce text={executionResult?.text ?? null} embedded />}
           </PhaseEvent>
         ) : null
-      ) : (
+      ) : !introActive ? (
         <ResultAnnounce text={shownAnnounce?.text || null} {...(shownAnnounce?.icon !== undefined ? { icon: shownAnnounce.icon } : {})} {...(shownAnnounce?.label !== undefined ? { label: shownAnnounce.label } : {})} {...(shownAnnounce?.still === true ? { still: true } : {})} {...(morningLetter !== null && letterLive ? { placement: "top" as const } : {})} />
-      )}
+      ) : null}
       {morningLetter !== null ? <WillLetter key={`${morningLetter.t0}:${morningLetter.seat}`} letter={morningLetter} reducedMotion={reducedMotion} getInputTop={letterInputTop} onLive={setLetterLive} /> : null}
       {morningPolice !== null ? (
         <PhaseEvent kind="investigation-result" title="조사 결과" interactive={false}>
@@ -865,6 +878,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       {noPanel ? null : (
         <GamePanel
           view={view}
+          introActive={introActive}
           offset={offset}
           send={send}
           canSend={canSend}
@@ -896,7 +910,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
             },
             ...(!playtest && canSend && layerKind === null && suspect.targets.size === 0 ? { deny: denySuspect } : {}),
           } : undefined}
-          pauseNightEvent={view.phase === "night" && announce?.text === DAY_COPY.noExecution}
+          pauseNightEvent={nightWithoutExecution && nightIntroSummary === undefined}
           notice={playtest ? (
             toastText ? <p className="mf-playtest__feedback" role="status" {...(toast.props.marker ? { [toast.props.marker]: "" } : {})}>{toastText}</p> : null
           ) : undefined}
@@ -971,17 +985,17 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           ) : null}
         </FloatActions>
       ) : null}
-      {speakOpen && !speakWriting ? (
+      {!introActive && speakOpen && !speakWriting ? (
         <PhaseEvent kind="showdown-word" title="마지막 한마디">
           <SpeakSheet chips={SHOWDOWN_COPY.chips} onPick={sendWord} onWrite={() => setSpeakWriting(true)} {...(canSend ? {} : { disabled: true })} />
         </PhaseEvent>
       ) : null}
-      {will.condemned && will.open === null ? (
+      {!introActive && will.condemned && will.open === null ? (
         <PhaseEvent kind="final-will" title="마지막 유언">
           <button type="button" className={callTool === "will" ? "mf-btn mf-btn--primary is-call" : "mf-btn mf-btn--primary"} data-will-button="" data-call={callTool === "will" ? "" : undefined} disabled={!canSend} onClick={(event) => will.openSheet("will", event.currentTarget)}>유언 쓰기</button>
         </PhaseEvent>
       ) : null}
-      {layerKind !== null ? (
+      {!introActive && layerKind !== null ? (
         <div ref={layerRef} className={centeredSheet ? "mf-will-layer mf-will-layer--centered" : "mf-will-layer"} data-sheet-layer={layerKind} data-phase-event={sheetReplacesPanel ? "final-will" : layerKind === "speak" ? "showdown-word" : undefined} {...(veiled ? { "data-panel-hidden": "true" } : {})}>
           {layerKind === "will" && will.open !== null ? (
             <DefenseAwareWillSheet

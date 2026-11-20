@@ -2,7 +2,7 @@
 // Vector3.project / Raycaster 결과가 groundToScreen / screenToGround 와 같다는 것을 cameraThree.test.ts 가 증명한다.
 // 시안(blockout.js)은 view 14 를 고정해 폰마다 배율이 달라졌다 — 여기서는 배율(px/단위)을 고정한다(UI-SPEC).
 import { OrthographicCamera, PerspectiveCamera } from "three";
-import { cameraScale, DEFAULT_CAMERA } from "./camera";
+import { cameraScale, DEFAULT_CAMERA, TABLE_EYE_FOV } from "./camera";
 import type { CameraRig, TableCamera } from "./camera";
 
 export function createCamera(): OrthographicCamera {
@@ -16,7 +16,7 @@ export function createTableCamera(): PerspectiveCamera {
 export function configureTableCamera(
   camera: PerspectiveCamera, view: TableCamera, { w, h }: { w: number; h: number }, offsetY: number,
 ): void {
-  const horizontal = (view.mode === "wide" ? 47 : 58) * Math.PI / 180;
+  const horizontal = view.mode === "wide" ? 47 * Math.PI / 180 : TABLE_EYE_FOV;
   camera.aspect = w / h;
   camera.fov = 2 * Math.atan(Math.tan(horizontal / 2) / camera.aspect) * 180 / Math.PI;
   camera.position.set(view.position.x, view.position.y, view.position.z);

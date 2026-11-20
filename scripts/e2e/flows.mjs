@@ -71,6 +71,7 @@ import {
   readWalkWatch,
   typeAndSendChat,
   waitChatLine,
+  waitForPhaseStart,
   waitWorldReady,
   readNightFaces,
   readSideColumn,
@@ -1490,6 +1491,7 @@ async function seatedOpeningFlow(ctx) {
   rec(`${id}/assigning`, "SO1", "재즈 바에서 착석 중에는 역할과 동료를 공개하지 않는다", assigning.map === "bar" && assigning.me.role === undefined && assigning.me.allies === undefined);
 
   const reveal = await tracker.waitFor((v) => v.phase === "roleReveal", 8000, "역할 확인 도착");
+  await waitForPhaseStart(page, reveal);
   await page.locator(".mf-reveal__stage .mf-card").waitFor({ state: "visible", timeout: 8000 });
   const roleStart = reveal.phaseEndsAt - reveal.phaseDurationMs;
   const chairs = await page.evaluate(({ seats, at }) => seats.map(seat => window.__mfWorld?.sample(seat, at) ?? null), {
@@ -1513,29 +1515,64 @@ async function seatedOpeningFlow(ctx) {
     const seated = await sampleWorld(page, reveal.me.seat);
     return !!seated && !!original && Math.hypot(seated.x - original.x, seated.z - original.z) < 0.01;
   };
-  await skipTo(page, tracker, "keyword");
+  const banner = page.locator("[data-phase-intro]");
+  const bannerTitle = page.locator("[data-phase-intro-title]");
+  const verifyIntro = async (phase, title) => {
+    await skipTo(page, tracker, phase, { waitForIntro: false });
+    const view = tracker.last();
+    const shown = await attempt(async () => {
+      await bannerTitle.filter({ hasText: title }).waitFor({ state: "visible", timeout: 1700 });
+      return true;
+    });
+    const centered = await attempt(async () => {
+      await page.waitForFunction(() => {
+        const at = window.__mfWorld?.screenOf(0, 0);
+        return !!document.querySelector("[data-phase-intro]") && window.__mfCamera?.projection === "eye"
+          && at && Math.abs(at.sx - window.innerWidth / 2) < window.innerWidth * 0.075;
+      }, undefined, { timeout: 1400 });
+      return true;
+    });
+    const delayed = Number.isFinite(view.phaseStartsAt) && view.phaseStartsAt > view.serverNow
+      && view.phaseEndsAt - view.phaseStartsAt === view.phaseDurationMs;
+    const sameChair = shown.ok && await sameStage() && await atOwnChair();
+    await waitForPhaseStart(page, view);
+    rec(`${id}/${phase}`, "SO-INTRO", "중앙을 바라보며 단계 제목을 띄우고, 서버가 배너 뒤에 전체 시간을 시작한다",
+      shown.ok && centered.ok && delayed && await banner.count() === 0, [shown.detail, centered.detail].filter(Boolean).join(" · "));
+    return sameChair;
+  };
+  await verifyIntro("keyword", /라이어\s*게임/);
   await page.locator("[data-keyword-card]").waitFor({ state: "visible", timeout: 6000 });
   await eye();
   rec(`${id}/keyword`, "SO4", "라이어게임까지 역할 확인과 같은 눈높이 장면이 이어진다", await sameStage() && await atOwnChair());
 
-  await skipTo(page, tracker, "dayAnnounce");
+  await verifyIntro("dayAnnounce", /답안\s*공개|답안\s*발표/);
   const presenting = await tracker.waitFor(v => v.day?.keyword?.presentation?.order === 1, 4000, "첫 답 발표");
   await page.locator("[data-answer-presentation]").waitFor({ state: "visible", timeout: 4500 });
   await eye();
   rec(`${id}/answers`, "SO4B", `${total}인 발표 첫 차례에도 같은 좌석과 눈높이로 한 답만 본다`, await sameStage() && await atOwnChair()
     && presenting.day.keyword.presentation.total === total && await page.locator("[data-answer-content]").count() === 1);
+  await skipOnce(page, tracker);
+  const second = await tracker.waitFor(v => v.day?.keyword?.presentation?.order === 2, 3500, "두 번째 발표 차례");
+  rec(`${id}/answers`, "SO-INTRO-TURN", "두 번째 발표자에게 넘어갈 때는 배너를 다시 띄우지 않는다",
+    (second.phaseStartsAt === undefined || second.phaseStartsAt <= second.serverNow) && await banner.count() === 0);
 
-  await skipTo(page, tracker, "discussion");
+  await verifyIntro("discussion", /토론/);
   await untilGame(page, (v) => v.phase === "discussion", 6000, "첫 토론");
   await eye();
   rec(`${id}/discussion`, "SO5", "첫 토론에서 같은 좌석과 눈높이를 쓰고 전체 보기 전환이 없다", await sameStage() && await atOwnChair()
     && await page.locator("[data-table-view]").count() === 0);
 
   for (const [phase, title] of [["verdict", "찬반"], ["nomination", "지목"], ["defense", "유언"], ["execution", "처형"], ["night", "밤"]]) {
-    await skipTo(page, tracker, phase);
-    await untilGame(page, v => v.phase === phase, 6000, title);
-    await eye();
-    rec(`${id}/${phase}`, "SO6", `${title}에서도 같은 좌석과 눈높이를 유지한다`, await sameStage() && await atOwnChair());
+    let sameChair;
+    if (phase === "execution") {
+      await skipTo(page, tracker, phase);
+      await untilGame(page, v => v.phase === phase, 6000, title);
+      await eye();
+      sameChair = await sameStage() && await atOwnChair();
+    } else {
+      sameChair = await verifyIntro(phase, phase === "verdict" ? /찬반|투표/ : new RegExp(title));
+    }
+    rec(`${id}/${phase}`, "SO6", `${title}에서도 같은 좌석과 눈높이를 유지한다`, sameChair);
   }
 
   await page.waitForSelector("[data-face]", { timeout: 8000 });

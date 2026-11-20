@@ -14,7 +14,7 @@ import type { MapId } from "../../shared/protocol";
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
 import { NETWORK_TEXT } from "../net/copy";
-import { BAR_FOLLOW_SHARE, BAR_TABLE_CAMERA, BAR_WALK_CAMERA, barNameTagFoot, barSeatAt, barSeatYaw, barTableZoom, cameraScale, clampTarget, DEFAULT_CAMERA, DEFAULT_TARGET, eyeTableCamera, followStep, gatherGroupZoom, gatherView, NAMETAG_GAP, NAMETAG_MAX_W, PAN_BOX, RESIZE_SETTLE_MS, stageOffsetY, tableAim, tableEyeAt, tableYaw, WIDE_TABLE_CAMERA } from "./camera";
+import { BAR_FOLLOW_SHARE, BAR_TABLE_CAMERA, BAR_WALK_CAMERA, barNameTagFoot, barSeatAt, barSeatYaw, barTableZoom, cameraScale, clampTarget, DEFAULT_CAMERA, DEFAULT_TARGET, eyeTableCamera, followStep, gatherGroupZoom, gatherView, NAMETAG_GAP, NAMETAG_MAX_W, PAN_BOX, RESIZE_SETTLE_MS, stageOffsetY, tableAim, tableEyeAt, tableHeadPitch, tableYaw, WIDE_TABLE_CAMERA } from "./camera";
 import type { V3 } from "./camera";
 import { figForSeat } from "./characterData";
 import type { OutfitId } from "./characterData";
@@ -438,6 +438,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   let cameraSent = "";
   let tableView: {
     seat: number; mode: "eye" | "wide"; center: number;
+    centerTable: boolean;
     focus: number | undefined; focusAt: number | undefined; yaw: number; pitch: number;
     goalYaw: number; goalPitch: number; panning: boolean;
   } | null = null;
@@ -1106,7 +1107,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
 
   function aimTable(
     r: WorldRenderer, table: SceneLook["table"], local: ReturnType<typeof tablePosition>,
-    serverNow: number, dt: number, immediate: boolean, offsetY: number,
+    serverNow: number, dt: number, immediate: boolean, offsetY: number, width: number, roomAbove: number,
   ): void {
     if (!table || !local) {
       r.setTableView?.(null, offsetY);
@@ -1115,13 +1116,14 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     }
     const eye = tableEyeAt(local);
     const center = tableAim(eye, { x: -local.x, y: 1.11, z: -local.z });
+    const centerTable = table.centerTable === true;
     const previous = tableView;
     const sameChair = previous !== null && previous.seat === local.slot && previous.mode === table.mode;
-    if (!sameChair || previous.focus !== table.focus || previous.focusAt !== table.focusAt) {
+    if (!sameChair || previous.centerTable !== centerTable || previous.focus !== table.focus || previous.focusAt !== table.focusAt) {
       let other = table.focus === undefined ? null : tablePosition(table.focus, serverNow);
       if (other?.slot === local.slot) other = null;
       // 처음 앉으면 맞은편에 실제로 앉아 있는 가장 먼 상대를 본다.
-      if (!other && !sameChair) {
+      if (!other && !sameChair && !centerTable) {
         let furthest = 0;
         for (const actor of actors.values()) {
           if (actor.seat === deps.mySeat()) continue;
@@ -1134,19 +1136,27 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
           }
         }
       }
-      const aim = other ? tableAim(eye, { x: other.x, y: 1.11, z: other.z }) : center;
+      const aim = centerTable ? tableAim(eye, { x: 0, y: 1.11, z: 0 })
+        : other ? tableAim(eye, { x: other.x, y: 1.11, z: other.z }) : center;
       const yaw = tableYaw(aim.yaw, center.yaw);
-      tableView = { seat: local.slot, mode: table.mode, center: center.yaw,
+      const lastAim = !centerTable && !other && sameChair
+        ? { yaw: previous.centerTable ? previous.goalYaw : previous.yaw, pitch: previous.centerTable ? previous.goalPitch : previous.pitch }
+        : null;
+      tableView = { seat: local.slot, mode: table.mode, center: center.yaw, centerTable,
         focus: table.focus, focusAt: table.focusAt,
         yaw: sameChair ? previous.yaw : yaw, pitch: sameChair ? previous.pitch : aim.pitch,
-        goalYaw: !other && sameChair ? previous.yaw : yaw,
-        goalPitch: !other && sameChair ? previous.pitch : aim.pitch, panning: false };
+        goalYaw: lastAim?.yaw ?? yaw, goalPitch: lastAim?.pitch ?? aim.pitch, panning: false };
     }
     if (tableView === null) return;
     if (!tableView.panning) {
       const blend = immediate ? 1 : 1 - Math.exp(-13 * dt);
+      let pitch = tableView.goalPitch;
+      const actor = table.mode === "eye" && !centerTable && table.focus !== undefined ? actors.get(table.focus) : undefined;
+      if (actor && actor.barSeat !== undefined && actor.barSeat !== local.slot && !actor.ghost && actor.exit === null) {
+        pitch = Math.max(pitch, tableHeadPitch(eye, { ...actor.pos, y: actor.headY }, width, roomAbove));
+      }
       tableView.yaw = mix(tableView.yaw, tableView.goalYaw, blend);
-      tableView.pitch = mix(tableView.pitch, tableView.goalPitch, blend);
+      tableView.pitch = mix(tableView.pitch, pitch, blend);
     }
     r.setTableView?.(table.mode === "eye" ? eyeTableCamera(eye, tableView.yaw, tableView.pitch) : WIDE_TABLE_CAMERA, offsetY);
   }
@@ -1263,8 +1273,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         a.ghostTint = ghostTint;
         a.handle.setGhost?.(true, { tint: ghostTint, animalForm: true });
       }
-      // 의심 포스트잇(24-05): 장면의 받은 종이 목록을 마지막으로 보낸 것과 비교해 달라졌을 때만 핸들에 건넨다.
-      // 유령 좌석은 빈 목록(모션 없음 — 핸들의 setGhost 도 떼지만 순서와 무관하게 맞춘다). 처음 받는 목록·유령 전환 프레임·모션 줄이기는 즉시(animate 거짓)
+      // 받은 의심 목록에 변화가 있을 때만 고깔을 배치한다. 유령 전환과 모션 줄이기는 즉시 반영한다.
       if (look !== null) syncNotes(a, wantGhost ? EMPTY_NOTES : (look.notes?.[a.seat] ?? EMPTY_NOTES), reduced || ghostFlipped);
       // 손가락 자세: 지목 중인 좌석만 유지하고, 풀리면 평소 자세로 돌아온다
       const pointAt = seatLook?.pointAt;
@@ -1382,6 +1391,9 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       const y = lift + baseY + (a.ghost ? ghostFloatY(now / 1000, reduced) : 0) + rise;
       a.handle.root.scale.setScalar(a.base * scale);
       a.handle.root.position.set(at.x, y, at.z);
+      if (a.notes !== null && a.notes.length > 0) {
+        a.handle.setNoteView?.(eyeView && viewer ? Math.atan2(viewer.x - at.x, viewer.z - at.z) - a.yaw : undefined);
+      }
       const suspectOutline = a.exit === null && !wantGhost && suspectTargets?.has(a.seat) ? (reduced ? "fixed" : "pulse") : null;
       if (suspectOutline !== a.suspectOutline) {
         a.suspectOutline = suspectOutline;
@@ -1458,7 +1470,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     }
     offsetCur ??= offsetGoal;
     r.setView(cam, offsetCur, rig);
-    aimTable(r, table, localTable, sNow, dt, reduced || resync, offsetCur);
+    aimTable(r, table, localTable, sNow, dt, reduced || resync, offsetCur, s.w, s.h / 2 - offsetCur - rect.top);
     if (zoomCur !== zoomSent) {
       zoomSent = zoomCur;
       r.setZoom?.(zoomCur);
@@ -1587,6 +1599,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       live.push(a);
     }
     let boxes: TagBox[] = [];
+    let tableCenterX: number | undefined;
     for (const a of live) {
       const tag = a.tag;
       if (tag === null) continue;
@@ -1608,7 +1621,15 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       const ownHalf = tableMode === undefined && a.barSeat !== undefined && gutter * 2 <= half;
       const lane = ownHalf && anchor.sx >= half ? half : 0;
       const laneWidth = ownHalf ? half : width;
-      const x = snap(framed ? Math.min(lane + laneWidth - gutter, Math.max(lane + gutter, anchor.sx)) : anchor.sx);
+      let tagX = anchor.sx;
+      if (tableMode === "eye" && a.notes && a.notes.length > 0 && anchor.sy - NAMETAG_GAP < stage.top + 45) {
+        // 고깔 위가 헤더에 가까우면 이웃 얼굴이 적은 탁자 바깥 쪽을 우선한다.
+        tableCenterX ??= r.project({ x: 0, y: BAR_SEAT_HEIGHT, z: 0 }).sx;
+        const step = (anchor.sx < tableCenterX ? -1 : 1) * (w / 2 + 28);
+        const outside = anchor.sx + step;
+        tagX = outside >= gutter && outside <= width - gutter ? outside : anchor.sx - step;
+      }
+      const x = snap(framed ? Math.min(lane + laneWidth - gutter, Math.max(lane + gutter, tagX)) : tagX);
       const bottom = snap(framed
         ? Math.min(stage.bottom - 11, Math.max(stage.top + 45, anchor.sy - NAMETAG_GAP))
         : anchor.sy - NAMETAG_GAP);
@@ -1678,7 +1699,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   }
 
   function panTable(deltaX: number): void {
-    if (disposed || tableView?.mode !== "eye" || look?.table?.mode !== "eye" || inputBlocked(status) || !Number.isFinite(deltaX)) return;
+    if (disposed || tableView?.mode !== "eye" || look?.table?.mode !== "eye" || look.table.centerTable || inputBlocked(status) || !Number.isFinite(deltaX)) return;
     tableView.yaw = tableYaw(tableView.yaw - deltaX * 0.0047, tableView.center);
     tableView.panning = true;
   }

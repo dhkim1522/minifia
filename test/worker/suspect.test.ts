@@ -1,15 +1,16 @@
 // 의심 포스트잇 워커 통합 시험(24-01, 결정 0089-10, D-01~D-06·D-22·D-25·D-26): 실제 방 DO 로 둘째 날 토론에서 붙이기·옮기기·거절·간격을 돈다.
 import { describe, expect, it } from "vitest";
+import type { NoteRow } from "../../shared/game/postit";
 import type { ServerMessage } from "../../shared/protocol";
-import { editRoom, framesOf, killSeats, mapPlayers, mark, send, settle, startedGame, storedRoom, summary, toPhase } from "./helpers";
+import { connect, editRoom, framesOf, hello, killSeats, mapPlayers, mark, send, settle, startedGame, storedRoom, summary, toPhase } from "./helpers";
 import type { Actor, Game } from "./helpers";
 
 type StateMsg = Extract<ServerMessage, { t: "state" }>;
 const states = (msgs: ServerMessage[]): StateMsg[] => msgs.filter((m): m is StateMsg => m.t === "state");
 
 /** 저장된 방의 notes(서버 전용 보관). */
-async function notesOf(code: string): Promise<Array<{ n: number; from: number; to: number }>> {
-  return ((await storedRoom(code)) as unknown as { notes?: Array<{ n: number; from: number; to: number }> }).notes ?? [];
+async function notesOf(code: string): Promise<NoteRow[]> {
+  return ((await storedRoom(code)) as unknown as { notes?: NoteRow[] }).notes ?? [];
 }
 
 /** 실제 착석 상태를 유지한 채 원하는 일차와 단계로 옮긴다. */
@@ -21,9 +22,9 @@ async function discussionAt(day: number, phase: "discussion" | "verdict" = "disc
 }
 
 /** 한 사람이 suspect 를 보내고 모든 소켓의 프레임을 g.actors 순서로 돌려준다(보낸 쪽 flush 가 먼저다). */
-async function suspectFrom(g: Game, from: Actor, target: number): Promise<ServerMessage[][]> {
+async function suspectFrom(g: Game, from: Actor, target: number, remove?: true): Promise<ServerMessage[][]> {
   const marks = g.actors.map((a) => mark(a.sock));
-  send(from.sock, { t: "suspect", target });
+  send(from.sock, { t: "suspect", target, remove });
   const out: ServerMessage[][] = g.actors.map(() => []);
   const order = [from, ...g.actors.filter((a) => a !== from)];
   for (const a of order) out[g.actors.indexOf(a)] = await settle(a.sock, marks[g.actors.indexOf(a)]!);
@@ -71,12 +72,6 @@ describe("의심 포스트잇 — 거절 균일성 (D-26, T-24-02)", () => {
       expect(summary(frames[i]!)).toBe(a === from ? `[error:BAD_MESSAGE,state:${phase}]` : "[]");
     });
   };
-
-  it("첫날 방은 거절된다", async () => {
-    const g = await discussionAt(1);
-    expectRejected(g, g.actors[1]!, await suspectFrom(g, g.actors[1]!, g.actors[2]!.seat), "discussion");
-    expect(await notesOf(g.code)).toEqual([]);
-  });
 
   it("찬반 단계는 거절된다", async () => {
     const g = await discussionAt(2, "verdict");
@@ -126,7 +121,7 @@ describe("의심 포스트잇 — 연타 간격과 같은 대상 (D-01·D-25, T-
     expect(JSON.stringify(await storedRoom(g.code))).toBe(before);
   });
 
-  it("옮기기는 줄 수를 늘리지 않고, 다른 사람의 종이는 그대로다(받은 사람은 뗄 수 없다 — 메시지가 없다)", async () => {
+  it("옮기기는 줄 수를 늘리지 않고 다른 사람이 붙인 표시를 유지한다", async () => {
     const g = await discussionAt(2);
     const a = g.actors[1]!;
     const b = g.actors[2]!;
@@ -138,6 +133,31 @@ describe("의심 포스트잇 — 연타 간격과 같은 대상 (D-01·D-25, T-
       { n: 2, from: b.seat, to: a.seat },
       { n: 2, from: a.seat, to: g.actors[3]!.seat },
     ]);
+  });
+
+  it("첫날 토론에서 내 표시만 떼고 중복 요청과 재접속 뒤에도 공개 쌓임과 기록이 맞다", async () => {
+    const g = await discussionAt(1);
+    const [a, b, target] = g.actors;
+    await suspectFrom(g, a!, target!.seat);
+    await suspectFrom(g, b!, target!.seat);
+    await pastGap();
+    const removed = await suspectFrom(g, a!, target!.seat, true);
+    const remaining = [{ to: target!.seat, from: b!.seat }];
+    const history = [{ n: 1, from: a!.seat, to: target!.seat }, { n: 1, from: b!.seat, to: target!.seat }];
+    for (const [i, frames] of removed.entries()) {
+      const view = states(frames)[0]!.view;
+      expect(view.day?.suspects).toEqual(remaining);
+      expect(view.day?.suspectLog).toEqual(history);
+      expect(view.me.suspectTo).toBe(g.actors[i] === b ? target!.seat : undefined);
+    }
+    expect(await notesOf(g.code)).toEqual([{ ...history[0], removed: true }, history[1]]);
+    await pastGap();
+    const duplicate = await suspectFrom(g, a!, target!.seat, true);
+    expect(duplicate.map(summary)).toEqual(g.actors.map(() => "[]"));
+    const rejoined = (await hello(await connect(g.code), a!.token)).view;
+    expect(rejoined.day?.suspects).toEqual(remaining);
+    expect(rejoined.day?.suspectLog).toEqual(history);
+    expect(rejoined.me.suspectTo).toBeUndefined();
   });
 });
 

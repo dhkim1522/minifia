@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { SUSPECT_MIN_GAP_MS } from "../../shared/game/postit";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import type { RoomConnection, RoomEvent } from "../../src/net/useRoomConnection";
@@ -854,7 +855,7 @@ describe("RoomScreen: 첫날 답안 발표", () => {
     expect(stage.props?.scene?.table).toMatchObject({ mode: "eye", focus: 7, focusAt: 36_000 });
   });
 
-  it("현재 답에 한 번 눌러 딱지를 붙이고 서버 확인 뒤 표시하며 자기 답에는 단추가 없다", () => {
+  it("현재 발표자에게 의심딱지를 붙였다가 뗄 수 있고 자기 답에는 단추가 없다", () => {
     const send = vi.fn(() => true);
     connectionMock.current = conn({ view: play("dayAnnounce", first), send });
     const { container, rerender } = render(ui());
@@ -868,6 +869,15 @@ describe("RoomScreen: 첫날 답안 발표", () => {
     expect(suspect()?.getAttribute("aria-pressed")).toBe("true");
     expect(suspect()?.disabled).toBe(true);
     expect(stage.props?.scene?.notes).toEqual({ 1: [0] });
+    act(() => vi.advanceTimersByTime(SUSPECT_MIN_GAP_MS));
+    expect(suspect()?.disabled).toBe(false);
+    expect(suspect()?.getAttribute("aria-label")).toBe("하윤 님의 의심 고깔 벗기기");
+    fireEvent.click(suspect()!);
+    expect(send).toHaveBeenLastCalledWith({ t: "suspect", target: 1, remove: true });
+    expect(suspect()?.getAttribute("aria-pressed")).toBe("true");
+    setView(state);
+    rerender(ui());
+    expect(suspect()?.getAttribute("aria-pressed")).toBe("false");
     setView(play("dayAnnounce", own));
     rerender(ui());
     expect(suspect()).toBeNull();
@@ -907,5 +917,78 @@ describe("RoomScreen: 첫날 답안 발표", () => {
     expect(container.querySelector("[data-answer-presentation], [data-answer-list]")).toBeNull();
     expect(container.textContent).not.toContain("안경");
     expect(container.textContent).not.toContain("해리포터");
+  });
+});
+
+describe("RoomScreen: 단계 안내", () => {
+  const ui = () => <RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />;
+  const startsAt = 2200;
+  const presentation = { order: 1, total: 3, seat: 1, text: "안경" };
+  const presenting: RoomView = {
+    ...view,
+    map: "bar",
+    phase: "dayAnnounce",
+    phaseStartsAt: startsAt,
+    phaseEndsAt: startsAt + 5000,
+    phaseDurationMs: 5000,
+    players: [...view.players, { seat: 1, nickname: "하윤", connected: true, isHost: false }, { seat: 2, nickname: "민지", connected: true, isHost: false }],
+    me: { ...view.me, role: "citizen" },
+    day: { n: 1, roles: ["mafia", "police", "citizen"], keyword: { genre: "영화", presentation } },
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1000);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    stage.props = null;
+  });
+
+  it("첫 답안 전에는 같은 눈높이에서 중앙을 보고 서버 시간에 한 번만 안내한다", () => {
+    const send = vi.fn(() => true);
+    const connection = conn({ view: presenting, send, offset: 700 });
+    connectionMock.current = connection;
+    const { container, rerender } = render(ui());
+    const world = container.querySelector("[data-world-stage-fake]");
+    const intro = () => container.querySelector("[data-phase-intro='dayAnnounce']");
+    expect(intro()?.textContent).toBe("답안 공개");
+    expect(intro()?.querySelector<HTMLSpanElement>("span")?.style.getPropertyValue("--mf-intro-delay")).toBe("-700ms");
+    expect(stage.props?.scene?.table).toMatchObject({ mode: "eye", centerTable: true });
+    expect(stage.props?.scene?.table?.focus).toBeUndefined();
+    expect(container.querySelector("[data-phase-gauge]")).toBeNull();
+    expect(container.querySelector("[data-phase-panel-paused]")?.hasAttribute("inert")).toBe(true);
+    fireEvent.click(container.querySelector("[data-answer-suspect]")!);
+    expect(send).not.toHaveBeenCalled();
+
+    act(() => vi.advanceTimersByTime(500));
+    expect(intro()).toBeNull();
+    expect(container.querySelector("[data-world-stage-fake]")).toBe(world);
+    expect(container.querySelector("[data-phase-gauge]")).not.toBeNull();
+    expect(stage.props?.scene?.table).toMatchObject({ mode: "eye", focus: 1, focusAt: startsAt });
+    fireEvent.click(container.querySelector("[data-answer-suspect]")!);
+    expect(send).toHaveBeenCalledWith({ t: "suspect", target: 1 });
+
+    vi.setSystemTime(6500);
+    connectionMock.current = {
+      ...connection,
+      view: {
+        ...presenting, phaseStartsAt: undefined, phaseEndsAt: 12_200,
+        day: { ...presenting.day!, keyword: { genre: "영화", presentation: { ...presentation, order: 2, seat: 2 } } },
+      },
+    };
+    rerender(ui());
+    expect(intro()).toBeNull();
+    expect(stage.props?.scene?.table).toMatchObject({ mode: "eye", focus: 2, focusAt: 7200 });
+  });
+
+  it("열림 뒤에 재접속하면 안내 없이 공개 중인 답과 남은 시간을 바로 보여 준다", () => {
+    vi.setSystemTime(3200);
+    connectionMock.current = conn({ view: presenting, epoch: 2 });
+    const { container } = render(ui());
+    expect(container.querySelector("[data-phase-intro], [data-phase-panel-paused]")).toBeNull();
+    expect(container.querySelector("[data-answer-content]")?.textContent).toBe("안경");
+    expect(screen.getByRole("timer", { name: "남은 시간 4초" })).toBeTruthy();
+    expect(stage.props?.scene?.table?.focus).toBe(1);
   });
 });

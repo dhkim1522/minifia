@@ -13,6 +13,7 @@ import { countGraphemes } from "../../shared/nickname";
 import { Button } from "../components/Button";
 import { ConfirmSheet } from "../components/ConfirmSheet";
 import { Icon } from "../components/Icon";
+import { PhaseIntro } from "../components/PhaseIntro";
 import { ReconnectBanner } from "../components/ReconnectBanner";
 import { RoleCardSheet } from "../components/RoleCardSheet";
 import type { RoleCardTab } from "../components/RoleCardSheet";
@@ -30,6 +31,7 @@ import { ownAnimalOf } from "../game/playerIdentity";
 import { ChatStore } from "../net/chatStore";
 import { ResultLogStore } from "../net/resultLogStore";
 import { usePhaseArrival } from "../net/phaseArrival";
+import { usePhaseIntro } from "../net/phaseIntro";
 import { useFixedRoomHeight } from "../net/useFixedRoomHeight";
 import { loadSeenCount, saveSeenCount, unseenCount } from "../net/recordsSeen";
 import { useDayFx } from "../net/useDayFx";
@@ -168,6 +170,7 @@ function soundHookOn(): boolean {
 export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   const connection = useRoomConnection(code, token);
   const { status, banner, view, removedReason } = connection;
+  const introAt = usePhaseIntro(view?.phaseStartsAt, connection.offset);
   const roomRef = useRef<HTMLDivElement>(null);
   useFixedRoomHeight(roomRef);
 
@@ -556,15 +559,19 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
 
   function renderPhase(view: RoomView) {
     const embedded = view.map === "bar";
+    const introActive = introAt !== undefined;
     const opening = view.phase === "assigning" ? (
       <Assigning view={view} menuButton={menuAction} embedded={embedded} />
     ) : view.phase === "keyword" ? (
-      <Keyword view={view} offset={connection.offset} epoch={connection.epoch} myRoleButton={withTest(menuAction)} send={connection.send} canSend={connection.canSend} onEvent={connection.onEvent} embedded={embedded} />
+      <Keyword view={view} offset={connection.offset} epoch={connection.epoch} myRoleButton={withTest(menuAction)} send={connection.send} canSend={connection.canSend && !introActive} onEvent={connection.onEvent} embedded={embedded} introActive={introActive} />
     ) : view.phase === "roleReveal" ? (
-      <RoleReveal view={view} offset={connection.offset} epoch={connection.epoch} myRoleButton={withTest(menuAction)} onSeenFront={onSeenFront} send={connection.send} canSend={connection.canSend} embedded={embedded} />
+      <RoleReveal view={view} offset={connection.offset} epoch={connection.epoch} myRoleButton={withTest(menuAction)} onSeenFront={onSeenFront} send={connection.send} canSend={connection.canSend && !introActive} embedded={embedded} introActive={introActive} />
     ) : undefined;
     if (opening !== undefined && !embedded) return (
-      <PreGame view={view} store={store} send={connection.send} canSend={connection.canSend} offset={connection.offset} onLeave={() => onExit("gaveUp")}>{opening}</PreGame>
+      <PreGame view={view} store={store} send={connection.send} canSend={connection.canSend} offset={connection.offset} onLeave={() => onExit("gaveUp")}>
+        {opening}
+        {introAt !== undefined ? <PhaseIntro key={introAt} view={view} startsAt={introAt} offset={connection.offset} /> : null}
+      </PreGame>
     );
 
     switch (view.phase) {
@@ -609,6 +616,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
             chat={chat}
             headerAction={menuAction}
             opening={opening}
+            introAt={introAt}
             testButton={testButton}
             announce={announce}
             deny={deny}

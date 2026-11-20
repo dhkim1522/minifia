@@ -1,12 +1,13 @@
-// [의심] 모드의 상태(24-03): 근처 산 사람을 고르면 {t:"suspect", target} 한 번 + 모드 끝.
+// [의심] 모드에서 대상 하나에 붙이거나 뗀다. 내 대상과 전체 쌓임은 서버 응답으로 바뀐다.
 //
 // - 근처 판정은 서버 구간(store.segOf) — 내 예측 위치를 쓰지 않는다(D-25). 서버가 같은 구간·같은 함수로 거리를 재므로 켠 대상은 서버가 받아 준다. 판정 함수는 suspectTargets(히스테리시스 92%/100%).
 // - 근처 집합은 250ms 간격으로 다시 잰다(걷는 중 이름표가 프레임마다 켜졌다 꺼지지 않게). 모드가 아닐 때도 같은 간격으로 재서 단추의 비활성(근처 0명)을 정한다.
 // - 낙관 그림은 없다(P24-8): 붙었다는 확인은 서버 view(me.suspectTo·day.suspects)가 오면 3D 가 보여 준다. 이 훅은 보내고 모드만 끝낸다.
 // - 땅을 눌러 걷는 것은 모드를 끝내지 않는다. 끝나는 때: 대상 고름 · 같은 단추 · Esc · 낮 토론을 벗어남 · 일차 바뀜 · 내가 죽음.
-// - 거절을 알아보는 기억은 SendGuard("suspect") 이고 알림은 GameMap 의 오류 구독이 낸다. 연타는 pick 이 같은 렌더에서 모드를 끄는 것이 막고 서버 600ms 간격(24-01)이 받친다.
+// - 거절 알림은 GameMap 이 보낸다. 화면과 서버는 같은 요청 간격으로 연타를 막는다.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isAlive } from "../../shared/game/alive";
+import { SUSPECT_MIN_GAP_MS } from "../../shared/game/postit";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import type { Segment } from "../../shared/game/world";
 import { emitSignal } from "../audio/signals";
@@ -17,7 +18,7 @@ import type { SendGuard } from "./useSendGuard";
 export const SUSPECT_POLL_MS = 250;
 
 /** 붙인 사람에게만 읽히는 안내(P24-8) */
-export const suspectSaid = (nickname: string): string => `${nickname} 님에게 의심딱지를 붙였어요`;
+export const suspectSaid = (nickname: string): string => `${nickname} 님에게 의심 고깔을 씌웠어요`;
 
 export interface UseSuspectOptions {
   view: RoomView;
@@ -36,10 +37,12 @@ export interface UseSuspectOptions {
 export type SuspectToggle = "on" | "off" | "deny" | null;
 
 export interface SuspectApi {
-  /** 단추를 낼 수 있는 때(낮 토론·둘째 날부터·내가 산 사람·나 말고 산 사람 ≥ 1) */
+  /** 단추를 낼 수 있는 때(낮 토론 중 다른 산 사람이 있는 생존자) */
   visible: boolean;
-  /** 오늘 이미 붙였다(서버 값) — 단추가 "옮기기" */
+  /** 오늘 붙여 둔 표시가 있는가(서버 값) */
   used: boolean;
+  /** 서버 요청 간격이 지나기를 기다리는 중 */
+  coolingDown: boolean;
   /** [의심] 모드(근처 캐릭터를 누르면 붙인다) */
   mode: boolean;
   /** 지금 근처의 산 사람 좌석(나 제외, 죽은 사람 제외) */
@@ -50,6 +53,8 @@ export interface SuspectApi {
   off: () => void;
   /** 대상 고르기 — 보내고 모드를 끈다 */
   pick: (seat: number) => void;
+  /** 답안 발표의 현재 발표자에게 표시를 붙이거나 뗀다. false 는 전송 실패다. */
+  change: (seat: number) => boolean | undefined;
   /** 붙인 사람에게만 읽히는 안내 문장(role="status"). 처음 마운트 때 이미 붙어 있던 것은 비어 있다 */
   said: string;
 }
@@ -62,6 +67,13 @@ export function useSuspect({ view, store, offset, send, canSend = true, guard }:
   const walkToTarget = view.playtest === true;
   const used = suspectUsed(view);
   const dayN = view.day?.n;
+  const sentAt = useRef(-Infinity);
+  const [coolingDown, setCoolingDown] = useState(false);
+  useEffect(() => {
+    if (!coolingDown) return;
+    const timer = setTimeout(() => setCoolingDown(false), Math.max(0, sentAt.current + SUSPECT_MIN_GAP_MS - Date.now()));
+    return () => clearTimeout(timer);
+  }, [coolingDown]);
   // 간격 타이머가 최신 값을 읽게 한다(렌더마다 타이머를 다시 걸지 않는다)
   const latest = useRef({ view, store, offset });
   latest.current = { view, store, offset };
@@ -120,26 +132,25 @@ export function useSuspect({ view, store, offset, send, canSend = true, guard }:
     return kept.length === near.size ? near : new Set(kept);
   }, [visible, near, players]);
 
-  // 서버가 붙임을 확인했다(me.suspectTo 가 새로 생김·바뀜): 거절 기다림을 풀고 붙인 사람에게만 안내를 만든다(처음 마운트 때의 값은 지난 일이다)
+  // 서버가 변경을 확인하면 거절 대기를 풀고 본인에게만 안내한다.
   const suspectTo = view.me.suspectTo;
   const seenTo = useRef(suspectTo);
   const [said, setSaid] = useState("");
   useEffect(() => {
     if (suspectTo === seenTo.current) return;
+    const previousTo = seenTo.current;
     seenTo.current = suspectTo;
-    if (suspectTo === undefined) {
-      setSaid("");
-      return;
-    }
+    const confirmedRemoval = suspectTo === undefined && visible && guard.peek() === "suspect";
     guard.clear("suspect");
-    const name = latest.current.view.players.find((p) => p.seat === suspectTo)?.nickname ?? "";
-    setSaid(suspectSaid(name));
-  }, [suspectTo, guard]);
+    const seat = suspectTo ?? (confirmedRemoval ? previousTo : undefined);
+    const name = latest.current.view.players.find((p) => p.seat === seat)?.nickname;
+    setSaid(name === undefined ? "" : confirmedRemoval ? `${name} 님의 의심 고깔을 벗겼어요` : suspectSaid(name));
+  }, [suspectTo, visible, guard]);
 
-  const disabled = !canSend || (!walkToTarget && targets.size === 0);
+  const disabled = !canSend || coolingDown || (!walkToTarget && targets.size === 0);
 
   const toggleMode = useCallback((): SuspectToggle => {
-    if (!visible || !canSend) return null;
+    if (!visible || !canSend || coolingDown) return null;
     if (mode) {
       setMode(false);
       return "off";
@@ -148,20 +159,28 @@ export function useSuspect({ view, store, offset, send, canSend = true, guard }:
     if (refresh().size === 0 && !walkToTarget) return "deny";
     setMode(true);
     return "on";
-  }, [visible, canSend, mode, refresh, walkToTarget]);
+  }, [visible, canSend, coolingDown, mode, refresh, walkToTarget]);
 
   const off = useCallback(() => setMode(false), []);
 
+  const change = useCallback((seat: number): boolean | undefined => {
+    const now = Date.now();
+    if (!canSend || now - sentAt.current < SUSPECT_MIN_GAP_MS) return;
+    const remove = latest.current.view.me.suspectTo === seat;
+    if (send({ t: "suspect", target: seat, ...(remove ? { remove: true } : {}) }) === false) return false;
+    sentAt.current = now;
+    setCoolingDown(true);
+    guard.mark("suspect", now);
+    emitSignal({ kind: "tap" });
+    return true;
+  }, [canSend, send, guard]);
+
   const pick = useCallback(
     (seat: number) => {
-      if (!visible || !canSend || !targets.has(seat)) return;
-      if (send({ t: "suspect", target: seat }) === false) return; // 소켓이 닫혀 못 보냈으면 아무것도 하지 않는다
-      guard.mark("suspect", Date.now());
-      emitSignal({ kind: "tap" });
-      setMode(false);
+      if (visible && targets.has(seat) && change(seat) === true) setMode(false);
     },
-    [visible, canSend, targets, send, guard],
+    [visible, targets, change],
   );
 
-  return { visible, used, mode, targets, disabled, toggleMode, off, pick, said };
+  return { visible, used, coolingDown, mode, targets, disabled, toggleMode, off, pick, change, said };
 }

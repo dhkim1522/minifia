@@ -20,6 +20,7 @@ import "../styles/event-choices.css";
 
 export interface GamePanelProps {
   view: RoomView;
+  introActive?: boolean;
   offset?: number;
   /** 보냈으면 true, 소켓이 닫혀 못 보냈으면 false. 반환값이 없는 함수(void)는 보낸 것으로 본다 */
   send: (msg: ClientMessage) => boolean | void;
@@ -66,7 +67,7 @@ export interface GamePanelProps {
  * 단계별 선택은 중앙에 보여 주고 채팅과 상시 도구는 화면 아래에 둔다.
  * 눌림은 서버 view(me.endDiscussion·me.verdictVote)가 기준이고, 내가 누른 즉시 바뀌는 것은 내 눌림 표시 하나뿐이다. 숫자는 서버가 센 값만 그린다(누가 눌렀는지·무엇을 골랐는지는 서버가 보내지 않는다).
  */
-export function GamePanel({ view, offset = 0, send, canSend, binding, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef, suspect, notice, tableControls, answerPresentation, pauseNightEvent = false }: GamePanelProps) {
+export function GamePanel({ view, introActive = false, offset = 0, send, canSend, binding, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef, suspect, notice, tableControls, answerPresentation, pauseNightEvent = false }: GamePanelProps) {
   const playtest = view.playtest === true;
   const presenting = answerPresentation !== undefined;
   const voteOpensAt = playtest && view.phase === "discussion" ? view.day?.voteOpensAt : undefined;
@@ -113,7 +114,7 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, kbOpen = f
     const field = inputRef?.current;
     if (verdictPhase && meAlive && field === document.activeElement) field?.blur();
   }, [verdictPhase, meAlive, inputRef]);
-  const inVerdict = verdictPhase && firstBallot === undefined && !kbOpen;
+  const inVerdict = verdictPhase && firstBallot === undefined && !kbOpen && !introActive;
   const showVerdict = inVerdict && meAlive; // 찬반 버튼 + 숫자
   const showVerdictCount = inVerdict; // 산 사람·유령 모두 같은 숫자 줄
   const verdictYes = view.day?.verdictCount?.yes ?? 0;
@@ -204,7 +205,7 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, kbOpen = f
           </div>
         </PhaseEvent>
       ) : null}
-      {firstBallot !== undefined ? (
+      {!introActive && (firstBallot !== undefined ? (
         <PhaseEvent kind="first-ballot" title="첫날 지목" interactive={meAlive && firstBallot.result === undefined} className="mf-event-choice">
           <PlaytestBallot view={view} ballot={firstBallot} canVote={meAlive && canSend} send={send} />
         </PhaseEvent>
@@ -228,9 +229,11 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, kbOpen = f
             {nightDone ? "준비 완료" : "아침 준비"}
           </Button>
         </PhaseEvent>
-      ) : null}
+      ) : null)}
       <section
         ref={panelRef}
+        inert={introActive}
+        data-phase-panel-paused={introActive ? "" : undefined}
         className={`mf-game__panel${lifted ?? kbOpen ? " mf-game__panel--kb" : ""}${showChat ? " mf-game__panel--chat" : ""}${panelEmpty ? " mf-game__panel--empty" : ""}`}
         data-world-panel=""
         data-answer-panel={presenting ? "" : undefined}

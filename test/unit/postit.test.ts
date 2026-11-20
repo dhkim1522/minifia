@@ -58,25 +58,21 @@ const world = (xs: Record<string, number> = { p0: 0, p1: 200, p2: 300, p3: 100, 
 const out = (r: ReturnType<typeof stickNote>): string => (r.ok ? `ok|${(r.state.notes ?? []).map((x) => `${x.n}:${x.from}>${x.to}`).join(",")}` : r.error);
 
 describe("postit — 상수 (D-02·D-22·D-25)", () => {
-  it("토론 하나 · 둘째 날부터 · 240 fx · 켜는 문턱 92% · 보이는 3장 · 간격 600ms", () => {
+  it("토론 하나 · 봇은 둘째 날부터 · 240 fx · 켜는 문턱 92% · 보이는 3장 · 간격 600ms", () => {
     expect(`${[...NOTE_PHASES].join(",")}|${NOTE_FIRST_DAY}|${NOTE_REACH_FX}|${NOTE_REACH_ON_PCT}|${NOTE_MAX_VISIBLE}|${SUSPECT_MIN_GAP_MS}`).toBe("discussion|2|240|92|3|600");
   });
 });
 
-describe("noteAllowedNow (D-22)", () => {
-  it("토론이고 둘째 날 이후일 때만 참이다", () => {
-    expect(noteAllowedNow("discussion", 2)).toBe(true);
-    expect(noteAllowedNow("discussion", 5)).toBe(true);
-    expect(noteAllowedNow("discussion", 1)).toBe(false);
-    expect(noteAllowedNow("discussion", undefined)).toBe(false);
-    expect(noteAllowedNow("verdict", 2)).toBe(false);
-    expect(noteAllowedNow("dayAnnounce", 2)).toBe(false);
+describe("noteAllowedNow", () => {
+  it("낮 토론만 참이다", () => {
+    expect(noteAllowedNow("discussion")).toBe(true);
+    expect(noteAllowedNow("verdict")).toBe(false);
+    expect(noteAllowedNow("dayAnnounce")).toBe(false);
+    expect(noteAllowedNow("keyword")).toBe(false);
   });
 
-  it("실험방 첫 토론부터 같은 거리와 한 장 이동 규칙을 쓴다", () => {
-    expect(noteAllowedNow("discussion", 1, true)).toBe(true);
-    expect(noteAllowedNow("keyword", 1, true)).toBe(false);
-    const first = { ...room("discussion", 1), playtest: true as const };
+  it("첫 토론부터 같은 거리와 한 장 이동 규칙을 쓴다", () => {
+    const first = room("discussion", 1);
     expect(stickNote(first, world(), "p0", 2, T0)).toEqual({ ok: false, error: "BAD_MESSAGE" });
     const placed = stickNote(first, world(), "p0", 1, T0);
     if (!placed.ok) throw new Error(placed.error);
@@ -138,8 +134,12 @@ describe("stickNote — 붙이기 (D-01·D-03)", () => {
     const first = stickNote(state, world(), "p0", 2, T0);
     expect(out(first)).toBe("ok|1:0>2");
     if (!first.ok) throw new Error(first.error);
+    const removed = stickNote(first.state, world(), "p0", 2, T0, true);
+    if (!removed.ok) throw new Error(removed.error);
+    expect(removed.state.notes).toEqual([{ n: 1, from: 0, to: 2, removed: true }]);
     const next = { ...first.state, keywordPresentationIndex: 1 };
     expect(out(stickNote(next, world(), "p0", 2, T0))).toBe("BAD_MESSAGE");
+    expect(out(stickNote(next, world(), "p0", 2, T0, true))).toBe("BAD_MESSAGE");
     expect(out(stickNote(next, world(), "p0", 1, T0))).toBe("ok|1:0>1");
   });
 });
@@ -150,8 +150,6 @@ describe("stickNote — 거절은 사유를 드러내지 않는다 (D-02·D-22·
     return state;
   };
   const cases: Array<[string, () => ReturnType<typeof stickNote>]> = [
-    ["첫날", () => stickNote(room("discussion", 1), world(), "p0", 1, T0)],
-    ["day 없음", () => stickNote({ ...room(), day: undefined }, world(), "p0", 1, T0)],
     ["찬반 단계", () => stickNote(room("verdict"), world(), "p0", 1, T0)],
     ["낮 시작 발표", () => stickNote(room("dayAnnounce"), world(), "p0", 1, T0)],
     ["죽은 행위자", () => stickNote(dead(room(), 0), world(), "p0", 1, T0)],

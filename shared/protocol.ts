@@ -273,7 +273,7 @@ export type ClientMessage =
   // 8페이즈 낮 처형(결정 0060). 옛 투표 메시지(처형 여부·후보 선택)는 08-21 에 지웠다 — 옛 번들이 보내면 스키마가 거부해 BAD_MESSAGE 다. 행위자는 모두 소켓 첨부 playerId 뿐이다.
   | { t: "endDiscussion"; on: boolean } // 토론 끝내기 — 누름(true)/취소(false), 산 사람만. 공개 값은 누른 수뿐이다(DAY-03)
   | { t: "point"; target: number } // 지목 — 대상 seat 하나, 취소 없음, 마감까지 바꿀 수 있다(DAY-04)
-  | { t: "suspect"; target: number } // 발표 중 현재 발표자 또는 허용된 낮 토론 대상에게 하루 한 장(같은 날 다시 보내면 옮기기).
+  | { t: "suspect"; target: number; remove?: true } // 발표 중 현재 발표자 또는 낮 토론 상대에게 붙이기·옮기기. remove는 해당 대상의 내 표시만 뗀다.
   | { t: "whisper"; to: number; text: string } // 귓속말(결정 0066-2) — 낮 토론, 하루 1번, 산 다른 사람 한 명에게 30자소 이하. 본문은 보낸·받은 사람 소켓에만 간다
   | { t: "badge"; role: BadgeId } // 직업 주장(결정 0066-1) — 서버가 정하는 것은 값의 형식뿐 참·거짓은 판정하지 않는다. 낮 시작 발표·토론·지목 단계에서만
   | { t: "dress"; look: OutfitId } // 로비 의상(결정 D-6) — 의상 id 하나뿐, 대기실에서만. 서버는 고른 값을 저장·방송할 뿐 역할과 비교하지 않는다
@@ -359,6 +359,7 @@ export interface RoomView {
   /** 판 번호(첫 판 1, 결정 D-5·D-26). 공개 숫자이고 역할의 함수가 아니다. 서버는 항상 싣는다 — 타입을 optional 로 둔 것은 화면 시험의 리터럴을 한꺼번에 바꾸지 않기 위해서다(화면은 `view.round ?? 1`). */
   round?: number;
   phaseEndsAt: number | null;
+  phaseStartsAt?: number;
   phaseDurationMs: number | null;
   serverNow: number;
   minPlayers: number;

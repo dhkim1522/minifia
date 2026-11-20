@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Plane, Raycaster, Vector2, Vector3 } from "three";
 import { describe, expect, it } from "vitest";
-import { BAR_TABLE_CAMERA, BAR_WALK_CAMERA, barTableZoom, cameraScale, eyeTableCamera, groundToScreen, PX_PER_UNIT, screenToGround, STAGE_SIZES, stageOffsetY, stageRect, tableAim, tableEyeAt, WIDE_TABLE_CAMERA } from "../../src/world/camera";
+import { BAR_TABLE_CAMERA, BAR_WALK_CAMERA, barTableZoom, cameraScale, eyeTableCamera, groundToScreen, PX_PER_UNIT, screenToGround, STAGE_SIZES, stageOffsetY, stageRect, tableAim, tableEyeAt, tableHeadPitch, WIDE_TABLE_CAMERA } from "../../src/world/camera";
 import { BAR_SEATS_FX, UNIT } from "../../shared/game/map";
 import { nextLadderStep, UnsupportedRendererError } from "../../src/world/renderer";
 import { configureCamera, configureTableCamera, createCamera, createTableCamera } from "../../src/world/threeCamera";
@@ -36,6 +36,21 @@ function forEachPhone(fn: (size: { w: number; h: number; label: string }, offset
 }
 
 describe("재즈 바 착석 카메라", () => {
+  it("작은 화면에서 옆자리의 머리 장식이 헤더 아래에 들어오게 피치를 조정한다", () => {
+    const camera = createTableCamera();
+    const eye = tableEyeAt({ x: 0, z: 2.04 });
+    const head = { x: 1.44, y: 2.10, z: 1.44 };
+    const face = tableAim(eye, { ...head, y: 1.11 });
+    for (const [w, h, bottom, minGap] of [[320, 568, 210, 8], [390, 844, 463, 24]]) {
+      const stageTop = 62;
+      const offsetY = stageOffsetY(h, stageTop, bottom);
+      const pitch = Math.max(face.pitch, tableHeadPitch(eye, head, w, h / 2 - offsetY - stageTop));
+      configureTableCamera(camera, eyeTableCamera(eye, face.yaw, pitch), { w, h }, offsetY);
+      const projected = new Vector3(head.x, head.y, head.z).project(camera);
+      expect((1 - projected.y) * h / 2).toBeGreaterThanOrEqual(stageTop + minGap - 0.1);
+    }
+  });
+
   it("어느 의자에서도 시선 투영과 탭 방향이 일치하고 카메라 뒤는 프러스텀에서 빠진다", () => {
     const camera = createTableCamera();
     const ray = new Raycaster();

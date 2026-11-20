@@ -11,6 +11,20 @@
 // 표는 데이터만 둔다 — 진입 전이(훅)는 tick.ts 의 ON_ENTER 표에 있다.
 import type { PhaseId } from "../protocol";
 
+export const PHASE_INTRO_MS = 1_200;
+/** 서버에서 켜고, 이전 시간표를 검증하는 시험 fixture에서만 끈다. */
+export const PHASE_INTRO_SWITCH = { on: true };
+
+export function phaseHasIntro(phase: PhaseId, presentingAnswer: boolean): boolean {
+  return phase === "roleReveal" || phase === "keyword" || phase === "discussion" ||
+    phase === "verdict" || phase === "nomination" || phase === "defense" ||
+    phase === "night" || phase === "showdown" || (phase === "dayAnnounce" && presentingAnswer);
+}
+
+export function phaseIntroActive(phaseStartsAt: number | undefined, now: number): boolean {
+  return phaseStartsAt !== undefined && now < phaseStartsAt;
+}
+
 export interface PhaseDef {
   /** 단계 길이(ms). null 이면 시간으로 끝나지 않는다. */
   durationMs: number | null;
