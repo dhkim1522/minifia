@@ -6,7 +6,7 @@
 
 - **v3.0 시험판**(`v3`)은 [B안 달빛 누아르](docs/decisions/0093-v3-noir-visual-redesign.md)의 재즈 바와 공통 화면을 쓴다. **22** 낮은 토론 → 찬반 → 지목 → 유언 → 처형(결정 0090). **23** 첫날 라이어게임과 정답 공개, 조기 진행, D1 판 기록(결정 0091). **24-01~07** 구현 완료.
 - [동물 12종](docs/decisions/0102-animal-characters.md)은 3D 모델·초상·의상을 공유한다. [공용 화면](docs/decisions/0100-home-art-and-discussion-controls.md)의 채팅은 하단에 두고, [단계의 선택과 결과](docs/decisions/0103-phase-events.md)는 중앙에서 진행한다.
-- **공개 v3** `2026-11-20T08:55:18Z+491cc91d`. [라이어 답 5초씩 시계방향 공개와 의심딱지](docs/decisions/0113-clockwise-first-day-answers.md). 공개 320·390px 착석·발표 E2E 56/56, 4인 소켓 UAT 42/42. [재즈 바 고정 시점](docs/decisions/0112-jazz-bar-fixed-view.md), [4~8인 봇](docs/decisions/0110-bot-test-play.md), [테스트 방](https://minifia-v3.dhplay.workers.dev/?test=1).
+- **공개 v3** `2026-11-20T10:58:24Z+5194d416`. [단계 시작 배너와 의심 고깔](docs/decisions/0114-phase-intros-and-suspicion-hats.md). 공개 320·390px 착석·답안·조기 진행 E2E 80/80, 4인 소켓 UAT 42/42. 독립 검수에서 1.2초 배너와 고깔 세 겹·총수 표시 확인. [고정 시점](docs/decisions/0112-jazz-bar-fixed-view.md), [4~8인 봇](docs/decisions/0110-bot-test-play.md), [테스트 방](https://minifia-v3.dhplay.workers.dev/?test=1).
 - `keyword-sizes` 390px 가상 키보드 타이머 중앙 정렬 2건은 이전 공개판과 이번 로컬에서 동일하게 실패했다.
 - **v2.0 완료 처리(2026-11-07)**: 태그 `v2.0`, 문서는 `.planning/milestones/v2.0-*`. 열린 감사 항목 26개는 STATE.md 미룬 항목. main 은 v1.0 그대로, v3.0 실테스트 통과 뒤 반영.
 - **캐릭터·맵**의 B안 모델은 `src/world/character.ts`, `src/world/ghost3d.ts`, `src/world/maps/`에 있다. 시안은 `design/v3.0/redesign/b-noir.png`. 이미지 재생성은 [에셋 자동 검사](docs/screen-map.md#에셋-자동-검사) 참고.
@@ -22,7 +22,7 @@
 - **실테스트는 v3.0 전체를 한 번에**(팀·실기기, v2.0 실기기 칸도 그때). 단계별 팀 테스트는 없다.
 - 결정 0071~0091 과 각 페이즈 UI-SPEC "기본값 기록"은 사용자가 돌아와 검토하고 한 줄씩 바꿀 수 있다. 0090-8: 유언 10초에 몸동작도 막았다(살리려면 audience 분기 필요).
 - **키워드 목록 초안 검토(0089-23)**: `shared/game/keywords.ts` 7장르 306개, 사용자 검토 대기. 3글자 초성 우연 겹침(고양이↔가을이) 등 알려진 한계는 0091-19.
-- **실기기 확인**은 유령·유언·처형, 작은 화면의 키보드·답 인용, 의심딱지와 BGM·효과음 균형을 본다. 아침을 놓친 경우 그날 유언은 공개 채팅에서 읽는다.
+- **실기기 확인**은 유령·유언·처형, 작은 화면의 키보드·답 인용, 의심 고깔과 BGM·효과음 균형을 본다. 아침을 놓친 경우 그날 유언은 공개 채팅에서 읽는다.
 - **18.1·18 눈 확인**: 헤더 시간대 글자·움직임(0085)·늘어나는 기록 창과 키보드·결과판·처형 큰 글(0083), 재즈 바의 아침·낮·저녁 조명.
 - 레포 재생성은 하지 않는다(사용자 결정). 위생 grep 은 계속.
 - **Cloudflare 무료 한도**: DO 하루 쓰기 10만 행을 넘으면 방 만들기가 500(`1101`), 한국 09시 초기화. 대책은 결정 0076. 큰 회귀는 로컬로 돌린다.
