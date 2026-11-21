@@ -72,6 +72,7 @@ interface ViewOpts {
   mySeat?: number;
   endCount?: number;
   pressed?: boolean;
+  skipOpensAt?: number;
 }
 
 function makeView(o: ViewOpts = {}): RoomView {
@@ -80,20 +81,23 @@ function makeView(o: ViewOpts = {}): RoomView {
   const players = Array.from({ length: count }, (_, seat) =>
     player(seat, { ...(o.dead?.includes(seat) ? { alive: false } : {}), ...(o.nicknames?.[seat] !== undefined ? { nickname: o.nicknames[seat]! } : {}) }),
   );
+  const phase = o.phase ?? "discussion";
+  const alive = count - (o.dead?.length ?? 0);
+  const canVote = !o.dead?.includes(mySeat);
   return {
     code: "0042",
-    phase: o.phase ?? "discussion",
+    phase,
     phaseEndsAt: o.noClock ? null : NOW + (o.phase === "execution" ? EXECUTION_MS : 90_000),
     phaseDurationMs: o.noClock ? null : o.phase === "execution" ? EXECUTION_MS : 90_000,
     serverNow: NOW,
     minPlayers: 4,
     maxPlayers: 8,
     players,
-    me: { seat: mySeat, isHost: mySeat === 0, chat: o.dead?.includes(mySeat) ? "ghost" : "all", ...(o.pressed ? { endDiscussion: true as const } : {}), ...(o.records ? { records: o.records } : {}) },
+    me: { seat: mySeat, isHost: mySeat === 0, chat: canVote ? "all" : "ghost", ...(o.pressed ? { phaseSkip: true as const } : {}), ...(o.records ? { records: o.records } : {}) },
+    ...(phase === "discussion" || o.skipOpensAt !== undefined ? { phaseSkip: { count: o.endCount ?? 0, total: alive, opensAt: o.skipOpensAt ?? NOW, canVote } } : {}),
     day: {
       n: o.n ?? 1,
       roles: [],
-      ...(o.endCount !== undefined ? { endCount: o.endCount } : {}),
       ...(o.execution ? { execution: o.execution } : {}),
       ...(o.candidate !== undefined ? { candidate: o.candidate } : {}),
     },
@@ -133,7 +137,7 @@ const mount = (view: RoomView, over: Partial<RoomConnection> = {}, onExit: (r: s
 
 const endButton = (c: ParentNode): HTMLButtonElement | null => c.querySelector("[data-end-discussion]");
 const countParts = (c: ParentNode): [number, number] => {
-  const m = /^(\d+) \/ (\d+)$/.exec(c.querySelector(".mv-count")?.textContent ?? "");
+  const m = /^(\d+) \/ (\d+)$/.exec(c.querySelector("[data-phase-skip] .mv-count")?.textContent ?? "");
   return m ? [Number(m[1]), Number(m[2])] : [-1, -1];
 };
 const countNow = (c: ParentNode): number => countParts(c)[0];
@@ -233,19 +237,14 @@ describe("GameMap — 실험방 토론 도구", () => {
     expect(send.mock.calls.some(([message]) => message.t === "chat")).toBe(false);
   });
 
-  it("토론 시작부터 토론 스킵을 요청하고 근처에 아무도 없어도 의심 모드로 걸을 수 있다", () => {
+  it("스킵이 열리기 전에도 의심 모드를 쓰고 3초 뒤 서버가 지정한 스킵에 동의할 수 있다", () => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
     try {
       const send = vi.fn();
-      const view: RoomView = { ...makeView({ count: 5 }), playtest: true };
-      Object.assign(view.day!, { voteOpensAt: NOW + 45_000, voteReadyTotal: 4, voteReadyRequired: 3 });
+      const view: RoomView = { ...makeView({ count: 5, skipOpensAt: NOW + 3000 }), playtest: true };
       const { container } = mount(view, { send });
-      const button = endButton(container)!;
-      expect(button.getAttribute("aria-label")).toContain("필요한 4명 중 0명 요청");
-      fireEvent.click(button);
-      expect(send).toHaveBeenCalledWith({ t: "endDiscussion", on: true });
-      expect(button.getAttribute("aria-pressed")).toBe("true");
+      expect(endButton(container)).toBeNull();
 
       const suspect = container.querySelector<HTMLButtonElement>('[data-playtest-action="suspect"]')!;
       fireEvent.click(suspect);
@@ -253,8 +252,14 @@ describe("GameMap — 실험방 토론 도구", () => {
       expect(stage.props?.canWalk).toBe(true);
       expect(stage.props?.pick?.seats.size).toBe(0);
       expect(container.textContent).toContain("조금 더 가까이 가 보세요");
-      act(() => vi.advanceTimersByTime(45_000));
-      expect(button.getAttribute("aria-label")).toContain("필요한 3명 중 0명 요청");
+      act(() => vi.advanceTimersByTime(2999));
+      expect(endButton(container)).toBeNull();
+      act(() => vi.advanceTimersByTime(1));
+      const button = endButton(container)!;
+      expect(button.getAttribute("aria-label")).toContain("5명 중 0명 동의");
+      fireEvent.click(button);
+      expect(send).toHaveBeenCalledWith({ t: "phaseSkip", opensAt: NOW + 3000, on: true });
+      expect(button.getAttribute("aria-pressed")).toBe("true");
     } finally {
       vi.useRealTimers();
     }
@@ -276,45 +281,45 @@ describe("GameMap — 실험방 토론 도구", () => {
   });
 });
 
-describe("GameMap — 낮 토론 [토론 끝내기] (DAY-03, 08-13)", () => {
-  it("산 사람의 낮 토론은 루트가 data-game-stage·data-phase 이고 [토론 끝내기] 가 하나이며 점 total = 산 사람의 과반 수", () => {
+describe("GameMap — 단계 스킵", () => {
+  it("산 사람의 토론에는 머리 쪽에 스킵과 전원 동의 집계가 있다", () => {
     const { container } = mount(makeView({ count: 5 }));
     const root = container.querySelector("main.mf-game") as HTMLElement;
     expect(root).not.toBeNull();
     expect(root.hasAttribute("data-game-stage")).toBe(true);
     expect(root.getAttribute("data-phase")).toBe("discussion");
     expect(root.querySelector("[data-world-stage-fake]")).not.toBeNull();
-    expect(container.querySelectorAll("[data-end-discussion]").length).toBe(1);
-    expect(endButton(container)?.getAttribute("aria-label")).toBe("토론 스킵, 필요한 3명 중 0명 요청");
+    expect(container.querySelectorAll(".mf-game__header [data-phase-skip]").length).toBe(1);
+    expect(container.querySelector("[data-world-panel] [data-phase-skip]")).toBeNull();
+    expect(endButton(container)?.getAttribute("aria-label")).toBe("스킵, 5명 중 0명 동의");
     expect(endButton(container)?.getAttribute("aria-pressed")).toBe("false");
-    // 5명 → 과반 3
-    expect(countMax(container)).toBe(3);
+    expect(countMax(container)).toBe(5);
     expect(countNow(container)).toBe(0);
   });
 
-  it("과반 수는 산 사람 수로 센다: 8명 중 3명이 죽어 5명이면 3, 2명이면 2", () => {
+  it("서버가 제공한 분모를 표시한다", () => {
     const eight = mount(makeView({ count: 8, dead: [5, 6, 7] }));
-    expect(countMax(eight.container)).toBe(3);
+    expect(countMax(eight.container)).toBe(5);
     eight.unmount();
     const two = mount(makeView({ count: 4, dead: [2, 3] }));
     expect(countMax(two.container)).toBe(2);
   });
 
-  it("누르면 endDiscussion {on: true} 를 한 번 보내고 내 눌림(aria-pressed)만 즉시 바뀐다 — 숫자는 서버가 센 값 그대로", () => {
+  it("동의와 취소는 현재 단계의 opensAt 를 보내고 숫자는 서버 집계를 따른다", () => {
     const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
     const { container } = mount(makeView(), { send });
     fireEvent.click(endButton(container)!);
     expect(send).toHaveBeenCalledTimes(1);
-    expect(send).toHaveBeenCalledWith({ t: "endDiscussion", on: true });
+    expect(send).toHaveBeenCalledWith({ t: "phaseSkip", opensAt: NOW, on: true });
     expect(endButton(container)?.getAttribute("aria-pressed")).toBe("true");
     expect(countNow(container)).toBe(0);
     // 다시 누르면 취소
     fireEvent.click(endButton(container)!);
-    expect(send).toHaveBeenLastCalledWith({ t: "endDiscussion", on: false });
+    expect(send).toHaveBeenLastCalledWith({ t: "phaseSkip", opensAt: NOW, on: false });
     expect(endButton(container)?.getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("서버 view(endCount 1, me.endDiscussion true)가 오면 숫자가 1 로 바뀌고 눌림이 서버 값을 따른다", () => {
+  it("서버 view 가 오면 숫자와 눌림이 서버 값을 따른다", () => {
     const m = mount(makeView());
     expect(countNow(m.container)).toBe(0);
     m.show(makeView({ endCount: 1, pressed: true }));
@@ -354,27 +359,31 @@ describe("GameMap — 낮 토론 [토론 끝내기] (DAY-03, 08-13)", () => {
     expect(container.querySelector(".mv-chat")).not.toBeNull();
   });
 
-  it("낮 토론이 아닌 단계(낮 시작·지목)에는 [토론 끝내기] 가 없다", () => {
+  it("서버가 스킵 창을 주지 않은 단계에는 버튼이 없다", () => {
     for (const phase of ["dayAnnounce", "nomination", "defense", "verdict", "execution"] as const) {
       const { container, unmount } = mount(makeView({ phase }));
-      expect(endButton(container)).toBeNull();
+      expect(container.querySelector("[data-phase-skip]")).toBeNull();
       unmount();
     }
   });
 
-  it("다른 사람의 토론 끝내기 여부는 그리지 않는다 — 개수 숫자만 있고 이름표에 넘기는 속성도 없다", () => {
+  it("다른 사람의 동의 여부는 집계로만 보이고 이름표에는 표시하지 않는다", () => {
     const { container } = mount(makeView({ count: 6, endCount: 2 }));
     expect(countNow(container)).toBe(2);
-    expect(countMax(container)).toBe(4);
+    expect(countMax(container)).toBe(6);
     expect(stage.props?.tagProps).toBeUndefined();
     expect(stage.props?.pick).toBeUndefined();
   });
 
-  it("보내는 메시지에는 신원 필드가 없다(on 하나뿐)", () => {
+  it("스킵 창이 바뀌면 이전 동의 상태가 사라지고 새 창에 동의할 수 있다", () => {
     const send = vi.fn();
-    const { container } = mount(makeView(), { send });
-    fireEvent.click(endButton(container)!);
-    expect(Object.keys(send.mock.calls[0]![0] as object).sort()).toEqual(["on", "t"]);
+    const m = mount(makeView({ pressed: true }), { send });
+    expect(endButton(m.container)?.getAttribute("aria-pressed")).toBe("true");
+    m.show(makeView({ phase: "verdict", skipOpensAt: NOW + 1 }));
+    const button = m.container.querySelector("[data-phase-skip]")!;
+    expect(button.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(button);
+    expect(send).toHaveBeenCalledWith({ t: "phaseSkip", opensAt: NOW + 1, on: true });
   });
 });
 
@@ -624,7 +633,7 @@ describe("GameMap — 헤더·[역할 카드] (UI-SPEC A2)", () => {
       vi.advanceTimersByTime(ms);
     });
 
-  it("기본판 낮 토론: 제목·상단 시간 게이지·내 역할이 한 줄에 있다", () => {
+  it("기본판 낮 토론 헤더에 제목과 게이지, 스킵·게임 메뉴가 있다", () => {
     const { container } = mount(makeView());
     const header = container.querySelector(".mf-game__header") as HTMLElement;
     expect(header.querySelector(".mv-phase__title")?.textContent).toBe("토론");
@@ -634,7 +643,7 @@ describe("GameMap — 헤더·[역할 카드] (UI-SPEC A2)", () => {
     const gauge = header.querySelector('[role="timer"][data-phase-gauge]');
     expect(gauge?.textContent).toBe("");
     expect(gauge?.getAttribute("aria-label")).toBe("남은 시간 90초");
-    expect(header.querySelectorAll("button").length).toBe(1);
+    expect(header.querySelectorAll("button").length).toBe(2);
     expect(header.querySelector("[data-guide]")).toBeNull();
   });
 
@@ -664,22 +673,23 @@ describe("GameMap — 헤더·[역할 카드] (UI-SPEC A2)", () => {
     expect(container.textContent).not.toContain("모두의 직업이 보여요");
   });
 
-  it("토론의 메뉴는 글 없는 점 세 개 아이콘이며 게이지 오른쪽에 놓인다", () => {
+  it("토론 메뉴는 스킵 옆에 글 없는 점 세 개 아이콘으로 표시한다", () => {
     const { container } = mount(makeView());
-    const btn = container.querySelector(".mf-game__header button") as HTMLButtonElement;
+    const btn = container.querySelector("[data-game-menu]") as HTMLButtonElement;
     expect(btn.getAttribute("aria-label")).toBe("메뉴");
     expect(btn.hasAttribute("data-tool-label")).toBe(false);
     expect(btn.querySelector(".mf-rolecard-btn__label")).toBeNull();
     expect(btn.textContent).toBe("");
     expect(btn.querySelectorAll("svg circle")).toHaveLength(3);
     expect(btn.parentElement?.classList.contains("mf-game-phase-header__actions")).toBe(true);
+    expect(btn.previousElementSibling).toBe(endButton(container));
     expect(container.querySelector(".mf-game__header [data-phase-gauge]")).not.toBeNull();
     expect(container.querySelectorAll("button[data-game-menu]").length).toBe(1);
   });
 
   it("안 읽은 일지가 있으면 토론 메뉴 이름과 점으로 새 기록을 알린다", () => {
     const { container } = mount(makeView({ records: [{ n: 1, target: 1, isMafia: false }] }));
-    const btn = container.querySelector(".mf-game__header button") as HTMLButtonElement;
+    const btn = container.querySelector("[data-game-menu]") as HTMLButtonElement;
     expect(btn.getAttribute("aria-label")).toBe("메뉴, 새 기록");
     expect(btn.querySelector(".mf-rolecard-btn__dot")).not.toBeNull();
     const css = readFileSync("src/styles/rolecard.css", "utf8");
@@ -688,7 +698,7 @@ describe("GameMap — 헤더·[역할 카드] (UI-SPEC A2)", () => {
 
   it("메뉴에서 내 역할과 기록을 누르면 역할 카드 시트가 열린다", () => {
     const { container } = mount(makeView());
-    fireEvent.click(container.querySelector(".mf-game__header button")!);
+    fireEvent.click(container.querySelector("[data-game-menu]")!);
     fireEvent.click(container.querySelector("[data-game-menu-role]")!);
     expect(document.querySelector('dialog[aria-label="역할 카드"]')).not.toBeNull();
   });
@@ -1190,6 +1200,30 @@ describe("GameMap — 순차 지목 이름표 (22-10, D-12)", () => {
   const toastText = (c: ParentNode) => c.querySelector(".mv-toast__text")?.textContent ?? "";
   const sendOf = (): ReturnType<typeof vi.fn> => (connectionMock.current as RoomConnection).send as ReturnType<typeof vi.fn>;
   const tag = (seat: number) => stage.props?.tagProps?.(seat) ?? {};
+
+  it("재즈 바 지목은 얼굴판에서만 보낸다. 확정 뒤 후보에게 이름표 강조나 핀 조명을 주지 않는다", () => {
+    const view: RoomView = { ...voteView(), map: "bar" };
+    const m = mount(view);
+    const face = () => m.container.querySelector<HTMLButtonElement>('[data-table-seat="2"]')!;
+    expect(stage.props?.pick).toBeUndefined();
+    expect(tag(2)).toEqual({});
+    expect(stage.props?.scene?.pin).toEqual({ mode: "turn", seat: 0 });
+    expect(face().getAttribute("data-pick")).toBe("2");
+
+    act(() => stage.props?.onTableSeat?.(2));
+    expect(sendOf()).not.toHaveBeenCalled();
+    fireEvent.click(face());
+    expect(sendOf()).toHaveBeenCalledExactlyOnceWith({ t: "point", target: 2 });
+    expect(face().getAttribute("aria-pressed")).toBe("true");
+    expect(tag(2)).toEqual({});
+
+    const done = voteView([[0, 2]]);
+    m.show({ ...done, map: "bar", day: { ...done.day!, turn: { ...done.day!.turn!, doneAt: NOW } } });
+    expect(stage.props?.scene?.pin).toEqual({ mode: "turn", seat: 0 });
+    expect(stage.props?.scene?.seats[0]?.pointAt).toBe(2);
+    expect(face().getAttribute("aria-pressed")).toBe("true");
+    expect(tag(2)).toEqual({});
+  });
 
   it("산 사람 4명, 내 차례: 나를 뺀 세 이름표가 누를 수 있고 묶음 '지목', 이름 '{닉네임} 님 가리키기'", () => {
     mount(voteView());

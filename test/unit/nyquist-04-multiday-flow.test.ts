@@ -108,7 +108,7 @@ describe("종료 뒤에는 행동이 거부된다 (END-01, END-02)", () => {
   it("ended 에서 지목·찬반·토론 끝내기·밤 지목이 모두 WRONG_PHASE 다", async () => {
     const { castTurnPoint } = await import("../../shared/game/nomination");
     const { castVerdict } = await import("../../shared/game/verdict");
-    const { toggleEnd } = await import("../../shared/game/discussion");
+    const { votePhaseSkip } = await import("../../shared/game/phaseSkip");
     const { pickTarget } = await import("../../shared/game/night");
     const { stateWithVerdict } = await import("../helpers/voteState");
     const s0 = stateWithVerdict(4, 1, "execution", { candidate: "mafia" });
@@ -119,7 +119,7 @@ describe("종료 뒤에는 행동이 거부된다 (END-01, END-02)", () => {
     const outcomes = [
       castTurnPoint(ended, who.id, other.seat, ended.phaseEndsAt ?? 0),
       castVerdict(ended, who.id, true),
-      toggleEnd(ended, who.id, true),
+      votePhaseSkip(ended, who.id, 0, true, 0),
       pickTarget(ended, who.id, other.seat),
     ].map((r) => (r.ok ? "ok" : r.error));
     expect(outcomes).toEqual(["WRONG_PHASE", "WRONG_PHASE", "WRONG_PHASE", "WRONG_PHASE"]);

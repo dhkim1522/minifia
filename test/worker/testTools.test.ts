@@ -219,7 +219,9 @@ describe("testBotVote", () => {
   it("게임 중에는 WRONG_PHASE 와 방장 state 이고 저장된 방에 설정이 없다", async () => {
     const r = await seatQuiet(3, { testMode: true });
     await start(r);
-    expect(summary(await sendAndSettle(r.host, msg("no", "host")))).toBe("[error:WRONG_PHASE,state:assigning]");
+    const frames = await sendAndSettle(r.host, msg("no", "host"));
+    // 시작 요청의 착석 snap이 assigning 프레임 뒤에 이어서 도착할 수 있다.
+    expect(summary(frames.filter((frame) => frame.t !== "world"))).toBe("[error:WRONG_PHASE,state:assigning]");
     expect(Object.hasOwn(await stored(r.code), "testBotVote")).toBe(false);
   });
 

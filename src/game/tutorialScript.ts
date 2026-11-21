@@ -10,9 +10,7 @@ import { EARLY_GRACE_MS } from "../../shared/game/early";
 import { BAR_CHAIR_CLOCKWISE_ANGLES } from "../../shared/game/keywordPresentation";
 import { BAR_SEATS_FX, barChairAssignment } from "../../shared/game/map";
 import { ROOM_MAP_ID } from "../../shared/game/maps";
-import { majorityOf } from "../../shared/game/nomination";
 import { ANSWER_REVEAL_MS, EXECUTION_MS, WILL_REVEAL_MS } from "../../shared/game/phases";
-import { PLAYTEST_DISCUSSION_MIN_MS } from "../../shared/game/playtest";
 import { rolesInPlay } from "../../shared/game/roles";
 import { emptyWorld, restSegment, snapFrame } from "../../shared/game/world";
 import type { WorldState } from "../../shared/game/world";
@@ -98,7 +96,7 @@ export const TUTORIAL_PILLS = {
   "keyword.noAnswer": "제시어 대신 단서를 써요",
   "answers.suspect": "의심 가는 답에 표시해요",
   "discussion.talk": "궁금한 점을 물어봐요",
-  "discussion.end": "절반 넘게 누르면 끝나요",
+  "discussion.end": "모두 스킵을 누르면 넘어가요",
   "verdict.majority": "찬성이 더 많으면 지목해요",
   "pick.point": "의심 가는 사람을 가리켜요",
   "will.will": "처형되는 사람은 유언을 남겨요",
@@ -107,9 +105,6 @@ export const TUTORIAL_PILLS = {
   "postit.pick": "의심 가는 사람을 눌러요",
   "postit.fall": "아침에 의심 표시가 풀려요",
   "roles.ready": "역할을 읽고 준비를 눌러요",
-  "discussion.unanimous": "모두 요청하면 투표해요",
-  "discussion.majority": `${PLAYTEST_DISCUSSION_MIN_MS / 1000}초 뒤엔 절반만 넘으면 돼요`,
-  "discussion.request": "토론 스킵을 눌러요",
   "verdict.choice": "한 명을 뽑거나 건너뛰어요",
   "night.ready": "시민은 아침을 준비해요",
 } as const;
@@ -159,7 +154,7 @@ export const TUTORIAL_CHAT: readonly { atMs: number; seat: number; text: string;
 export const TUTORIAL_WILL = "믿어줘, 난 정말 아니야";
 
 /** 누른 뒤 가짜 반응(다른 참가자의 행동)이 나오는 단계 수와 간격 */
-const END_STEPS = 4; // 나 + 나머지 셋 = 6명 중 과반
+const END_STEPS = TUTORIAL_CAST.seats.length;
 const VERDICT_VOTES: readonly boolean[] = [true, true, false, true, false, true]; // 나 → 찬성 4 · 반대 2
 /** 장면 6 차례 순서: 민준→도윤, 서연→도윤, 나→(하린), 지호→도윤, 도윤→민준, 하린→도윤 */
 const PICK_ORDER: readonly number[] = [0, 2, 5, 3, 1, 4];
@@ -289,11 +284,7 @@ export const TUTORIAL_PLAYTEST_SCENES: readonly TutorialScene[] = [
       beat("b", null, "postit.fall", { holdMs: 2200, sfx: "ui.tap" }),
     ],
   },
-  {
-    ...sceneOf("discussion"),
-    ms: 19500, ringAtMs: 4100,
-    beats: [beat("a", 0, "discussion.unanimous"), beat("b", 2100, "discussion.majority"), beat("c", 4100, "discussion.request")],
-  },
+  sceneOf("discussion"),
   {
     id: "verdict", kind: "do", ms: 16800, autoActMs: TUTORIAL_AUTO_ACT_MS, targets: ["first-ballot"],
     beats: [beat("a", 0, "verdict.choice"), beat("b", null, null, { holdMs: EARLY_GRACE_MS }), beat("c", null, null, { holdMs: 3000 })],
@@ -329,7 +320,7 @@ export function autoAct(id: TutorialSceneId, at?: TutorialBeatId, playtest = fal
     case "keyword":
       return { target: "send", msg: { t: "answer", text: TUTORIAL_MY_ANSWER, final: true }, steps: 1, next: null };
     case "discussion":
-      return { target: "endDiscussion", msg: { t: "endDiscussion", on: true }, steps: playtest ? TUTORIAL_CAST.seats.length : END_STEPS, next: null };
+      return { target: "endDiscussion", msg: { t: "endDiscussion", on: true }, steps: END_STEPS, next: null };
     case "verdict":
       if (playtest) {
         return at === undefined || at === "a"
@@ -425,11 +416,6 @@ export function tutorialView(
 
   const out: RoomView = view;
   const day = out.day!;
-  if (playtest && phase === "discussion" && dayN === 1) {
-    day.voteOpensAt = startedAt + PLAYTEST_DISCUSSION_MIN_MS;
-    day.voteReadyTotal = TUTORIAL_CAST.seats.length;
-    day.voteReadyRequired = majorityOf(TUTORIAL_CAST.seats.length);
-  }
   switch (id) {
     case "roles":
       out.me = { ...mine, role: "citizen", ...(playtest && acted >= 1 ? { roleReady: true as const } : {}) };
@@ -453,7 +439,7 @@ export function tutorialView(
       break;
     }
     case "discussion": {
-      const count = Math.min(acted, playtest ? TUTORIAL_CAST.seats.length : END_STEPS);
+      const count = Math.min(acted, END_STEPS);
       out.me = { ...mine, role: "citizen", ...(count >= 1 ? { endDiscussion: true as const } : {}) };
       day.endCount = count;
       if (playtest) day.suspects = [{ to: TUTORIAL_CAST.suspect, from: TUTORIAL_CAST.me }];

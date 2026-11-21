@@ -27,7 +27,7 @@ import { isAlive } from "./alive";
 import { channelOf } from "./audience";
 import { botCount } from "./bots";
 import { ROOM_MAP_ID } from "./maps";
-import { endCountOf, endRequiredOf, phaseDurationOf } from "./discussion";
+import { phaseDurationOf } from "./discussion";
 import { buildSummary } from "./endgame";
 import { noExecutionOf } from "./execution";
 import { answerOpenOf } from "./keywordAnswer";
@@ -39,7 +39,8 @@ import { pointLinesOf, turnViewOf } from "./nomination";
 import { runoffVotersOf, runoffViewOf } from "./runoff";
 import { showdownViewOf } from "./showdown";
 import { PHASE_DEFS } from "./phases";
-import { firstBallotCount, firstPlaytestDay, humanSeats, voteOpensAt } from "./playtest";
+import { phaseSkipOpensAt, phaseSkipStatus } from "./phaseSkip";
+import { firstBallotCount, firstPlaytestDay } from "./playtest";
 import { RULES } from "./ruleset";
 import { isReady } from "./rematch";
 import { rolesInPlay } from "./roles";
@@ -72,7 +73,7 @@ const DAY_PHASES: ReadonlySet<PhaseId> = new Set([
  * 낮 정보. 허용 목록 리터럴로만 만든다 — 조건을 채울 때만 키를 만들고, 서버 전용 필드는 싣지 않는다.
  * 읽는 쪽이 기본값을 쥔다: 일차 없으면 1(RESEARCH Pattern 6).
  */
-function buildDay(state: RoomState, presentation: KeywordPresentation | undefined): DayView {
+function buildDay(state: RoomState, presentation: KeywordPresentation | undefined, phaseSkip: RoomView["phaseSkip"]): DayView {
   const day: DayView = {
     n: state.day ?? 1,
     roles: rolesInPlay(state.players.length),
@@ -85,14 +86,13 @@ function buildDay(state: RoomState, presentation: KeywordPresentation | undefine
     if (revealAnswer) kw.answer = state.keyword.word;
     day.keyword = kw;
   }
-  // 토론 끝내기는 누른 산 사람 수만 공개한다 — 누가 눌렀는지는 서버 전용(Player.endVote)이고 본인 값만 me.endDiscussion 으로 간다(결정 0060-2).
+  // 이전 클라이언트의 토론 버튼에도 같은 건너뛰기 집계를 보낸다.
   if (state.phase === "discussion") {
-    day.endCount = endCountOf(state);
-    const opens = voteOpensAt(state);
-    if (opens !== undefined) {
-      day.voteOpensAt = opens;
-      day.voteReadyRequired = endRequiredOf(state);
-      day.voteReadyTotal = humanSeats(state).length;
+    day.endCount = phaseSkip?.count ?? 0;
+    if (firstPlaytestDay(state) && phaseSkip !== undefined) {
+      day.voteOpensAt = phaseSkip.opensAt;
+      day.voteReadyRequired = phaseSkip.total;
+      day.voteReadyTotal = phaseSkip.total;
     }
   }
   // 찬반은 집계 수(찬성·반대)만 모두에게 공개한다(D-11) — 던진 좌석(옛 day.voted)은 싣지 않는다: 좌석과 수가 함께 보이면 첫 투표자의 표가 추론된다(D-26).
@@ -218,6 +218,11 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   const me = state.players.find((p) => p.id === playerId);
   if (!me) throw new Error("buildView: player is not in this room");
   const presentation = keywordPresentationOf(state, now);
+  const skipOpensAt = phaseSkipOpensAt(state);
+  const skipStatus = skipOpensAt === undefined ? undefined : phaseSkipStatus(state, playerId);
+  const phaseSkip = skipOpensAt !== undefined && skipStatus !== undefined && skipStatus.total > 0
+    ? { opensAt: skipOpensAt, count: skipStatus.count, total: skipStatus.total, canVote: skipStatus.canVote }
+    : undefined;
   // 판 규칙은 상수 RULES 하나다 — 꺼진 장치의 키는 서버 상태에 값이 있어도 싣지 않는다(값이 빈 것이 아니라 키가 없다).
 
   const players: PublicPlayer[] = [...state.players]
@@ -247,7 +252,7 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
 
   // 내 정보도 허용 목록으로만 만든다. role·allies 는 조건을 채울 때만 키 자체를 만든다(undefined 로 남기지 않는다).
   const myInfo: MyInfo = { seat: me.seat, isHost: me.id === state.hostId };
-  if (state.playtest === true && state.phase === "roleReveal" && me.roleReady === true) myInfo.roleReady = true;
+  if (state.phase === "roleReveal" && me.roleReady === true) myInfo.roleReady = true;
   if (firstPlaytestDay(state) && state.phase === "verdict" && state.firstBallotOutcome === undefined && isAlive(me) && me.firstBallot !== undefined) {
     myInfo.firstBallot = me.firstBallot;
   }
@@ -341,9 +346,9 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     myInfo.whisperUsed = true;
   }
 
-  // 토론 끝내기 누름은 본인에게만(결정 0060-2) — 산 본인이 discussion 에서 눌렀을 때만 키를 만든다. 누른 사람이 누구인지는 어떤 키로도 싣지 않는다.
-  if (state.phase === "discussion" && isAlive(me) && me.endVote === true) {
-    myInfo.endDiscussion = true;
+  if (phaseSkip !== undefined && skipStatus?.pressed) {
+    myInfo.phaseSkip = true;
+    if (state.phase === "discussion") myInfo.endDiscussion = true;
   }
 
   // 찬반 값은 본인에게만(결정 0053·0060-4, T-08-02) — verdict 단계에서 유권자(산 사람 전원 — 찬반에는 후보가 없다, D-11)인 본인이 던진 값이 있을 때만 키를 만든다. 남의 값은 어떤 키로도 싣지 않는다.
@@ -403,6 +408,7 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     phaseEndsAt: state.phaseEndsAt,
     ...(state.phaseStartsAt !== undefined ? { phaseStartsAt: state.phaseStartsAt } : {}),
     phaseDurationMs: phaseDurationOf(state), // 단계 표 길이 — 파생은 한 곳(discussion.ts)
+    ...(phaseSkip !== undefined ? { phaseSkip } : {}),
     serverNow: now,
     minPlayers: MIN_PLAYERS,
     maxPlayers: MAX_PLAYERS,
@@ -412,7 +418,7 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     mapChoice: ROOM_MAP_ID,
   };
   if (state.phase !== "lobby") view.map = ROOM_MAP_ID;
-  if (DAY_PHASES.has(state.phase)) view.day = buildDay(state, presentation);
+  if (DAY_PHASES.has(state.phase)) view.day = buildDay(state, presentation, phaseSkip);
   if (state.phase === "lobby" && state.bench !== undefined) {
     const reservedAnimals = state.bench.flatMap((p) => p.animal === undefined ? [] : [p.animal]).sort();
     if (reservedAnimals.length > 0) view.reservedAnimals = reservedAnimals;

@@ -166,7 +166,7 @@ export interface DayView {
   points?: PointLine[]; // nomination 단계 동안만, 지금 지목 줄(공개 차례 연출용). 단계가 끝나면 키가 없다 — 기록으로 남기지 않는다(D-14)
   endCount?: number; // discussion 단계에서, 토론 끝내기를 누른 산 사람 수(누가 눌렀는지는 싣지 않는다)
   voteOpensAt?: number; // 실험방 첫날 토론에서 표결 진입을 요청할 수 있는 서버 시각
-  voteReadyRequired?: number; // 실험방 과반이 되는 인원, 봇 제외
+  voteReadyRequired?: number; // 이전 실험방 클라이언트에 보내는 건너뛰기 동의 인원, 봇 제외
   voteReadyTotal?: number; // 실험방 첫 토론에서 투표로 넘기는 데 동의할 수 있는 총인원
   firstBallot?: { count: number; result?: FirstBallotResult }; // 실험방 첫날의 투표 수와 공개 결과
   verdictCount?: { yes: number; no: number }; // verdict 단계에서만, 모두에게 같은 찬반 집계 수(번복도 바로 반영, D-11). 던진 좌석(옛 voted)은 싣지 않는다(D-26) — 내 표는 me.verdictVote
@@ -264,14 +264,15 @@ export type ClientMessage =
   | { t: "hello"; token: string }
   | { t: "ping"; c: number }
   | { t: "start" } // 방장만 대기실에서(결정 0089-15: 옛 tutorial 옵션은 22페이즈에서 없어졌다 — 덧붙은 키는 스키마가 거부한다)
-  | { t: "roleReady" } // 실험방 본인 역할 확인 완료
+  | { t: "roleReady" } // 본인 역할 확인 완료
   | { t: "nightDone" } // 실험방 시민 본인의 밤 완료
   | { t: "firstBallot"; target: number | null } // 실험방 첫날 비공개 지목 또는 보류(null)
   | { t: "leave" }
   | { t: "kick"; seat: number }
   | { t: "pick"; target: number } // 밤 행동 — 행동 종류는 보내지 않는다(서버 저장 역할이 정한다)
   // 8페이즈 낮 처형(결정 0060). 옛 투표 메시지(처형 여부·후보 선택)는 08-21 에 지웠다 — 옛 번들이 보내면 스키마가 거부해 BAD_MESSAGE 다. 행위자는 모두 소켓 첨부 playerId 뿐이다.
-  | { t: "endDiscussion"; on: boolean } // 토론 끝내기 — 누름(true)/취소(false), 산 사람만. 공개 값은 누른 수뿐이다(DAY-03)
+  | { t: "endDiscussion"; on: boolean } // 이전 클라이언트의 토론 건너뛰기
+  | { t: "phaseSkip"; opensAt: number; on: boolean } // 현재 단계 또는 차례의 건너뛰기 동의/취소
   | { t: "point"; target: number } // 지목 — 대상 seat 하나, 취소 없음, 마감까지 바꿀 수 있다(DAY-04)
   | { t: "suspect"; target: number; remove?: true } // 발표 중 현재 발표자 또는 낮 토론 상대에게 붙이기·옮기기. remove는 해당 대상의 내 표시만 뗀다.
   | { t: "whisper"; to: number; text: string } // 귓속말(결정 0066-2) — 낮 토론, 하루 1번, 산 다른 사람 한 명에게 30자소 이하. 본문은 보낸·받은 사람 소켓에만 간다
@@ -345,6 +346,7 @@ export interface MyInfo {
   suspectTo?: number; // 오늘 내가 붙인 대상 seat. 답안 발표와 토론 중 산 본인에게만 보낸다.
   whisperUsed?: true; // 오늘 귓속말을 이미 보냈다(결정 0066-2) — discussion 단계의 산 본인에게만, 다른 소켓·다른 단계·다음 일차에는 키가 없다
   endDiscussion?: true; // discussion 단계에서 본인이 토론 끝내기를 누른 상태(본인에게만, 8페이즈 결정 0060)
+  phaseSkip?: true; // 현재 단계나 차례에서 건너뛰기에 동의한 본인에게만
   nightTally?: Array<{ seat: number; n: number }>; // 밤, 산 마피아 본인에게만: 대상 seat 별 산 마피아 선택 수(seat 오름차순, 본인 포함, 누가 골랐는지는 없다, 결정 0061-7)
   nightSure?: number; // 밤, 산 마피아 본인에게만: 전원 일치로 확정된 대상 seat(결정 0061-7). 채우는 일은 09-07 view
   will?: string; // 산 본인에게만: 본인이 남긴 유언(결정 0061-10). 지도 단계에서 저장된 값이 있을 때만(09-12)
@@ -361,6 +363,8 @@ export interface RoomView {
   phaseEndsAt: number | null;
   phaseStartsAt?: number;
   phaseDurationMs: number | null;
+  /** opensAt은 현재 단계/차례 식별자 겸 동의 입력이 열리는 서버 시각이다. 동의한 좌석은 공개하지 않는다. */
+  phaseSkip?: { opensAt: number; count: number; total: number; canVote: boolean };
   serverNow: number;
   minPlayers: number;
   maxPlayers: number;

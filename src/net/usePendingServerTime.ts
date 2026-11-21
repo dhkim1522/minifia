@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
-import { phaseIntroActive } from "../../shared/game/phases";
 
-/** 새로 입장한 클라이언트도 서버가 정한 열림 시각까지만 안내를 표시한다. */
-export function usePhaseIntro(startsAt: number | undefined, offset: number): number | undefined {
+/** 서버 시각이 되면 새 프레임을 기다리지 않고 만료한다. */
+export function usePendingServerTime(startsAt: number | undefined, offset: number): number | undefined {
   const [completed, setCompleted] = useState<number>();
-  const active = startsAt !== completed && phaseIntroActive(startsAt, Date.now() + offset);
+  const active = startsAt !== undefined && startsAt !== completed && Date.now() + offset < startsAt;
 
   useEffect(() => {
     if (!active || startsAt === undefined) return;

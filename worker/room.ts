@@ -54,7 +54,7 @@ import { castTurnPoint, turnStartOf } from "../shared/game/nomination";
 import { castRunoffVote } from "../shared/game/runoff";
 import { acceptLastWord, castShowdownPoint } from "../shared/game/showdown";
 import { castVerdict } from "../shared/game/verdict";
-import { discussionMajorityAt, endReached, toggleEnd } from "../shared/game/discussion";
+import { phaseSkipOpensAt, votePhaseSkip } from "../shared/game/phaseSkip";
 import { MAP_PHASES, canMove } from "../shared/game/movement";
 import { layoutFor, layoutKey } from "../shared/game/gather";
 import { BAR_MAP, BAR_SEATS_FX, STAGE_SPOT, barChairAssignment } from "../shared/game/map";
@@ -97,7 +97,7 @@ const RATE_WINDOW_MS = 1000;
 const RATE_MAX_MESSAGES = 20;
 
 const PHASE_INPUT = new Set<ClientMessage["t"]>([
-  "roleReady", "firstBallot", "nightDone", "pick", "endDiscussion", "point", "suspect",
+  "roleReady", "firstBallot", "nightDone", "pick", "endDiscussion", "phaseSkip", "point", "suspect",
   "verdict", "move", "typing", "emote", "badge", "whisper", "will", "note", "answer",
 ]);
 // DO storage.delete(keys[]) 의 한 번 최대 키 수.
@@ -373,7 +373,10 @@ export class Room extends DurableObject<Env> {
         await this.handlePick(ws, msg.target);
         return;
       case "endDiscussion":
-        await this.handleEndDiscussion(ws, msg.on);
+        await this.handlePhaseSkip(ws, this.room?.phase === "discussion" ? phaseSkipOpensAt(this.room) : undefined, msg.on);
+        return;
+      case "phaseSkip":
+        await this.handlePhaseSkip(ws, msg.opensAt, msg.on);
         return;
       case "point":
         await this.handlePoint(ws, msg.target);
@@ -836,7 +839,7 @@ export class Room extends DurableObject<Env> {
   // persistAndBroadcast 를 부르지 않는다(L7): 전원 방송이나 '누군가 썼다' 는 타이밍이 다른 폰에 새면 안 된다. 같은 값은 같은 객체라 저장·전송이 없다.
   // 간격(WILL_MIN_GAP_MS) 안의 요청은 상태를 바꾸지 않고 오류 없이 버린다(T-09-27). 봇도 같은 본체를 지난다(특권 없음).
   // 유언 단계 [남기기](22-11 D-15, T-22-21): final 이고 지금이 defense 이며 보낸 사람이 처형자(verdict.candidate)일 때만 간격 검사 없이(자동 저장 직후여도 버려지지 않게) 저장하고,
-  // 마감을 지금으로 당겨 applyEndDiscussion 과 같은 길(tick → afterTransition)로 처형 단계에 들어간다 — 처형 진입·사망 카드(유언)·방송·알람이 정상 마감과 같다.
+  // 마감을 지금으로 당겨 tick → afterTransition 경로로 처형 단계에 들어간다 — 처형 진입·사망 카드(유언)·방송·알람이 정상 마감과 같다.
   // 처형자가 아니면 final 은 무시하고 일반 저장 경로를 탄다(응답이 일반 저장 거절과 같아 처형자가 누구인지 알려 주는 신호가 없다).
   private async applyWill(playerId: string, text: string, now: number, final = false): Promise<WsErrorCode | null> {
     if (!this.room) return "BAD_MESSAGE";
@@ -990,7 +993,7 @@ export class Room extends DurableObject<Env> {
     return null;
   }
 
-  // 동점 결선(결정 0066-4): 메시지는 기존 point 를 단계별로 분기한다. 마감을 건드리지 않는다(5초를 다 채운다) — reschedule 이 필요 없다.
+  // 동점 결선(결정 0066-4): 메시지는 기존 point 를 단계별로 분기한다.
   // 방송 규율: 그 사람의 첫 표는 day.runoff.voted(던진 좌석 목록)가 모두에게 바뀌므로 전원이 각자 view 를 받는다.
   // 이미 던진 사람이 값을 바꾸면 공개 값은 그대로이고 바뀌는 것은 본인 값(me.ballot)뿐이다 — 전원에게 보내면 '누군가 마음을 바꿨다' 는 타이밍이 샌다.
   private async applyRunoffVote(playerId: string, target: number, now: number): Promise<WsErrorCode | null> {
@@ -1000,6 +1003,7 @@ export class Room extends DurableObject<Env> {
     if (!result.ok) return result.error;
     if (result.state === this.room) return null;
     this.room = result.state;
+    if (await this.maybeAdvanceEarly(now, { extend: false })) return null;
     if (!castBefore) {
       await this.persistAndBroadcast();
       return null;
@@ -1009,7 +1013,7 @@ export class Room extends DurableObject<Env> {
     return null;
   }
 
-  // 마지막 3인 동시 지목(결정 0066-5): 메시지는 기존 point 를 단계별로 분기한다. 마감을 건드리지 않는다(8초를 다 채운다, O-12) — reschedule 이 필요 없다.
+  // 마지막 3인 동시 지목(결정 0066-5): 메시지는 기존 point 를 단계별로 분기한다.
   // 방송 규율(applyRunoffVote 와 같다): 그 사람의 첫 표는 day.showdown.voted(던진 좌석 목록)가 모두에게 바뀌므로 전원이 각자 view 를 받는다.
   // 이미 던진 사람이 값을 바꾸면 공개 값은 그대로이고 바뀌는 것은 본인 값(me.ballot)뿐이다 — 전원에게 보내면 '누군가 마음을 바꿨다' 는 타이밍이 샌다.
   private async applyShowdownPoint(playerId: string, target: number, now: number): Promise<WsErrorCode | null> {
@@ -1019,6 +1023,7 @@ export class Room extends DurableObject<Env> {
     if (!result.ok) return result.error;
     if (result.state === this.room) return null;
     this.room = result.state;
+    if (await this.maybeAdvanceEarly(now, { extend: false })) return null;
     if (!castBefore) {
       await this.persistAndBroadcast();
       return null;
@@ -1122,36 +1127,29 @@ export class Room extends DurableObject<Env> {
     return null;
   }
 
-  // 토론 끝내기(8페이즈, DAY-03): 신원은 소켓 첨부의 playerId 뿐이다(T-08-04).
-  private async handleEndDiscussion(ws: WebSocket, on: boolean): Promise<void> {
+  private async handlePhaseSkip(ws: WebSocket, opensAt: number | undefined, on: boolean): Promise<void> {
     const att = this.attachmentOf(ws);
-    if (!att || !this.room) {
+    const before = this.room;
+    if (!att || !before || before.players.find((player) => player.id === att.playerId)?.connId !== att.connId) {
       this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
       return;
     }
-    const error = await this.applyEndDiscussion(att.playerId, on, Date.now());
-    if (error !== null) this.sendRejection(ws, att.playerId, error);
-  }
-
-  // 개수(day.endCount)는 모두에게 공개되는 실시간 정보라 바뀔 때마다 모든 소켓이 각자 view 를 받는다(누른 본인 값은 view 허용 목록이 me.endDiscussion 으로만 싣는다). 같은 값이면 같은 객체라 저장·전송이 없다.
-  // 과반(endReached)에 닿는 순간 서버가 마감을 지금으로 당겨 tick 으로 정상 마감과 같은 경로를 탄다(handleTestSkip 과 같다) — 새 마감은 now + 다음 단계 길이이고 알람이 따라 옮겨진다.
-  // 유령·단계 틀림은 규칙 함수가 BAD_MESSAGE·WRONG_PHASE 로 거절한다.
-  private async applyEndDiscussion(playerId: string, on: boolean, now: number): Promise<WsErrorCode | null> {
-    if (!this.room) return "BAD_MESSAGE";
-    const majorityAt = discussionMajorityAt(this.room);
-    const result = toggleEnd(this.room, playerId, on);
-    if (!result.ok) return result.error;
-    if (result.state === this.room) return null;
-    if (endReached(result.state, now)) {
-      const prev = this.room;
+    const now = Date.now();
+    const result = opensAt === undefined ? { ok: false, error: "WRONG_PHASE" } as const
+      : votePhaseSkip(before, att.playerId, opensAt, on, now);
+    if (!result.ok) {
+      this.sendRejection(ws, att.playerId, result.error);
+      return;
+    }
+    if (result.state === before) return;
+    // 전원 동의는 자연 마감과 같은 판정 경로를 탄다. 순차 지목에서는 현재 미확정 차례만 기권 처리된다.
+    if (result.unanimous) {
       this.room = tick({ ...result.state, phaseEndsAt: now }, now, cryptoRandInt);
-      await this.afterTransition(prev, now);
-      return null;
+      await this.afterTransition(before, now);
+      return;
     }
     this.room = result.state;
     await this.persistAndBroadcast();
-    if (majorityAt !== discussionMajorityAt(result.state)) await this.reschedule();
-    return null;
   }
 
   // 서버 봇 행동 실행(결정 0024): 때가 된 행동을 꺼내 남은 계획을 먼저 저장하고, 봇 id 로 같은 apply* 를 부른다.
@@ -1188,7 +1186,7 @@ export class Room extends DurableObject<Env> {
       }
       // 8페이즈(결정 0060-13): 토론 끝내기·지목·찬반도 사람과 같은 본체를 지난다(특권 없음, 결정 0024-6). 거부는 알릴 소켓이 없어 버린다.
       case "endDiscussion":
-        await this.applyEndDiscussion(step.botId, true, Date.now());
+        // 이전에 저장된 봇 계획만 처리된다. 건너뛰기 집계에는 봇이 참여하지 않는다.
         return;
       // 9페이즈 보완(09-24): 채팅 줄 직전 입력 중 켜짐. 사람의 typing 메시지와 같은 relayTyping 본체를 지난다(꺼짐은 보내지 않는다 — 줄이 오면 클라이언트가 지운다). 유언·쪽지 행동에는 붙이지 않는다(WILL-01).
       case "typing":
@@ -1368,9 +1366,7 @@ export class Room extends DurableObject<Env> {
       return;
     }
     // 난수는 여기서만 넣는다 — 아침 판정(03-03)의 동률·문구 추첨
-    const majorityAt = discussionMajorityAt(room);
-    const closing = majorityAt <= now ? { ...room, phaseEndsAt: majorityAt } : room;
-    const next = tick(closing, now, cryptoRandInt);
+    const next = tick(room, now, cryptoRandInt);
     // 방장 이양(D-17)은 단계 전환과 무관하게 같은 호출에서 맞춘다(멱등). 어떤 진입점이든 advance 를 지난다.
     // 대기실 정리(D-18)는 이양 뒤에 적용한다 — 옛 방장도 같은 규칙을 받는다. 게임 중·결과 단계는 pruneLobby 가 건드리지 않는다.
     const hosted = resolveHost(next, now);

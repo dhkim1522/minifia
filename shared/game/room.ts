@@ -172,6 +172,8 @@ export interface RoomState {
   phaseEndsAt: number | null;
   /** 화면 안내가 끝나고 해당 단계의 입력과 시간이 시작되는 서버 시각. */
   phaseStartsAt?: number;
+  /** 현재 단계나 차례의 건너뛰기에 동의한 참가자의 내부 ID. 차례 또는 단계가 바뀌면 비운다. */
+  phaseSkipVotes?: string[];
   /** 일차(1부터). dayAnnounce 진입 때 tick 의 진입 훅이 올린다. 없으면 아직 낮이 시작되지 않았다. 뷰에는 DayView.n 으로 실린다. */
   day?: number;
   /** 판 번호(1부터, 결정 D-26). 다시 하기(11-08)가 올린다. 없으면 1 — 옛 저장 방은 읽는 쪽 기본값(roundOf)으로 읽는다. 단계 키 '판:일차:단계'의 앞 부분이고 view.round 로 실린다. */
@@ -479,7 +481,7 @@ export function beginGame(
   // 의심 포스트잇(notes)도 같은 구조 분해로 뺀다 — 새 판에 어제 판의 종이가 따라오지 않게(벨트, D-08).
   const {
     keyword: _prevKeyword, answerSubmits: _prevSubmits, keywordAnswers: _prevAnswers,
-    keywordPresentationIndex: _prevPresentation, notes: _prevNotes, barChairs: _prevChairs, ...rest
+    keywordPresentationIndex: _prevPresentation, notes: _prevNotes, barChairs: _prevChairs, phaseSkipVotes: _prevSkip, ...rest
   } = state;
   const keyword = pickKeyword !== undefined ? pickKeyword(randInt) : undefined;
   // 옷장 조작이 없는 실험방은 좌석별 외형과 기본 코트로 인물을 구분한다.

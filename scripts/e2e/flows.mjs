@@ -1377,7 +1377,6 @@ const recMany = (rec, scenario, lines, suffix = "") => {
   for (const l of lines) rec(scenario, l.id, `${l.label}${suffix}`, l.ok, l.detail);
 };
 const aliveOf = (view) => view.players.filter((p) => p.alive !== false).map((p) => p.seat);
-const majorityOf = (n) => Math.floor(n / 2) + 1;
 
 /** 게임 화면이 pred 를 만족할 때까지 읽는다. 시간 안에 안 오면 SetupError(새 방으로 다시 돈다). */
 async function untilGame(page, pred, ms = 6000, label = "게임 화면") {
@@ -1678,17 +1677,20 @@ async function dayFlow(ctx) {
     const { host, hp, ht, hostSeat, guests } = game;
     const humans = [{ page: hp, tracker: ht, handle: host, who: "방장" }, ...guests.map((x, i) => ({ page: x.page, tracker: x.tracker, handle: x, who: `손님${i + 1}` }))];
     const pages = humans.map((x) => x.page);
-    const N = humans.length; // 산 사람 4명: 과반 3, 지목 버튼 3, 찬반은 전원 투표자
+    const N = humans.length;
     await allAt(pages, "discussion");
     await Promise.all(pages.map((p) => settle(p)));
 
-    // 낮 토론: 채팅 패널과 과반 집계를 보고 착석 뒤에는 바닥 탭으로 움직이지 않는지 확인한다.
+    // 낮 토론: 채팅 패널과 전원 동의 집계를 보고 착석 뒤에는 바닥 탭으로 움직이지 않는지 확인한다.
     {
       const sc = `${id}/discussion`;
+      await Promise.all(pages.map((page) => page.locator("[data-end-discussion]").waitFor({ timeout: 6000 })));
       for (const x of humans) {
         const g = await readGame(x.page);
         panelRow(rec, sc, "DY1", g, h, x.who);
-        rec(sc, "DY2", `[토론 끝내기]가 있고 숫자 최대가 과반(${majorityOf(N)})이다 (${x.who})`, !!g.end && g.end.total === majorityOf(N) && g.end.pressed === false, `end ${JSON.stringify(g.end)}`);
+        const skip = g.phaseSkip;
+        const positioned = skip?.inHeader && skip.rect.top >= g.header.top && skip.rect.bottom <= g.header.bottom && skip.rect.left >= 0 && skip.rect.right <= g.vw;
+        rec(sc, "DY2", `상단 스킵에 참가자 전원의 동의 수 0 / ${N}이 표시된다 (${x.who})`, positioned && g.end?.total === N && g.end?.on === 0 && !g.end.pressed, `스킵 ${JSON.stringify(g.end)} · 위치 ${JSON.stringify(skip?.rect)}`);
         rec(sc, "DY2b", `토론에는 지목 버튼이 없다 (${x.who})`, g.picks.length === 0, `지목 버튼 ${g.picks.length}개`);
       }
       const g0 = await readGame(hp);
@@ -1701,34 +1703,42 @@ async function dayFlow(ctx) {
         target ? "" : "탭할 바닥을 찾지 못함");
     }
 
-    // [토론 끝내기]: 두 명이 눌러도 토론이 이어지고, 세 번째(과반)에서 찬반으로 넘어간다(22페이즈 D-10)
+    // 일부가 동의하거나 취소해도 토론이 이어지고 마지막 참가자까지 동의하면 찬반으로 넘어간다.
     {
       const sc = `${id}/discussion`;
-      for (let i = 0; i < majorityOf(N) - 1; i++) {
+      await pressEndDiscussion(hp, true);
+      await untilGame(guests[0].page, (g) => g.phase === "discussion" && g.end?.on === 1, 4000, "스킵 첫 동의 집계");
+      await pressEndDiscussion(hp, false);
+      const canceled = await attempt(async () => {
+        await untilGame(guests[0].page, (g) => g.phase === "discussion" && g.end?.on === 0, 4000, "스킵 동의 취소 집계");
+      });
+      rec(sc, "DY3b", "동의를 다시 누르면 다른 참가자 화면에서도 집계가 줄어든다", canceled.ok, canceled.detail);
+      for (let i = 0; i < N - 1; i++) {
         const r = await attempt(async () => {
           await pressEndDiscussion(humans[i].page, true);
         });
-        rec(sc, "DY3", `[토론 끝내기] 누르면 눌림 표시 (${humans[i].who})`, r.ok, r.detail);
+        rec(sc, "DY3", `스킵에 동의하면 눌림 표시가 보인다 (${humans[i].who})`, r.ok, r.detail);
       }
       const seen = await attempt(async () => {
-        const g = await untilGame(humans[N - 1].page, (x) => (x.end?.on ?? 0) >= majorityOf(N) - 1, 4000, "끝내기 숫자");
-        return g.phase === "discussion" ? true : { ok: false, detail: `과반 전인데 ${g.phase} 로 넘어감` };
+        const g = await untilGame(humans[N - 1].page, (x) => x.end?.on === N - 1, 4000, "전원 동의 전 집계");
+        return g.phase === "discussion" && !g.end.pressed;
       });
-      rec(sc, "DY4", "과반 전에는 토론이 이어지고 점이 눌린 수만큼 켜진다", seen.ok, seen.detail);
+      rec(sc, "DY4", `스킵 ${N - 1} / ${N}에서 토론이 이어진다`, seen.ok, seen.detail);
       const last = await attempt(async () => {
         await pressEndDiscussion(humans[N - 1].page, true);
       });
-      rec(sc, "DY3", `[토론 끝내기] 누르면 눌림 표시 (${humans[N - 1].who})`, last.ok, last.detail);
+      rec(sc, "DY3", `스킵에 동의하면 눌림 표시가 보인다 (${humans[N - 1].who})`, last.ok, last.detail);
       const moved = await attempt(async () => {
-        await ht.waitFor((v) => v.phase === "verdict", 5000, "과반 → 찬반");
+        await ht.waitFor((v) => v.phase === "verdict", 5000, "전원 동의 → 찬반");
       });
-      rec(sc, "DY5", `과반(${majorityOf(N)}명)이 누르면 찬반으로 넘어간다`, moved.ok, moved.detail);
+      rec(sc, "DY5", `${N}명 모두 동의하면 찬반으로 넘어간다`, moved.ok, moved.detail);
     }
 
     // 찬반(22페이즈 D-11, P22-2): 후보 없이 산 사람 전원이 "오늘 처형할까?" 에 답한다. 투표자는 채팅 위 찬반을 고르고, 모두 같은 집계를 본다.
     {
       const sc = `${id}/verdict`;
       await allAt(pages, "verdict");
+      await Promise.all(pages.map((page) => page.locator('[data-verdict="yes"]').waitFor({ timeout: 5000 })));
       await Promise.all(pages.map((p) => settle(p)));
       for (const x of humans) {
         const g = await readGame(x.page);
@@ -1763,19 +1773,24 @@ async function dayFlow(ctx) {
       rec(sc, "VD4", "찬반 줄에 후보 이름·기록 표식이 없다(숫자만)", noId.ok, noId.detail);
       await gameGH(ctx, id, "verdict", host);
       await gameGH(ctx, id, "verdict-guest", guests[0]);
+      const next = await attempt(async () => {
+        await chooseVerdict(hp, true);
+        await ht.waitFor((v) => v.phase === "nomination", 6500, "찬반 전원 선택 → 지목");
+      });
+      rec(sc, "VD5", "전원이 찬반을 고르면 지목으로 자동 진행한다", next.ok, next.detail);
     }
 
     // 지목(22페이즈 D-12): 순차 차례 — 방장은 손님1 을, 손님 셋은 방장을 자기 차례에 가리킨다. 득표 배지·채팅 줄·기록 카드는 없고 끝나면 points 가 비워진다
     {
       const sc = `${id}/nomination`;
-      await skipTo(hp, ht, "nomination");
+      if (ht.last().phase === "verdict") await skipTo(hp, ht, "nomination");
       await allAt(pages, "nomination");
       await ht.waitFor((v) => v.phase === "nomination" && v.day?.turn !== undefined, 6000, "차례 시작");
       await Promise.all(pages.map((p) => settle(p)));
       const g0 = await readGame(hp);
       rec(sc, "NM7", "헤더 제목이 '지목' 이다", g0.title === "지목", `제목 '${g0.title}'`);
       panelRow(rec, sc, "NM2", g0, h, "방장");
-      rec(sc, "NM2b", "지목에는 토론 끝내기·찬반 단추가 없다", g0.end === null && g0.verdictBtns.length === 0, `end ${JSON.stringify(g0.end)} · 찬반 단추 ${g0.verdictBtns.length}`);
+      rec(sc, "NM2b", "지목 화면에 토론·찬반 조작이 남지 않는다", g0.end === null && g0.verdictBtns.length === 0, `토론 스킵 ${JSON.stringify(g0.end)} · 찬반 단추 ${g0.verdictBtns.length}`);
       // 차례 알약이 한 명씩 돈다: 방장 페이지가 본 차례 번호(1..N)를 모은다
       const noRecord = await watchTurns(hp);
       const picked = await Promise.all(
@@ -1808,6 +1823,7 @@ async function dayFlow(ctx) {
     {
       const sc = `${id}/defense`;
       await allAt(pages, "defense");
+      await hp.locator('[data-will-sheet="will"]').waitFor({ timeout: 5000 });
       await Promise.all(pages.map((p) => settle(p)));
       const gh = await readGame(hp);
       rec(sc, "DF1", "처형자(방장)에게 유언 시트가 하나 자동으로 열려 있다", gh.willSheets === 1, `시트 ${gh.willSheets}개`);
@@ -2279,14 +2295,13 @@ async function basicOffFlow(ctx) {
     const { hp, ht } = game;
     let endBtn = null;
     let steps = 0;
-    // 한 칸씩: 로비 직후(assigning)부터 ended 까지. 첫 토론에서 [토론 끝내기] 개수를 센다(OFF5)
+    // 한 칸씩: 로비 직후(assigning)부터 ended 까지. 첫 토론의 열린 스킵 개수를 센다(OFF5).
     while (ht.last().phase !== "ended" && steps < BASIC_OFF_MAX_STEPS) {
       const phase = await step(`${ht.last().phase} 다음 단계`, () => skipOnce(hp, ht));
       steps += 1;
       if (phase === "discussion" && endBtn === null) {
         await settle(hp);
-        // 배포본은 단계 프레임과 화면 그리기 사이가 느려 한 번에 세면 0개일 수 있다 — 버튼이 붙을 때까지 3초 기다린 뒤 센다(개수 기대는 그대로 정확히 1)
-        await hp.locator("[data-end-discussion]").first().waitFor({ state: "attached", timeout: 3000 }).catch(() => {});
+        await hp.locator("[data-end-discussion]").first().waitFor({ state: "attached", timeout: 6000 }).catch(() => {});
         endBtn = await hp.locator("[data-end-discussion]").count();
       }
       await sleep(250); // 감시(100ms)가 이 단계 화면을 한 번은 보게
@@ -2313,8 +2328,7 @@ async function basicOffFlow(ctx) {
     // OFF4 결과 화면: 탭이 없다(전체 대화만, 18.1 P181-7) — 귓속말 탭도 당연히 없다
     const tabs = await hp.evaluate(() => ({ all: document.querySelectorAll("[data-result-tab]").length, whisper: document.querySelectorAll('[data-result-tab="whisper"]').length }));
     rec(`${id}/result`, "OFF4", "결과 화면에 탭이 없다(전체 대화만, 18.1 P181-7)", shown.ok && tabs.all === 0 && tabs.whisper === 0, shown.ok ? `탭 ${tabs.all}개, 귓속말 탭 ${tabs.whisper}개` : shown.detail);
-    // OFF5 낮 토론에는 [토론 끝내기] 가 하나 있다(기본판 장치)
-    rec(`${id}/discussion`, "OFF5", "토론 단계에 [토론 끝내기] 가 하나 있다", endBtn === 1, `[data-end-discussion] ${endBtn}개`);
+    rec(`${id}/discussion`, "OFF5", "토론에서 시간이 지나면 스킵 버튼이 하나 나타난다", endBtn === 1, `스킵 ${endBtn}개`);
   } finally {
     await closeGame(game);
   }

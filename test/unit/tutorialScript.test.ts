@@ -128,7 +128,7 @@ describe("알약 문구(P24-25)", () => {
       "제시어 대신 단서를 써요",
       "의심 가는 답에 표시해요",
       "궁금한 점을 물어봐요",
-      "절반 넘게 누르면 끝나요",
+      "모두 스킵을 누르면 넘어가요",
       "찬성이 더 많으면 지목해요",
       "의심 가는 사람을 가리켜요",
       "처형되는 사람은 유언을 남겨요",
@@ -137,9 +137,6 @@ describe("알약 문구(P24-25)", () => {
       "의심 가는 사람을 눌러요",
       "아침에 의심 표시가 풀려요",
       "역할을 읽고 준비를 눌러요",
-      "모두 요청하면 투표해요",
-      "45초 뒤엔 절반만 넘으면 돼요",
-      "토론 스킵을 눌러요",
       "한 명을 뽑거나 건너뛰어요",
       "시민은 아침을 준비해요",
     ]);
@@ -296,10 +293,10 @@ describe("12초 대행 = 눌렀을 때와 같은 결과(P24-27)", () => {
     expect(reactTo("verdict", "a", { t: "verdict", agree: false })).toBeNull();
   });
 
-  it("discussion: 과반(6명 중 4)이 눌러 끝난다", () => {
+  it("discussion: 참가자 6명이 모두 눌러 끝난다", () => {
     const auto = autoAct("discussion")!;
     expect(auto.msg).toEqual({ t: "endDiscussion", on: true });
-    expect(tutorialView("discussion", "b", T0, auto.steps).day?.endCount).toBe(4);
+    expect(tutorialView("discussion", "b", T0, auto.steps).day?.endCount).toBe(6);
   });
 
   it("keyword·night: 보내기·얼굴 누름과 같은 메시지", () => {
@@ -399,8 +396,8 @@ describe("첫날 실험방 연습", () => {
     ]);
     const postit = tutorialView("postit", "b", T0, 0, playtest);
     expect(postit).toMatchObject({ map: "bar", playtest: true, day: { n: 1, suspects: [{ from: 5, to: 4 }] } });
-    const discussion = tutorialView("discussion", "c", T0, 6, playtest);
-    expect(discussion.day).toMatchObject({ endCount: 6, voteOpensAt: T0 + 45_000, voteReadyTotal: 6, voteReadyRequired: 4 });
+    const discussion = tutorialView("discussion", "b", T0, 6, playtest);
+    expect(discussion.day?.endCount).toBe(6);
     expect(tutorialView("answerReveal", "a", T0, 0, playtest).day?.keyword?.answer).toBe(TUTORIAL_CAST.word);
   });
 

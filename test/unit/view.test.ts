@@ -215,7 +215,7 @@ function roleValueLeaks(view: RoomView, spectator = false): string[] {
 
 /** view 최상위에 올 수 있는 키(허용 목록). */
 const TOP_KEYS: ReadonlySet<string> = new Set([
-  "code", "phase", "round", "phaseStartsAt", "phaseEndsAt", "phaseDurationMs", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day", "spectate", "result", "mapChoice", "map",
+  "code", "phase", "round", "phaseStartsAt", "phaseEndsAt", "phaseDurationMs", "phaseSkip", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day", "spectate", "result", "mapChoice", "map",
 ]);
 
 /** 그 밤에 살아 있는 각 역할이 지금 고른 대상 seat(중복 없음·오름차순). */
@@ -308,6 +308,7 @@ const SERVER_ONLY_KEYS: readonly string[] = [
   "keywordAnswers",
   "keywordPresentationIndex",
   "answerDraft", // 쓰던 글 — 본인 값은 me.answer 로만
+  "phaseSkipVotes", // 동의한 참가자의 내부 ID는 서버 전용이다
   "earlyFrom", // 조기 진행이 마감을 줄이기 전의 원래 마감(23-08, D-11) — 서버 전용, 찬반 번복 연장의 상한. 화면은 줄어든 phaseEndsAt 만 본다
   "startedAt", // 판 시작 시각(23-10, D-16) — D1 판 길이 계산용 서버 전용
   "gameId", // D1 games 의 판 id(23-10, D-16) — 서버 전용, 방 코드와 무관한 uuid
@@ -318,7 +319,7 @@ const DAY_VIEW_PHASES: ReadonlySet<PhaseId> = new Set([
   "keyword", "dayAnnounce", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "answerReveal", "night", "morning", "ended",
 ]);
 const ME_KEYS: ReadonlySet<string> = new Set([
-  "seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "chat", "endDiscussion", "verdictVote",
+  "seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "chat", "endDiscussion", "verdictVote", "phaseSkip", "roleReady",
   "whisperUsed", // 오늘 귓속말을 이미 보냈다(결정 0066-2) — 토론 단계의 산 본인에게만, 값은 true 뿐
   "ballot", // 동점 결선(결정 0066-4)·마지막 3인 동시 지목(결정 0066-5)에서 본인이 고른 좌석 — 투표 창·결과/지목 창·공개의 산 본인에게만, 값은 좌석 하나
   "nightTally", "nightSure", // 밤 산 마피아 본인에게만(결정 0061-7) — 아래 "마피아 집계" describe 가 조건을 단언한다
@@ -1655,14 +1656,13 @@ describe("buildView 낮 처형 필드 (08-07, DAY-03~06)", () => {
 
   it("discussion: day.endCount 는 누른 산 사람 수이고 me.endDiscussion 은 누른 산 본인에게만, 키는 다른 경로에 없다", () => {
     let s = base();
-    s = withPlayer(s, 0, { endVote: true });
-    s = withPlayer(s, 1, { endVote: true });
-    s = withPlayer(s, 4, { endVote: true, alive: false }); // 죽은 사람의 남은 값은 세지 않는다
+    s = withPlayer(s, 4, { alive: false }); // 죽은 사람의 남은 값은 세지 않는다
+    s = { ...s, phaseSkipVotes: s.players.filter((p) => [0, 1, 4].includes(p.seat)).map((p) => p.id) };
     const views = s.players.map((p) => ({ seat: p.seat, view: buildView(s, p.id, START_AT) }));
     expect(views.map((v) => String(v.view.day?.endCount)).join(" ")).toBe("2 2 2 2 2");
     expect(views.map((v) => String(v.view.me.endDiscussion)).join(" ")).toBe("true true undefined undefined undefined");
     expect(views.map((v) => Object.hasOwn(v.view.me, "endDiscussion")).join(" ")).toBe("true true false false false");
-    const stray = views.flatMap((v) => keyPaths(v.view).filter((path) => ["endDiscussion", "endVote"].includes(lastKey(path)) && path !== "me.endDiscussion"));
+    const stray = views.flatMap((v) => keyPaths(v.view).filter((path) => ["endDiscussion", "endVote", "phaseSkipVotes"].includes(lastKey(path)) && path !== "me.endDiscussion"));
     expect(stray.join(",")).toBe("");
   });
 

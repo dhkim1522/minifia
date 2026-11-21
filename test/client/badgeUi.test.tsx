@@ -65,6 +65,7 @@ function makeView(o: Opt = {}): RoomView {
     minPlayers: 4,
     maxPlayers: 8,
     players,
+    phaseSkip: (o.phase ?? "discussion") === "discussion" ? { opensAt: NOW, count: 0, total: players.filter((p) => p.alive !== false).length, canVote: !meDead } : undefined,
     me: { seat: mySeat, isHost: mySeat === 0, chat: meDead ? "ghost" : "all" },
     day: { n: 1, roles: [] },
   } as RoomView;
@@ -144,7 +145,7 @@ describe("기본판: 낮 토론에 떠 있는 버튼·시트가 없다 (U-8, UI#
       expect(container.textContent).not.toContain("준비 중");
     });
 
-    it("discussion: [토론 끝내기] 하나는 있다(UI#13 populated) — 떠 있는 줄 없이", () => {
+    it("discussion: 머리의 스킵 버튼 하나가 있고 떠 있는 줄은 없다", () => {
       const { container } = mount(makeView({ phase: "discussion" }));
       expect(container.querySelectorAll("[data-end-discussion]")).toHaveLength(1);
       expect(container.querySelectorAll("[data-float]")).toHaveLength(0);

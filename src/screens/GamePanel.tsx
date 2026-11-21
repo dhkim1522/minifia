@@ -1,8 +1,7 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef } from "react";
 import type { ReactNode, RefObject } from "react";
 import { isAlive } from "../../shared/game/alive";
 import { MAP_PHASES } from "../../shared/game/movement";
-import { majorityOf } from "../../shared/game/nomination";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { Button } from "../components/Button";
 import { PhaseEvent } from "../components/PhaseEvent";
@@ -21,7 +20,6 @@ import "../styles/event-choices.css";
 export interface GamePanelProps {
   view: RoomView;
   introActive?: boolean;
-  offset?: number;
   /** 보냈으면 true, 소켓이 닫혀 못 보냈으면 false. 반환값이 없는 함수(void)는 보낸 것으로 본다 */
   send: (msg: ClientMessage) => boolean | void;
   /** 연결이 열려 있어 서버로 보낼 수 있는가 */
@@ -65,24 +63,12 @@ export interface GamePanelProps {
 
 /**
  * 단계별 선택은 중앙에 보여 주고 채팅과 상시 도구는 화면 아래에 둔다.
- * 눌림은 서버 view(me.endDiscussion·me.verdictVote)가 기준이고, 내가 누른 즉시 바뀌는 것은 내 눌림 표시 하나뿐이다. 숫자는 서버가 센 값만 그린다(누가 눌렀는지·무엇을 골랐는지는 서버가 보내지 않는다).
+ * 눌림은 서버 view 가 기준이고, 내가 누른 즉시 바뀌는 것은 내 눌림 표시 하나뿐이다. 숫자는 서버 집계를 표시한다.
  */
-export function GamePanel({ view, introActive = false, offset = 0, send, canSend, binding, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef, suspect, notice, tableControls, answerPresentation, pauseNightEvent = false }: GamePanelProps) {
+export function GamePanel({ view, introActive = false, send, canSend, binding, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef, suspect, notice, tableControls, answerPresentation, pauseNightEvent = false }: GamePanelProps) {
   const playtest = view.playtest === true;
   const presenting = answerPresentation !== undefined;
-  const voteOpensAt = playtest && view.phase === "discussion" ? view.day?.voteOpensAt : undefined;
-  const [openedVoteAt, setOpenedVoteAt] = useState<number>();
-  useEffect(() => {
-    if (voteOpensAt === undefined) return;
-    const delay = voteOpensAt - Date.now() - offset;
-    if (delay <= 0) return;
-    const id = setTimeout(() => setOpenedVoteAt(voteOpensAt), delay);
-    return () => clearTimeout(id);
-  }, [voteOpensAt, offset]);
-  const serverPressed = view.me.endDiscussion === true;
-  const [pressed, choose] = useViewChoice<boolean>(view, serverPressed);
   // 거절이 오면 서버 값으로 되돌린다. 처음 그릴 때(거절 0)는 아무것도 하지 않는다.
-  // 찬반도 같다: 내 선택은 누른 즉시 보이되 서버 view(me.verdictVote)가 오면 서버 값이 이긴다(DAY-06).
   const serverVerdict: Verdict | null = view.me.verdictVote === undefined ? null : view.me.verdictVote ? "yes" : "no";
   const [verdict, chooseVerdict] = useViewChoice<Verdict | null>(view, serverVerdict);
   // 밤 경찰·의사의 선택(NIGHT-09): 내가 누른 얼굴은 즉시 눌린 모양이 되고 서버 view(me.pick)가 오면 서버 값이 이긴다.
@@ -91,7 +77,6 @@ export function GamePanel({ view, introActive = false, offset = 0, send, canSend
   useEffect(() => {
     if (seenRejects.current === rejected) return;
     seenRejects.current = rejected;
-    choose(serverPressed);
     chooseVerdict(serverVerdict);
     chooseNightPick(view.me.pick);
     // choose 는 렌더마다 새 함수지만 setState 만 부른다
@@ -100,10 +85,6 @@ export function GamePanel({ view, introActive = false, offset = 0, send, canSend
 
   const me = view.players.find((p) => p.seat === view.me.seat);
   const meAlive = me === undefined || isAlive(me);
-  const voteUnlocked = voteOpensAt === undefined || openedVoteAt === voteOpensAt || Date.now() + offset >= voteOpensAt;
-  const aliveCount = view.players.filter(isAlive).length;
-  const total = voteUnlocked ? view.day?.voteReadyRequired ?? majorityOf(aliveCount) : view.day?.voteReadyTotal ?? aliveCount;
-  const count = view.day?.endCount ?? 0;
 
   // 찬반 줄(22-10, D-11·D-26): 처형 후보가 없어 산 사람 전원이 던진다. 유령은 같은 숫자 줄만 본다(보기 패널).
   // 숫자는 서버가 모두에게 같게 보낸 집계(day.verdictCount)뿐이다 — 누가 던졌는지는 어디에도 없다.
@@ -169,12 +150,6 @@ export function GamePanel({ view, introActive = false, offset = 0, send, canSend
   const showRoleTool = !presenting && (showNoteRow || showWillRow || penOn);
   const panelEmpty = !presenting && !showChat && !showRoleTool && !notice && !tableControls;
 
-  const pressEnd = (): void => {
-    if (!canSend) return;
-    const on = pressed !== true;
-    if (send({ t: "endDiscussion", on }) === false) return;
-    choose(on);
-  };
   const sendChat = (text: string): void => {
     binding.onSend?.(text);
     onCallUsed?.();
@@ -253,7 +228,6 @@ export function GamePanel({ view, introActive = false, offset = 0, send, canSend
             callInput={call?.chat}
             onInputFocus={onCallUsed}
             suspect={discussion ? suspect : undefined}
-            skip={discussion && meAlive ? { enabled: canSend, pressed: pressed === true, count, total, request: pressEnd } : undefined}
             will={penOn ? { open: willOpen, saved: willSaved, call: call?.will === true, request: openWillFrom } : undefined}
           />
         ) : showRoleTool ? (

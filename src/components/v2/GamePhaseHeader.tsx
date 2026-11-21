@@ -1,10 +1,13 @@
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 import type { RoomView } from "../../../shared/protocol";
 import { hostTimeOf } from "../../game/hostLine";
 import { keywordPresentationOf } from "../../game/keywordView";
 import { timerTone, useCountdown } from "../../net/countdown";
 import type { TimerTone } from "../../net/countdown";
 import { useEarlyCalm } from "../../net/earlyCalm";
+import { PhaseSkip } from "./PhaseSkip";
+import type { PhaseSkipControls } from "./PhaseSkip";
+import { useReducedMotion } from "../../net/useReducedMotion";
 import "../../styles/phase-gauge.css";
 
 interface GamePhaseHeaderProps {
@@ -16,9 +19,10 @@ interface GamePhaseHeaderProps {
   turnGauge?: ReactNode;
   tod?: { id: string; word: string | null };
   epoch?: number;
+  skipControls?: PhaseSkipControls;
 }
 
-export function GamePhaseHeader({ title, view, offset, extra, timeless, turnGauge, tod, epoch }: GamePhaseHeaderProps) {
+export function GamePhaseHeader({ title, view, offset, extra, timeless, turnGauge, tod, epoch, skipControls }: GamePhaseHeaderProps) {
   const { phaseEndsAt, phaseDurationMs } = view;
   const early = useEarlyCalm(view, epoch);
   const presentation = keywordPresentationOf(view);
@@ -45,20 +49,58 @@ export function GamePhaseHeader({ title, view, offset, extra, timeless, turnGaug
           calm={early}
         />
       ) : null)}
-      <div className="mf-game-phase-header__actions">{extra}</div>
+      <div className="mf-game-phase-header__actions">
+        {skipControls ? <PhaseSkip view={view} offset={offset} {...skipControls} /> : null}
+        {extra}
+      </div>
     </div>
   );
 }
 
 function PhaseTimeGauge({ endsAt, duration, offset, calm }: { endsAt: number; duration: number; offset: number; calm: boolean }) {
   const { seconds, remainingMs, ratio } = useCountdown(endsAt, duration, offset);
-  return <PhaseGauge seconds={seconds} ratio={ratio} tone={calm ? "calm" : timerTone(remainingMs, duration)} />;
+  return <PhaseGauge seconds={seconds} ratio={ratio} tone={calm ? "calm" : timerTone(remainingMs, duration)} clock={{ endsAt, duration, offset }} />;
 }
 
-export function PhaseGauge({ seconds, ratio, tone }: { seconds: number; ratio: number; tone: TimerTone }) {
+interface GaugeClock {
+  endsAt: number;
+  duration: number;
+  offset: number;
+}
+
+export function PhaseGauge({ seconds, ratio, tone, clock }: { seconds: number; ratio: number; tone: TimerTone; clock?: GaugeClock }) {
+  const fill = useRef<HTMLSpanElement>(null);
+  const reduced = useReducedMotion();
+  const { endsAt, duration, offset } = clock ?? {};
+
+  useLayoutEffect(() => {
+    const bar = fill.current;
+    if (reduced || !bar?.animate || endsAt === undefined || duration === undefined || duration <= 0 || offset === undefined) return;
+    let animation: Animation | undefined;
+    // React updates the label and color. The browser moves the fill on a single timeline.
+    const sync = () => {
+      animation?.cancel();
+      animation = bar.animate([{ transform: "scaleX(1)" }, { transform: "scaleX(0)" }], {
+        duration,
+        delay: endsAt - (Date.now() + offset) - duration,
+        easing: "linear",
+        fill: "both",
+      });
+      // Timing corrections and phase changes cancel the preceding animation.
+      void animation.finished.catch(() => {});
+    };
+    const onVisible = () => { if (!document.hidden) sync(); };
+    sync();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      animation?.cancel();
+    };
+  }, [endsAt, duration, offset, reduced]);
+
   return (
     <span className="mf-phase-gauge" data-phase-gauge="" data-tone={tone} role="timer" aria-label={`남은 시간 ${seconds}초`}>
-      <span className="mf-phase-gauge__fill" aria-hidden="true" style={{ transform: `scaleX(${ratio})` }} />
+      <span ref={fill} className="mf-phase-gauge__fill" aria-hidden="true" style={{ transform: `scaleX(${ratio})` }} />
     </span>
   );
 }

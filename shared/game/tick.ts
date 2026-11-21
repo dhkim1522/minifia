@@ -21,7 +21,7 @@
 // 진입 훅의 세 번째 인자 at 은 진입 시각(= 이전 마감)이다 — 시각을 스스로 읽지 않는 순수 규칙이 "진입 + 30분" 같은 계산을 할 때 쓴다.
 import type { PhaseId } from "../protocol";
 import { emptyGameCloseAt, nextContinuityAt } from "./continuity";
-import { discussionMajorityAt, enterDiscussion, phaseDurationOf } from "./discussion";
+import { enterDiscussion, phaseDurationOf } from "./discussion";
 import { enterEnded, routeAfterExecution, routeAfterMorning } from "./endgame";
 import { enterExecution } from "./execution";
 import { closeKeyword, routeAfterRoleReveal, stepKeywordPresentation } from "./keywordAnswer";
@@ -112,7 +112,7 @@ export function tick(state: RoomState, now: number, randInt: RandInt = NO_RANDOM
       const resolved = onDeadline(current, deadline);
       const turnMs = phaseDurationOf(resolved.state) ?? PHASE_DEFS[current.phase].durationMs;
       if (resolved.stay && turnMs !== null) {
-        const { phaseStartsAt: _intro, ...turn } = resolved.state;
+        const { phaseStartsAt: _intro, phaseSkipVotes: _skip, earlyFrom: _early, ...turn } = resolved.state;
         current = { ...turn, phaseEndsAt: deadline + turnMs };
         continue;
       }
@@ -123,7 +123,7 @@ export function tick(state: RoomState, now: number, randInt: RandInt = NO_RANDOM
     const next = branch ?? nextPhaseOf(closing.phase);
     if (next === null) break;
     const duration = PHASE_DEFS[next].durationMs;
-    const { phaseStartsAt: _intro, ...previousPhase } = closing;
+    const { phaseStartsAt: _intro, phaseSkipVotes: _skip, earlyFrom: _early, ...previousPhase } = closing;
     const entered: RoomState = {
       ...previousPhase,
       phase: next,
@@ -147,5 +147,5 @@ export function tick(state: RoomState, now: number, randInt: RandInt = NO_RANDOM
 /** DO 알람 하나로 단계 마감과 방 만료, 방장 이양·로비 정리 마감(continuity)을 함께 다룬다. */
 export function nextWakeAt(state: RoomState): number {
   // 버려진 게임 방 닫기(결정 0076)도 같은 알람에 합친다.
-  return Math.min(state.phaseEndsAt ?? Number.POSITIVE_INFINITY, discussionMajorityAt(state), state.expiresAt, nextContinuityAt(state), emptyGameCloseAt(state));
+  return Math.min(state.phaseEndsAt ?? Number.POSITIVE_INFINITY, state.expiresAt, nextContinuityAt(state), emptyGameCloseAt(state));
 }

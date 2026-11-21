@@ -229,7 +229,7 @@ export function TutorialScreen({ onExit, playtest = false }: { onExit: () => voi
         <GameMap view={view} store={store} chat={chat} send={send} canSend offset={0} tod={false}
           timeless bottomExtra={60} onLeave={onExit} announce={liveAnnouncements[0] ?? null}
           opening={pregame ? sceneId === "roles" ? (
-            <RoleReveal view={playtest ? timelessView : view} offset={0} myRoleButton={null} onSeenFront={() => setCardSeen(true)} send={send} canSend embedded />
+            <RoleReveal view={playtest ? timelessView : view} offset={0} myRoleButton={null} onSeenFront={() => setCardSeen(true)} send={send} canSend embedded practice />
           ) : (
             <Keyword key={beatId} view={view} offset={0} myRoleButton={null} send={send} canSend timeless embedded />
           ) : undefined}

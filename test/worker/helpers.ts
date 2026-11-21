@@ -185,6 +185,9 @@ export interface StoredRoom {
   expiresAt: number;
   phase: string;
   phaseEndsAt: number | null;
+  phaseSkipVotes?: string[];
+  keywordPresentationIndex?: number;
+  firstBallotOutcome?: unknown;
   day?: number;
   /** 4페이즈 서버 전용 투표 상태: 개인 표는 마감·공개 구간 진입 훅이 키째 지운다(결정 0034). */
   voteLog?: Array<{ n: number; reason?: string; exec: { yes: number; no: number; passed: boolean }; cand?: { candidate?: number } }>;
@@ -529,22 +532,23 @@ export async function until(label: string, ready: () => Promise<boolean>): Promi
 
 /**
  * 한 번의 전이를 사건으로 기다린다(12-03, D-26). 보내기 전에 저장된 단계(before)를 읽고, 모든 소켓의 cursor 를 끝으로 옮긴 뒤 trigger 를 부르고,
- * 소켓마다 "before 와 다른 단계의 state 프레임" 을 받을 때까지 기다린다. 옛 skipOnce 는 '아무 state 프레임' 하나에 풀려서, 앞 전이의 뒤늦은 같은 단계 프레임이
- * 먼저 오면 전이가 끝나기 전에 반환할 수 있었다. 받은 단계(첫 소켓 기준)를 돌려준다. 못 받으면 어느 단계에서 어느 소켓을 기다렸는지 담아 던진다.
+ * 소켓마다 새 단계 또는 차례의 state를 기다린다. 같은 차례의 뒤늦은 상태 프레임은 지나친다.
+ * 받은 단계(첫 소켓 기준)를 돌려준다. 못 받으면 어느 단계에서 어느 소켓을 기다렸는지 담아 던진다.
  */
 export async function awaitTransition(
   socks: TestSocket[],
   trigger: () => void,
-  readPhase: () => Promise<string>,
+  readStep: () => Promise<string>,
   limitMs = TRANSITION_WAIT_MS,
+  viewStep: (view: RoomView) => string = (view) => view.phase,
 ): Promise<string> {
-  const before = await readPhase();
+  const before = await readStep();
   for (const s of socks) s.cursor = s.frames.length;
   trigger();
   let reached = before;
   for (const [i, s] of socks.entries()) {
     try {
-      const msg = await nextFrame(s, (m) => m.t === "state" && m.view.phase !== before, limitMs);
+      const msg = await nextFrame(s, (m) => m.t === "state" && viewStep(m.view) !== before, limitMs);
       if (i === 0 && msg.t === "state") reached = msg.view.phase;
     } catch {
       throw new Error(`awaitTransition: ${before} 에서 바뀐 단계의 state 를 소켓 ${i} 가 ${limitMs}ms 안에 받지 못했다`);
@@ -559,13 +563,26 @@ export async function awaitTransition(
  */
 export const TRANSITION_WAIT_MS = 10_000;
 
-/** 방장이 testSkip 을 한 번 보내고 모든 소켓이 바뀐 단계의 state 를 받을 때까지(awaitTransition). */
+/** 첫날 답과 투표 결과는 같은 단계 안에 별도 차례가 있다. */
+function phaseStep(phase: string, answerOrder: number | undefined, ballotResult: boolean): string {
+  if (phase === "dayAnnounce" && answerOrder !== undefined) return `${phase}:${answerOrder}`;
+  if (phase === "verdict" && ballotResult) return `${phase}:result`;
+  return phase;
+}
+
+/** 방장이 testSkip 을 한 번 보내고 모든 소켓이 바뀐 단계나 차례의 state를 받을 때까지 기다린다. */
 export async function skipOnce(seated: Seated): Promise<void> {
   const socks = [seated.host, ...seated.guests.map((g) => g.sock)];
   await awaitTransition(
     socks,
     () => send(seated.host, { t: "testSkip" }),
-    async () => (await storedRoom(seated.code)).phase,
+    async () => {
+      const room = await storedRoom(seated.code);
+      const answerOrder = room.keywordPresentationIndex === undefined ? undefined : room.keywordPresentationIndex + 1;
+      return phaseStep(room.phase, answerOrder, room.firstBallotOutcome !== undefined);
+    },
+    TRANSITION_WAIT_MS,
+    (view) => phaseStep(view.phase, view.day?.keyword?.presentation?.order, view.day?.firstBallot?.result !== undefined),
   );
 }
 
@@ -777,6 +794,11 @@ export function verdictAs(sock: TestSocket, agree: boolean): void {
   send(sock, { t: "verdict", agree });
 }
 
+/** 실제 시간을 기다리지 않고 토론의 건너뛰기 입력을 연다. */
+export async function openDiscussionSkip(code: string): Promise<void> {
+  await editRoom(code, (room) => ({ ...room, phaseStartsAt: Date.now() - 3_100 }));
+}
+
 /** 토론 끝내기를 누르거나(on true) 취소한다(on false). */
 export function endAs(sock: TestSocket, on: boolean): void {
   send(sock, { t: "endDiscussion", on });
@@ -825,7 +847,7 @@ export async function observe(g: Game, first: Actor, act: () => void | Promise<v
 }
 
 /** 두 구간을 비교할 때 달라도 되는 휘발 필드. */
-export const VOLATILE = new Set(["serverNow", "phaseEndsAt", "t0", "at", "c", "seq"]);
+export const VOLATILE = new Set(["serverNow", "phaseEndsAt", "opensAt", "t0", "at", "c", "seq"]);
 
 /** 휘발 필드(서버 시각·마감·구간 시작·줄 시각·핑 번호·채널별 줄 번호)를 지운 프레임 열 한 줄. 두 구간은 같은 방의 앞뒤라 줄 번호만 다르다. */
 export function stable(msgs: ServerMessage[]): string {

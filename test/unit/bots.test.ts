@@ -55,7 +55,6 @@ import { MAX_PLAYERS, MAX_TEST_BOTS } from "../../shared/protocol";
 import type { PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
 import { castPoints, startedFrom, stateWithVerdict } from "../helpers/voteState";
-import { toggleEnd } from "../../shared/game/discussion";
 import { castTurnPoint, enterNomination, nominationStepMs, stepNomination } from "../../shared/game/nomination";
 import { RULES } from "../../shared/game/ruleset";
 import { castVerdict } from "../../shared/game/verdict";
@@ -997,7 +996,7 @@ describe("봇 투표·변론 계획: 회귀", () => {
     }
   });
 
-  it("고정 봇 투표가 설정된 판의 discussion·night 계획 스냅샷을 유지한다", () => {
+  it("고정 봇 투표가 설정된 판의 discussion·night 계획 스냅샷", () => {
     const digest = (text: string): number => [...text].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 1_000_000_007, 7);
     const got = (["discussion", "night"] as const).map((phase) => {
       const state = { ...stateAt(1, 5, 8, phase), testBotVote: { exec: "yes" as const } };
@@ -1005,10 +1004,10 @@ describe("봇 투표·변론 계획: 회귀", () => {
       const steps = planBotSteps(state, nowOf(state), seededRandInt(42)).filter((st) => st.act.t !== "will" && st.act.t !== "typing");
       return digest(canon(steps));
     });
-    expect(got.join(",")).toBe("34804349,715181244");
+    expect(got.join(",")).toBe("131523613,715181244");
   });
 
-  it("discussion 계획의 난수 호출 수는 claim 제거 뒤에도 그대로다 (07-08, 리서치 Pitfall 13)", () => {
+  it("discussion 계획은 발언 두 줄의 지연과 문구를 고른다", () => {
     const countCalls = (state: RoomState): number => {
       let calls = 0;
       const inner = seededRandInt(42);
@@ -1019,7 +1018,7 @@ describe("봇 투표·변론 계획: 회귀", () => {
       return calls;
     };
     // discussion = 봇당 randInt(폭) + randInt(문구 수) 를 두 번 + 토론 끝내기 간격 한 번(08-07) — 봇당 5번, 봇 5명이면 25번(07-11: 자유 채팅 문구 하나, 이모티콘·종류 난수 없음).
-    expect(countCalls(stateAt(1, 5, 8, "discussion"))).toBe(25);
+    expect(countCalls(stateAt(1, 5, 8, "discussion"))).toBe(20);
   });
 });
 
@@ -1097,45 +1096,17 @@ describe("봇 계획: 토론 끝내기 (DAY-03)", () => {
     return { state: { ...base, phaseEndsAt: now + 100_000 }, now };
   };
 
-  it("살아 있는 봇마다 endDiscussion 한 번이 now + 30000 이상 now + 60000 미만에 서고 toggleEnd 에 통과한다; 탈락한 봇은 없다", () => {
-    for (let seed = 1; seed <= 20; seed += 1) {
-      const { state: whole, now } = wideDiscussion(seed);
-      const state = markDead(whole, 3);
-      const steps = planBotSteps(state, now, seededRandInt(seed));
-      for (const bot of botsOf(state)) {
-        const ends = steps.filter((s) => s.botId === bot.id && s.act.t === "endDiscussion");
-        expect(`${seed}:${bot.seat}:${ends.length}`).toBe(`${seed}:${bot.seat}:${bot.alive === false ? 0 : 1}`);
-        for (const s of ends) {
-          expect(`${seed}:${s.at >= now + 30_000 && s.at < now + 60_000}`).toBe(`${seed}:true`);
-          const r = toggleEnd(state, s.botId, true);
-          expect(`${seed}:${r.ok ? "ok" : r.error}`).toBe(`${seed}:ok`);
-        }
-      }
-    }
-  });
-
-  // 20-03 조사: 워커 시험이 토론 마감을 60초 뒤로 두면(toPhase 기본값) 끝내기 시각(now + 30~60초)이 마감 여유(마감 − 500ms)에 걸려
-  // 봇 하나의 끝내기가 계획에서 빠질 수 있었다(시험이 간헐적으로 "끝내기 2 ≠ 3"). 제품의 토론 길이(DISCUSSION_MS)에서는 난수가 최댓값이어도 빠지지 않는다.
-  it("마감 여유: 끝내기 시각이 마감 − 500ms 이상이면 그 봇의 끝내기는 계획에서 빠지고, 제품의 토론 길이에서는 난수가 최댓값이어도 모두 남는다", () => {
-    const base = stateAt(1, 4, 5, "discussion");
-    const now = nowOf(base);
-    const max = (n: number): number => n - 1; // 모든 난수가 최댓값 — 끝내기는 now + 59999
-    const ends = (phaseEndsAt: number, randInt: (n: number) => number): number =>
-      planBotSteps({ ...base, phaseEndsAt }, now, randInt).filter((st) => st.act.t === "endDiscussion").length;
-    const got = [
-      ends(now + 60_000, max), // 마감 60초: 여유는 now + 59500 — 끝내기 now + 59999 는 빠진다
-      ends(now + 60_000, () => 0), // 마감 60초라도 난수가 작으면(끝내기 now + 30000) 남는다
-      ends(now + 60_500, max), // 경계: 여유 now + 60000 > 끝내기 now + 59999 — 남는다
-      ends(now + PHASE_DEFS.discussion.durationMs!, max), // 제품의 토론 길이
-    ];
-    expect(`${got.join(",")} 봇=${botsOf(base).length} 제품 길이=${PHASE_DEFS.discussion.durationMs! - 500 > 59_999}`).toBe("0,4,4,4 봇=4 제품 길이=true");
+  it("봇은 토론을 건너뛰는 데 동의하지 않는다", () => {
+    const { state, now } = wideDiscussion(5);
+    const steps = planBotSteps(state, now, seededRandInt(5));
+    expect(steps.some((step) => step.act.t === "endDiscussion")).toBe(false);
   });
 
   it("일반 봇의 둘째 발언은 첫 발언을 제외한 문구 중에서 뽑는다", () => {
     const { state, now } = wideDiscussion(5);
     const rec = recording(7);
     planBotSteps(state, now, rec.randInt);
-    const per = [10000, BOT_CHAT_LINES.length, 18000, BOT_CHAT_LINES.length - 1, 30000];
+    const per = [10000, BOT_CHAT_LINES.length, 18000, BOT_CHAT_LINES.length - 1];
     expect(rec.calls.join(",")).toBe(Array(botsOf(state).length).fill(per).flat().join(","));
   });
 });
@@ -1311,14 +1282,14 @@ describe("봇 유언·다가가기 계획 (09-12, 결정 0061-18, 가정 A3)", (
     expect(planBotSteps(state, nowOf(state), seededRandInt(4)).filter((s) => s.act.t === "will").length).toBe(0);
   });
 
-  it("will 을 더해도 난수 호출 순서가 같다: 호출 기록이 봇당 5번(폭·문구·폭·문구·끝내기 폭) 그대로다", () => {
+  it("유언은 난수를 소비하지 않아 발언 계획의 호출이 봇당 네 번이다", () => {
     const state = stateAt(1, 5, 8, "discussion");
     const calls: number[] = [];
     planBotSteps(state, nowOf(state), (n) => {
       calls.push(n);
       return 0;
     });
-    expect(calls.length).toBe(botsOf(state).length * 5);
+    expect(calls.length).toBe(botsOf(state).length * 4);
   });
 
   it("night: 어떤 봇에도 걷기 행동이 없다 — 산 봇마다 pick 하나뿐이다(마피아 접근 걷기는 없어졌다, 15-03 D-05)", () => {

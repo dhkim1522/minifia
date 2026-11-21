@@ -45,7 +45,7 @@ export const FIRST_ANSWER_TURN_MS = 5_000; // 첫날 원탁에서 한 사람의 
 export const ANSWER_REVEAL_MS = 3_000;
 export const NO_EXECUTION_MS = 1_400; // 처형 없음 큰 글 시간 — src/game/dayView.ts 의 ANNOUNCE_NOEXEC_MS 가 같은 값을 쓴다(23-07)
 export const DAY_ANNOUNCE_MS = 2_000; // D-20
-export const DISCUSSION_MS = 90_000; // DAY-07 — 낮 토론 90초(결정 0060-1). 과반이 토론 끝내기를 누르면 일찍 끝난다(DAY-03)
+export const DISCUSSION_MS = 90_000; // 낮 토론 기본 마감. 전원 동의로 일찍 끝날 수 있다.
 export const NIGHT_MS = 30_000; // NIGHT-05
 // 아침 기본 길이 — 무사·구출·미선택(NIGHT-06, 결정 0061-13). 탈락이 있으면 morningMsOf(discussion.ts)가 아래 가산을 더한다.
 export const MORNING_MS = 5_000;

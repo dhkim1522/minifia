@@ -46,6 +46,34 @@ it("서버 시계에 맞춰 숫자 없이 줄어들고 10초·5초에 색을 바
   expect(fill?.style.transform).toBe("scaleX(0)");
 });
 
+it("게이지 애니메이션은 탐색 시점과 서버 시계에 맞추고 카운트다운 렌더에는 다시 시작하지 않는다", () => {
+  const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "animate");
+  const cancel = vi.fn();
+  const animate = vi.fn(() => ({ cancel, finished: Promise.resolve() }));
+  Object.defineProperty(HTMLElement.prototype, "animate", { configurable: true, value: animate });
+  try {
+    const view = fixture();
+    const header = (next: RoomView, offset: number) => <GamePhaseHeader title="토론" view={next} offset={offset} extra={null} />;
+    const { rerender, unmount } = render(header(view, 1_000));
+    expect(animate).toHaveBeenCalledExactlyOnceWith([{ transform: "scaleX(1)" }, { transform: "scaleX(0)" }], {
+      duration: 20_000, delay: -1_000, easing: "linear", fill: "both",
+    });
+
+    act(() => { vi.advanceTimersByTime(4_000); });
+    expect(animate).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("timer").getAttribute("aria-label")).toBe("남은 시간 15초");
+
+    rerender(header({ ...view, phaseEndsAt: NOW + 9_000 }, 2_000));
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(animate).toHaveBeenLastCalledWith(expect.any(Array), expect.objectContaining({ delay: -17_000 }));
+    unmount();
+    expect(cancel).toHaveBeenCalledTimes(2);
+  } finally {
+    if (original) Object.defineProperty(HTMLElement.prototype, "animate", original);
+    else Reflect.deleteProperty(HTMLElement.prototype, "animate");
+  }
+});
+
 it("조기 진행에는 경고하지 않고 다음 단계에서 새 막대를 그린다", () => {
   const normal = fixture();
   const header = (view: RoomView, epoch = 0) => <GamePhaseHeader title="토론" view={view} offset={0} epoch={epoch} extra={null} />;

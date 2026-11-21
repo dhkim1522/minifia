@@ -33,6 +33,7 @@ const CLIENT_MESSAGE_KINDS = [
   "move",
   "nightDone",
   "note",
+  "phaseSkip",
   "pick",
   "ping",
   "point",

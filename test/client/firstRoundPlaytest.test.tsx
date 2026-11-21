@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RoomView } from "../../shared/protocol";
+import { GamePhaseHeader } from "../../src/components/v2/GamePhaseHeader";
 import { hostLineOf } from "../../src/game/hostLine";
 import { GamePanel } from "../../src/screens/GamePanel";
 import { RoleReveal } from "../../src/screens/RoleReveal";
@@ -53,18 +54,23 @@ describe("첫날 실험방의 최소 조작", () => {
     expect(hostLineOf(confirmed)).toBe("다른 사람을 기다려요");
   });
 
-  it("토론을 시작하면 곧바로 토론 스킵을 요청하고 45초 뒤 과반으로 바뀐다", () => {
+  it("찬반 단계 스킵은 서버 시각이 되면 열리고 전원 동의 수를 표시한다", () => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
-    const view = fixture({ day: { n: 1, roles, voteOpensAt: NOW + 45_000, voteReadyTotal: 4, voteReadyRequired: 3 } });
+    const opensAt = NOW + 3500;
+    const view = fixture({ phase: "verdict", phaseSkip: { opensAt, count: 0, total: 4, canVote: true } });
     const send = vi.fn();
-    render(<GamePanel view={view} send={send} binding={binding} canSend />);
-    const vote = screen.getByRole("button", { name: /토론 스킵, 필요한 4명 중 0명 요청/ });
+    const node = (room: RoomView) => <GamePhaseHeader title="찬반" view={room} offset={500} extra={null} skipControls={{ send, canSend: true }} />;
+    const { rerender } = render(node(view));
+    expect(screen.queryByRole("button", { name: /스킵/ })).toBeNull();
+    act(() => { vi.advanceTimersByTime(3000); });
+    const vote = screen.getByRole("button", { name: "스킵, 4명 중 0명 동의" });
     fireEvent.click(vote);
-    expect(send).toHaveBeenCalledWith({ t: "endDiscussion", on: true });
-    act(() => { vi.advanceTimersByTime(45_000); });
-    expect(screen.getByRole("button", { name: /토론 스킵 취소, 필요한 3명 중 0명 요청/ })).toBe(vote);
-    expect(vote.getAttribute("aria-pressed")).toBe("true");
+    expect(send).toHaveBeenCalledWith({ t: "phaseSkip", opensAt, on: true });
+    rerender(node({ ...view, phaseSkip: { ...view.phaseSkip!, count: 1 }, me: { ...view.me, phaseSkip: true } }));
+    expect(screen.getByRole("button", { name: "스킵, 4명 중 1명 동의" })).toBe(vote);
+    fireEvent.click(vote);
+    expect(send).toHaveBeenLastCalledWith({ t: "phaseSkip", opensAt, on: false });
   });
 
   it("대상과 안 뽑기를 같은 화면에서 보내고 서버 결과로 선택 목록을 바꾼다", () => {
@@ -117,4 +123,20 @@ describe("첫날 실험방의 최소 조작", () => {
     expect(container.querySelector("[data-room-chat] [data-chat-log].is-fixed")).not.toBeNull();
     expect(container.querySelector("[data-chat-open]")).toBeNull();
   });
+});
+
+it("일반방에서는 카드를 펼친 뒤 역할 확인을 보낼 수 있다", () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(NOW);
+  const view = fixture({ playtest: undefined, phase: "roleReveal", phaseEndsAt: NOW + 15_000, phaseDurationMs: 15_000 });
+  const send = vi.fn();
+  const node = (room: RoomView) => <RoleReveal view={room} offset={0} myRoleButton={null} onSeenFront={() => {}} send={send} canSend />;
+  const { rerender } = render(node(view));
+  expect(screen.queryByRole("button", { name: "확인" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "역할 카드 뒤집기" }));
+  fireEvent.click(screen.getByRole("button", { name: "확인" }));
+  expect(send).toHaveBeenCalledWith({ t: "roleReady" });
+  rerender(node({ ...view, me: { ...view.me, roleReady: true } }));
+  expect(screen.queryByRole("button", { name: "확인" })).toBeNull();
+  expect(screen.getByText("확인했어요")).toBeTruthy();
 });

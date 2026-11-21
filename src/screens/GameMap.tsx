@@ -23,6 +23,7 @@ import { SceneCurtain } from "../components/SceneCurtain";
 import { PickTurnBlock } from "../components/v2/PickTurnBlock";
 import { RoleCardButton } from "../components/RoleCardButton";
 import { GamePhaseHeader, PhaseGauge } from "../components/v2/GamePhaseHeader";
+import { PhaseSkip } from "../components/v2/PhaseSkip";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
 import { suspectChipShown } from "../components/v2/HeadStack";
 import { CLAIM_ICON } from "../components/v2/ClaimBadge";
@@ -180,6 +181,8 @@ function MapHeader({ view, offset, extra, tod, epoch, timeless }: { view: RoomVi
   const presenting = keywordPresentationOf(view) !== undefined;
   const title = presenting ? "답안 공개" : view.phase === "verdict" && view.day?.firstBallot !== undefined ? "투표" : headerFor(view).title;
   const showTurnGauge = !timeless && turn !== null && (turn.stage === "turn" || turn.stage === "done");
+  const turnEndsAt = turn?.mode === "pick" ? view.day?.turn?.endsAt
+    : turn?.mode === "runoff" ? view.phaseEndsAt : view.day?.showdown?.endsAt ?? view.phaseEndsAt;
   return (
     <GamePhaseHeader
       title={title}
@@ -187,7 +190,10 @@ function MapHeader({ view, offset, extra, tod, epoch, timeless }: { view: RoomVi
       offset={offset}
       epoch={epoch}
       timeless={timeless || blocked}
-      turnGauge={showTurnGauge ? <PhaseGauge seconds={turn.seconds} ratio={turn.ratio} tone={turn.tone} /> : null}
+      turnGauge={showTurnGauge ? (
+        <PhaseGauge seconds={turn.seconds} ratio={turn.ratio} tone={turn.tone}
+          {...(turn.stage === "turn" && turnEndsAt != null ? { clock: { endsAt: turnEndsAt, duration: turn.totalMs, offset } } : {})} />
+      ) : null}
       {...(tod ? { tod: { id: todOf(view.phase), word: presenting || view.phase === "discussion" ? null : todWordOf(view.phase, title) } } : {})}
       extra={extra}
     />
@@ -417,6 +423,7 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
   const runoffVoting = runoff !== undefined && runoff.step === 1 && meAlive && canSend && !runoff.cand.includes(view.me.seat);
   // 마지막 3인 동시 지목(09.1.1-15, UI-SPEC E-3): 산 세 사람이 나를 뺀 두 사람의 이름표를 직접 눌러 가리킨다(마감까지 바꾸기 가능). 서버 값은 view.me.ballot(본인에게만 온다)
   const showdownPointing = showdownStage === "point" && canSend && pointSeatsOf(view).length > 0;
+  const tableBallot = tableOn && (nominating || runoff !== undefined || showdownStage === "point" || showdownStage === "reveal");
   const serverMine = nominating
     ? view.day?.points?.find((l) => l.seat === view.me.seat)?.target
     : nighting
@@ -539,10 +546,10 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
         const ci = runoff.cand.indexOf(seat);
         const count = ci < 0 || runoff.step !== 2 ? 0 : (runoff.tally?.[ci] ?? 0);
         return {
-          ...(runoffVoting && pickSeats?.has(seat) ? { blink: true } : {}),
-          ...(mine === seat ? { mine: true } : {}),
-          ...(voted.has(seat) ? { done: true } : {}),
-          ...(count >= 1 ? { count } : {}),
+          ...(!tableBallot && runoffVoting && pickSeats?.has(seat) ? { blink: true } : {}),
+          ...(!tableBallot && mine === seat ? { mine: true } : {}),
+          ...(!tableBallot && voted.has(seat) ? { done: true } : {}),
+          ...(!tableBallot && count >= 1 ? { count } : {}),
         };
       };
     }
@@ -553,10 +560,10 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
       const voted = new Set(view.day?.showdown?.voted ?? []);
       const counts = revealCounts(view);
       return (seat) => ({
-        ...(showdownPointing && pickSeats?.has(seat) ? { blink: true } : {}),
-        ...(showdownStage === "point" && mine === seat ? { mine: true } : {}),
-        ...(voted.has(seat) ? { done: true } : {}),
-        ...((counts[seat] ?? 0) >= 1 ? { count: counts[seat] } : {}),
+        ...(!tableBallot && showdownPointing && pickSeats?.has(seat) ? { blink: true } : {}),
+        ...(!tableBallot && showdownStage === "point" && mine === seat ? { mine: true } : {}),
+        ...(!tableBallot && voted.has(seat) ? { done: true } : {}),
+        ...(!tableBallot && (counts[seat] ?? 0) >= 1 ? { count: counts[seat] } : {}),
         ...(speaker === seat ? { ring: "turn" as const, turn: true } : {}),
       });
     }
@@ -568,12 +575,12 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
     const turnSeat = (stage === "turn" || stage === "done") && turn !== undefined ? turn.order[turn.i] : undefined;
     return (seat) => {
       return {
-        ...(canPick && pickSeats?.has(seat) ? { blink: true } : {}),
-        ...(mine === seat ? { mine: true } : {}),
+        ...(!tableBallot && canPick && pickSeats?.has(seat) ? { blink: true } : {}),
+        ...(!tableBallot && mine === seat ? { mine: true } : {}),
         ...(turnSeat === seat ? { ring: "turn" as const, turn: true } : {}),
       };
     };
-  }, [nominating, nighting, mine, spectate, verdicting, defending, view, canPick, pickSeats, runoff, runoffVoting, showdownPointing, showdownStage]);
+  }, [nominating, nighting, mine, spectate, verdicting, defending, view, canPick, pickSeats, runoff, runoffVoting, showdownPointing, showdownStage, tableBallot]);
 
   // 유령 화면의 이름표: 모든 이름표 위에 그 사람의 직업 칩(spectate.seats 의 job), 죽은 좌석은 반투명. 산 사람 view 에는 spectate 가 없어 이 겹침이 없다.
   const roleTagProps = useMemo<WorldTagProps | undefined>(() => {
@@ -735,15 +742,19 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
   const cameraFocus = centerTable || preferredSeat === view.me.seat ? undefined : preferredSeat;
   const cameraFocusAt = chooseManually ? tableFocusAt : phaseFocusAt;
 
+  const lookAtTableSeat = (seat: number): void => {
+    if (!tableOn || introActive || layerKind !== null) return;
+    if (seat !== view.me.seat && view.players.some((p) => p.seat === seat && isAlive(p))) {
+      setTableChoice({ key: tableKey, focus: seat, focusAt: Date.now() + offset });
+    }
+  };
   const chooseTableSeat = (seat: number): void => {
     if (!tableOn || introActive || layerKind !== null) return;
     if (pick) {
       if (canSend && !pick.disabled && pick.seats.has(seat)) pick.onPick(seat);
       return;
     }
-    if (seat !== view.me.seat && view.players.some((p) => p.seat === seat && isAlive(p))) {
-      setTableChoice({ key: tableKey, focus: seat, focusAt: Date.now() + offset });
-    }
+    lookAtTableSeat(seat);
   };
 
   const scene = useMemo(() => {
@@ -759,17 +770,19 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
     if (tableOn && view.phase === "nomination") {
       const turn = view.day?.turn;
       const pointing = turn?.doneAt === undefined ? undefined : turn.order[turn.i];
+      if (look.pin?.mode === "slide") look.pin = { mode: "turn", seat: look.pin.from };
       for (const [seat, appearance] of Object.entries(look.seats)) {
         if (Number(seat) !== pointing) delete appearance.pointAt;
       }
     }
+    if (tableBallot && view.phase === "runoff") look.pin = null;
     // 역할 확인을 마친 게임 맵에서만 내 비공개 역할을 내 모델에 입힌다. 공개 의상과 다른 좌석은 그대로다.
     const ownSeat = look.seats[view.me.seat];
     const role = view.me.role;
     const ownRoleOutfit = role === "mafia" || (ownAnimalOf(view) !== undefined && (role === "police" || role === "doctor"));
     if (!inOpening && ownSeat && meAlive && view.spectate === undefined && ownRoleOutfit) ownSeat.costume = jobOutfit(role);
     return look;
-  }, [view, stageH, fading, mine, verdictZoom, camera, meAlive, inOpening, tableCameraOn, tableOn, centerTable, cameraFocus, cameraFocusAt, tableVoice]);
+  }, [view, stageH, fading, mine, verdictZoom, camera, meAlive, inOpening, tableCameraOn, tableOn, tableBallot, centerTable, cameraFocus, cameraFocusAt, tableVoice]);
 
   return (
     <main ref={rootRef} className={inOpening ? "mf-root mf-pregame mf-pregame--seated" : "mf-root mf-game"} data-game-stage={inOpening || inEnding ? undefined : ""} data-phase={view.phase} data-night-dark={nightDark ? "true" : undefined} data-ghost-view={ghost ? "true" : undefined} data-ghost-enter={ghost && entering ? "true" : undefined} data-kb-open={kbLifted ? "true" : undefined} data-suspect-mode={inOpening || inEnding ? undefined : suspect.mode ? "on" : "off"} data-suspects={suspectsMirror}>
@@ -786,6 +799,7 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
           tod={tod && !playtest}
           extra={(
             <>
+              {!introActive ? <PhaseSkip view={headerView} offset={offset} canSend={canSend} send={send} rejected={rejects} tutorial={timeless} /> : null}
               {testButton ? <div className="mf-game__test">{testButton}</div> : null}
               {headerAction ?? (roleCard ? <RoleCardButton iconOnly unread={roleCard.unread} onOpen={roleCard.onOpen} /> : null)}
             </>
@@ -815,8 +829,8 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
         }
         {...(deny ? { deny } : {})}
         {...(surprise ? { surprise } : {})}
-        {...(pick && !introActive ? { pick } : {})}
-        {...(tableOn ? { onTableSeat: chooseTableSeat } : {})}
+        {...(pick && !introActive && !tableBallot ? { pick } : {})}
+        {...(tableOn ? { onTableSeat: tableBallot ? lookAtTableSeat : chooseTableSeat } : {})}
         {...(stageTagProps ? { tagProps: stageTagProps } : {})}
         onNotice={(text) => show(text)}
         onLeave={() => onLeave?.()}
@@ -879,7 +893,6 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
         <GamePanel
           view={view}
           introActive={introActive}
-          offset={offset}
           send={send}
           canSend={canSend}
           binding={binding}
@@ -890,10 +903,11 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
             <AnswerPresentation turn={presentation} player={speaker} mySeat={view.me.seat} marked={speakerMarked}
               canSuspect={canSuspectSpeaker} {...(timeless ? {} : { onSuspect: suspectSpeaker })} />
           ) : undefined}
-          tableControls={tableOn && !kbLifted ? (
+          tableControls={tableOn && (!kbLifted || (tableBallot && pick !== undefined)) ? (
             <TableControls
               players={view.players.filter((p) => p.seat !== view.me.seat && isAlive(p))}
               {...(tableFocus !== undefined ? { focus: tableFocus } : {})}
+              {...(tableBallot && mine !== undefined ? { selected: mine } : {})}
               {...(pick ? { pick } : {})}
               notes={suspectStack}
               onChoose={chooseTableSeat}

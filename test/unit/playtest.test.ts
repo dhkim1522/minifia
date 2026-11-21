@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { endCountOf, endReached, phaseDurationOf, toggleEnd } from "../../shared/game/discussion";
+import { phaseDurationOf } from "../../shared/game/discussion";
 import { shrinkDeadline } from "../../shared/game/early";
 import { layoutKey } from "../../shared/game/gather";
 import { canMoveIn } from "../../shared/game/movement";
 import { completeNight, pickTarget } from "../../shared/game/night";
-import { allRolesReady, castFirstBallot, confirmRole, keywordReadUntil, voteOpensAt } from "../../shared/game/playtest";
+import { allRolesReady, castFirstBallot, confirmRole, keywordReadUntil } from "../../shared/game/playtest";
 import type { PhaseId } from "../../shared/protocol";
 import { createRoomState, type RoomState } from "../../shared/game/room";
 import { resetToLobby } from "../../shared/game/testTools";
-import { nextWakeAt, tick } from "../../shared/game/tick";
+import { tick } from "../../shared/game/tick";
 import { castVerdict } from "../../shared/game/verdict";
 import { buildView } from "../../shared/game/view";
 
@@ -71,25 +71,12 @@ describe("로컬 첫날 실험 규칙", () => {
     expect(phaseDurationOf(room("morning"))).toBe(8_000);
   });
 
-  it("투표로 넘기는 데 45초까지 전원, 이후 과반을 요구하고 봇은 제외한다", () => {
+  it("첫날 토론에서 봇을 제외한 생존자 전원의 동의를 요구한다", () => {
     const discussion = room("discussion");
     discussion.players[3] = { ...discussion.players[3]!, isBot: true, endVote: true };
-    expect(voteOpensAt(discussion)).toBe(125_000);
-    expect(buildView(discussion, "p0", 100_000).day).toMatchObject({ endCount: 0, voteOpensAt: 125_000, voteReadyRequired: 2, voteReadyTotal: 3 });
-    let ended = discussion;
-    for (const actor of ["p0", "p1"]) {
-      const next = toggleEnd(ended, actor, true);
-      if (!next.ok) throw new Error(next.error);
-      ended = next.state;
-    }
-    expect(endCountOf(ended)).toBe(2);
-    expect(nextWakeAt(ended)).toBe(125_000);
-    expect(endReached(ended, 124_999)).toBe(false);
-    expect(endReached(ended, 125_000)).toBe(true);
-    const last = toggleEnd(ended, "p2", true);
-    if (!last.ok) throw new Error(last.error);
-    expect(endReached(last.state, 124_999)).toBe(true);
-    expect(toggleEnd(ended, "p3", true)).toEqual({ ok: false, error: "BAD_MESSAGE" });
+    const view = buildView(discussion, "p0", 100_000);
+    expect(view.phaseSkip).toEqual({ count: 0, total: 3, canVote: true, opensAt: 83_000 });
+    expect(view.day).toMatchObject({ endCount: 0, voteOpensAt: 83_000, voteReadyRequired: 3, voteReadyTotal: 3 });
   });
 
   it.each([

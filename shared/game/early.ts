@@ -4,16 +4,18 @@
 //  - 키워드: 산 사람 중 사람 전원이 확정 제출(봇은 대상 아님 — 봇은 답을 내지 않는다).
 //  - 찬반: 산 사람 전원이 투표. 번복이 들어오면 다시 지금 + 1.5초(상한은 원래 마감, D-25).
 //  - 밤: 능력 사용과 실험방 시민의 밤 마치기를 센다. 처음 한 번만 줄이고 연장하지 않는다 — 연장 방송은 밤 행동에 대해 새 신호가 된다(D-25).
+//  - 결선·결전의 동시 투표: 선택권이 있는 생존자 전원의 표를 센다.
 // 연결이 끊긴 사람은 고르지 않으므로 조건이 참이 되지 않아 그 판은 정해진 시간을 다 쓴다(D-12, 연결 여부는 보지 않는다).
-// 토론(과반 끝내기)·유언([남기기])·연출 단계(처형·아침·정답 공개)·낮 시작은 여기서 넘기지 않는다 — earlyReady 가 늘 거짓이다.
+// 역할 확인(전원 확인), 유언([남기기]), 단계 건너뛰기(전원 동의)는 별도의 메시지에서 정상 마감 경로로 진행한다.
 //
 // 종료 시각 = 마지막 산 사람이 행동한 시각 + 1.5초라 역할과 무관하다(D-13). 단계 길이(phaseDurationOf)는 건드리지 않아 화면 막대가 0~1 로 미끄러진다.
-// 원래 마감은 earlyFrom(서버 전용)에 보관한다 — 줄이고 나면 값을 잃어 번복 연장의 상한을 알 수 없기 때문이다. 키(phase+day)가 다르면 무시하므로 지우지 않는다.
+// 원래 마감은 earlyFrom(서버 전용)에 보관한다 — 줄이고 나면 값을 잃어 번복 연장의 상한을 알 수 없기 때문이다. 단계나 차례가 바뀌면 지운다.
 // 봇 계획 키("단계:마감")도 새 마감으로 같이 갈아 끼운다 — 마감이 바뀌었다는 이유로 syncBotPlan 이 계획을 다시 세우지(난수를 쓰고 봇이 다시 던지지) 않게 한다(Pitfall 5).
 import { isAlive } from "./alive";
 import { botPlanKey, isBot } from "./bots";
 import { firstPlaytestDay } from "./playtest";
 import type { RoomState } from "./room";
+import { runoffVotersOf } from "./runoff";
 
 /** 전원이 끝낸 뒤 남기는 시간(0089-26 문언 1.5초). 유예 안 번복·변경을 받아 주는 여유이자 화면이 "곧 넘어감" 을 보여 주는 시간이다. */
 export const EARLY_GRACE_MS = 1_500;
@@ -33,6 +35,17 @@ export function earlyReady(state: RoomState): boolean {
         return state.firstBallotOutcome === undefined && alive.length > 0 && alive.every((p) => p.firstBallot !== undefined);
       }
       return alive.length > 0 && alive.every((p) => p.verdictVote !== undefined);
+    case "runoff": {
+      if (state.runoff?.step !== 1) return false;
+      const voters = runoffVotersOf(state);
+      return voters.length > 0 && voters.every((p) => p.runoffVote !== undefined);
+    }
+    case "showdown": {
+      const turn = state.showdown;
+      if (turn?.i !== 3) return false;
+      const voters = alive.filter((p) => turn.order.includes(p.seat));
+      return voters.length > 0 && voters.every((p) => p.showdownPick !== undefined);
+    }
     case "night":
       if (state.playtest === true) {
         return alive.length > 0 && alive.every((p) => p.role === "citizen"

@@ -82,7 +82,7 @@ export function stepShowdown(state: RoomState, at: number): DeadlineResult {
 }
 
 /**
- * 동시 지목 한 표. 마지막 값이 유효하다(마감 전 번복 가능, O-12 — 조기 종료 없음).
+ * 동시 지목 한 표. 마감 전 마지막 값이 유효하다.
  * 검사 순서가 계약이다: 단계(showdown 아니면 WRONG_PHASE) → 행위자(방에 있고 산 사람, 아니면 BAD_MESSAGE)
  * → 지목 창(i 3 이고 now < phaseEndsAt, 아니면 WRONG_PHASE) → 대상(셋 가운데 산 사람이고 자기 자신이 아님, 아니면 BAD_MESSAGE)
  * → 같은 값이면 입력 상태 그대로 ok → 그 사람의 showdownPick 만 바뀐 새 상태. 거절이면 입력 상태는 그대로다. 연결 상태는 읽지 않는다.

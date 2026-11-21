@@ -3,7 +3,6 @@ import type { CSSProperties, ReactNode, RefObject } from "react";
 import type { EmoteId } from "../../../shared/protocol";
 import { ChatPanel } from "./ChatPanel";
 import { EmoteTray } from "./EmoteTray";
-import { HeadCount } from "./HeadCount";
 import { V2Icon } from "./V2Icon";
 import { CHAT_TEXT, EMOTE_SHORT, EMOTE_TEXT } from "../../game/chatText";
 import { DISCUSSION_KB_LOG_H, DISCUSSION_LOG_H, DISCUSSION_SHORT_LOG_H, DISCUSSION_VIEWPORT_ALLOWANCE } from "../../game/chatUi";
@@ -34,11 +33,10 @@ export interface RoomChatDockProps {
   suspect?: Pick<SuspectApi, "mode" | "targets" | "disabled" | "used" | "off" | "toggleMode"> & {
     deny?: () => void;
   };
-  skip?: { enabled: boolean; pressed: boolean; count: number; total: number; request: () => void };
   will?: { open: boolean; saved: boolean; call?: boolean; request: (opener: HTMLElement) => void };
 }
 
-export function RoomChatDock({ binding, kbOpen, quickReactions = false, discussion, locked, actions, advance, callInput, onInputFocus, inputRef, suspect, skip, will }: RoomChatDockProps) {
+export function RoomChatDock({ binding, kbOpen, quickReactions = false, discussion, locked, actions, advance, callInput, onInputFocus, inputRef, suspect, will }: RoomChatDockProps) {
   const [reactionsOpen, setReactionsOpen] = useState(false);
   const [reacted, setReacted] = useState("");
   const surfaceId = useId();
@@ -100,7 +98,7 @@ export function RoomChatDock({ binding, kbOpen, quickReactions = false, discussi
       setReactionsOpen(false);
     }}>
       {quickReactions ? <span className="mf-sr-only" role="status">{reacted}</span> : null}
-      {(reactions.length > 0 && binding.onEmote) || suspect || will || skip || actions || advance ? (
+      {(reactions.length > 0 && binding.onEmote) || suspect || will || actions || advance ? (
         <div className="mf-room-chat__tools">
           <div className="mf-room-toolbar" role="group" aria-label="게임 도구">
             {reactions.length > 0 && binding.onEmote ? <button type="button" className="mf-room-tool" data-playtest-action="reaction" data-emote-button="" aria-label={reactionLabel} aria-expanded={reactionsOpen} aria-pressed={reactionsOpen} aria-controls={reactionsOpen ? surfaceId : undefined} aria-disabled={binding.sendDisabled || undefined} onMouseDown={(event) => event.preventDefault()} onClick={(event) => { if (!binding.sendDisabled) toggleReactions(event.detail === 0); }}>
@@ -128,17 +126,6 @@ export function RoomChatDock({ binding, kbOpen, quickReactions = false, discussi
             </button> : null}
             {actions}
             {advance ? <div className="mf-room-chat__advance">{advance}</div> : null}
-            {skip ? (
-              <button
-                type="button" className="mf-room-tool mf-room-tool--skip" data-playtest-action="skip" data-end-discussion=""
-                aria-label={`토론 스킵${skip.pressed ? " 취소" : ""}, 필요한 ${skip.total}명 중 ${skip.count}명 요청`}
-                aria-pressed={skip.pressed} aria-disabled={!skip.enabled || undefined}
-                onMouseDown={(event) => event.preventDefault()} onClick={skip.request}
-              >
-                <span>{skip.pressed ? "스킵 취소" : "토론 스킵"}</span>
-                <HeadCount count={skip.count} total={skip.total} />
-              </button>
-            ) : null}
           </div>
           {suspect?.mode ? <p className="mf-room-chat__surface mf-playtest__feedback" data-suspect-guidance="" role="status">{suspect.targets.size === 0 ? SUSPECT_TEXT.tooFar : suspect.used ? SUSPECT_TEXT.editHint : SUSPECT_TEXT.modeHint}</p> : null}
           {reactionsOpen ? (

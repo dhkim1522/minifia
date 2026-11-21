@@ -31,7 +31,7 @@ import { ownAnimalOf } from "../game/playerIdentity";
 import { ChatStore } from "../net/chatStore";
 import { ResultLogStore } from "../net/resultLogStore";
 import { usePhaseArrival } from "../net/phaseArrival";
-import { usePhaseIntro } from "../net/phaseIntro";
+import { usePendingServerTime } from "../net/usePendingServerTime";
 import { useFixedRoomHeight } from "../net/useFixedRoomHeight";
 import { loadSeenCount, saveSeenCount, unseenCount } from "../net/recordsSeen";
 import { useDayFx } from "../net/useDayFx";
@@ -170,7 +170,7 @@ function soundHookOn(): boolean {
 export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   const connection = useRoomConnection(code, token);
   const { status, banner, view, removedReason } = connection;
-  const introAt = usePhaseIntro(view?.phaseStartsAt, connection.offset);
+  const introAt = usePendingServerTime(view?.phaseStartsAt, connection.offset);
   const roomRef = useRef<HTMLDivElement>(null);
   useFixedRoomHeight(roomRef);
 

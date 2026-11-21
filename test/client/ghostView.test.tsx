@@ -88,6 +88,7 @@ function makeView(o: ViewOpts = {}): RoomView {
     minPlayers: 4,
     maxPlayers: 8,
     players,
+    phaseSkip: phase === "discussion" ? { opensAt: NOW, count: 0, total: count - dead.length, canVote: !meDead } : undefined,
     me: { seat: mySeat, isHost: mySeat === 0, chat: meDead ? "ghost" : "all" },
     day: { n: 1, roles: [], ...(o.candidate !== undefined ? { candidate: o.candidate } : {}) },
   };

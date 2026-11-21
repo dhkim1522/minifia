@@ -15,7 +15,7 @@ import { RULES } from "./ruleset";
 import { startRunoff } from "./runoff";
 
 /**
- * 산 사람 수의 과반 수 = ⌊n ÷ 2⌋ + 1 (2명 → 2, 5명 → 3, 8명 → 5). 지목 과반 표시와 토론 끝내기 과반이 이 한 곳을 쓴다.
+ * 산 사람 수의 과반 수 = ⌊n ÷ 2⌋ + 1 (2명 → 2, 5명 → 3, 8명 → 5).
  */
 export function majorityOf(aliveCount: number): number {
   return Math.floor(aliveCount / 2) + 1;

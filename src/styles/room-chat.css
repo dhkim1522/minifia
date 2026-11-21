@@ -87,19 +87,8 @@
   cursor: pointer;
 }
 .mf-room-tool svg { flex: none; color: currentColor; }
-.mf-room-tool--skip {
-  margin-inline-start: auto;
-  min-width: 0;
-  flex-direction: column;
-  gap: 2px;
-  padding-inline: 9px;
-  border-color: var(--noir-action-line);
-  background: var(--noir-action);
-  color: var(--noir-accent);
-}
 @media (max-width: 359px) {
   .mf-room-toolbar { gap: 4px; padding-inline: 8px; }
-  .mf-room-tool--skip { padding-inline: 6px; }
 }
 .mf-room-tool[aria-expanded="true"],
 .mf-room-tool[aria-pressed="true"] {

@@ -705,19 +705,16 @@ describe("봇 지목·찬반·토론 끝내기", () => {
     expect(frames.some((m) => JSON.stringify(m).includes('"agree"'))).toBe(false);
   }, 30_000);
 
-  it("discussion: 봇 셋이 모두 토론 끝내기를 누르면 산 넷의 과반(3)이라 다음 단계로 넘어가고 마감이 now + 다음 단계 길이다", async () => {
+  it("discussion: 봇이 네 명 게임의 건너뛰기를 막거나 먼저 끝내지 않는다", async () => {
     const r = await botRoomAt("discussion");
-    // 마감을 제품의 토론 길이로 둔다(20-03): toPhase 기본값(60초 뒤)이면 끝내기 시각(계획 시각 + 30~60초)이 마감 여유(마감 − 500ms)에 걸려
-    // 봇 하나의 끝내기가 계획에서 빠질 수 있다 — 난수가 29500 − (toPhase 와 계획 사이 걸린 ms) 이상일 때. 시험이 난수와 실행 속도에 기대지 않게 한다.
-    await toPhase(r.code, "discussion", (room) => ({ ...room, phaseEndsAt: Date.now() + PHASE_DEFS.discussion.durationMs! }));
+    const startsAt = Date.now() - 4_000;
+    await toPhase(r.code, "discussion", (room) => ({ ...room, phaseStartsAt: startsAt }));
     await armBots(r.code);
-    expect((await planKinds(r.code)).split(",").filter((k) => k === "endDiscussion").length).toBe(3);
-    const nextId = PHASE_DEFS.discussion.next!;
-    const before = Date.now();
-    await forceBotsDue(r.code);
-    await until("토론 끝", async () => (await stored(r.code)).phase === nextId);
-    const phaseEndsAt = (await stored(r.code)).phaseEndsAt as number;
-    expect(phaseEndsAt >= before + PHASE_DEFS[nextId].durationMs! - 50 && phaseEndsAt <= Date.now() + PHASE_DEFS[nextId].durationMs! + 50).toBe(true);
+    expect((await planKinds(r.code)).split(",")).not.toContain("endDiscussion");
+    const openedAt = startsAt + 3_000;
+    send(r.host, { t: "phaseSkip", opensAt: openedAt, on: true });
+    await settle(r.host, mark(r.host));
+    expect((await stored(r.code)).phase).toBe("verdict");
   }, 30_000);
 
   it("봇 point·verdict 도 사람과 같은 apply 본체를 지난다: 자기 지목·범위 밖 대상·차례 밖 지목은 거절되고 규칙을 지키는 행동만 저장된다", async () => {

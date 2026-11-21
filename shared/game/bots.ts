@@ -32,9 +32,6 @@ const NIGHT_CHAT_SPAN_MS = 6_000;
 
 /** 찬반: 찬성 확률(%). 테스트 방에서 처형 경로가 자주 열리게 높인 바뀔 수 있는 기본값(결정 0036). */
 export const EXEC_YES_PERCENT = 70;
-/** 토론 끝내기: now + 30000 + [0, 30000) ms 에 켜짐 한 번(결정 0060-2). 마감 − 500 보다 늦은 행동은 계획에서 버려지므로 토론이 길수록 더 많은 봇이 누른다. */
-const END_DISCUSSION_BASE_MS = 30_000;
-const END_DISCUSSION_SPAN_MS = 30_000;
 /** 찬반 지연: 1000 + [0, 5000) ms (단계 10초 안, 결정 0060-13). */
 const VERDICT_BASE_MS = 1_000;
 const VERDICT_SPAN_MS = 5_000;
@@ -96,7 +93,7 @@ export const BOT_TYPING_LEAD_MS = 1_500;
 export type BotAct =
   | { t: "chat"; text: string }
   | { t: "pick"; target: number }
-  // 8페이즈(결정 0060): 토론 끝내기(켜짐만)·지목·찬반. 사람과 같은 메시지 이름을 쓰고 방 DO 가 같은 apply* 본체로 처리한다.
+  // 이전에 저장된 계획 호환용. 현재 봇은 건너뛰기 동의에서 제외한다.
   | { t: "endDiscussion" }
   | { t: "point"; target: number }
   | { t: "verdict"; agree: boolean }
@@ -309,9 +306,7 @@ function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): 
         if (target !== undefined) add(first + 1_500 + randInt(5_000), { t: "suspect", target });
       }
     }
-    // 토론 끝내기(08-07): 채팅 두 줄 다음 난수 한 번. 사람과 같은 toggleEnd 를 지난다.
-    if (!firstPlaytestDay(state)) add(now + END_DISCUSSION_BASE_MS + randInt(END_DISCUSSION_SPAN_MS), { t: "endDiscussion" });
-    // 유언(09-12): 1일차에만 한 번, 고정 문장, 난수 없음 — 위 난수 호출 순서가 그대로다.
+    // 유언(09-12): 1일차에만 한 번, 고정 문장.
     if ((state.day ?? 1) === 1) add(now + BOT_WILL_AT_MS, { t: "will", text: BOT_WILL_LINES[bot.seat % BOT_WILL_LINES.length]! });
   } else if (state.phase === "nomination") {
     // 순차 지목(09.1, 결정 0063-1): 자기 차례에 한 번.

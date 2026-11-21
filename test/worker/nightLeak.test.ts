@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import type { ServerMessage } from "../../shared/protocol";
 import { EARLY_GRACE_MS } from "../../shared/game/early";
 import { PHASE_DEFS } from "../../shared/game/phases";
-import { actorsOf, advanceTo, chatSend, chatKeysOf, connect, editRoom, mapPlayers, endAs, lastViewOf, seat, send, skipThrough, flushWorld, homeBySeat, mark, moveAs, nextFrame, observe, pause, pickAs, restoreStorage, segEndsBySeat, settle, snapSeatsOf, snapshotStorage, stable, startedGame, storedRoom, summary, typingSend, withRole, worldFramesOf, worldOf } from "./helpers";
+import { actorsOf, advanceTo, chatSend, chatKeysOf, connect, editRoom, mapPlayers, endAs, openDiscussionSkip, lastViewOf, seat, send, skipThrough, flushWorld, homeBySeat, mark, moveAs, nextFrame, observe, pause, pickAs, restoreStorage, segEndsBySeat, settle, snapSeatsOf, snapshotStorage, stable, startedGame, storedRoom, summary, typingSend, withRole, worldFramesOf, worldOf } from "./helpers";
 import type { Game } from "./helpers";
 
 /** 마지막 world snap 의 '좌석:x,z' 오름차순 문자열. snap 이 없으면 'none'. */
@@ -212,13 +212,14 @@ describe("세 경로 동일성 — 테스트 넘기기·토론 끝내기도 단�
     for (let i = 0; i < socks.length; i += 1) expect(snapPoints(got[i]!)).toBe(homeRows(home, [mine(i)]));
   }, 40_000);
 
-  it("산 사람 전원이 토론 끝내기를 눌러 과반으로 찬반에 들어가도 토론 마지막 자리가 home 으로 기록된다", async () => {
+  it("산 사람 전원이 토론을 건너뛰어 찬반에 들어가도 토론 마지막 자리가 home 으로 기록된다", async () => {
     const g = await startedGame("discussion");
     moveAs(withRole(g, "citizen")[0]!, -120, 60);
     for (const sock of g.socks) await settle(sock, mark(sock));
     await flushWorld(g.code);
     const before = await segEndsBySeat(g.code, 1);
 
+    await openDiscussionSkip(g.code);
     for (const a of g.actors) endAs(a.sock, true);
     for (const sock of g.socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "verdict");
 

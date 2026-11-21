@@ -115,7 +115,8 @@ export function Keyword({ view, offset, epoch = 0, myRoleButton, send, canSend, 
     <Frame ref={rootRef} className={rootCls} data-keyword-screen="" data-kb-open={kbOpen ? "true" : undefined}>
       <div className="mf-reveal__dim" aria-hidden="true" />
       <header className="mf-reveal__header">
-        <GamePhaseHeader title={DAY_COPY.titles.keyword ?? ""} view={view} offset={offset} epoch={epoch} extra={myRoleButton} timeless={timeless || introActive} />
+        <GamePhaseHeader title={DAY_COPY.titles.keyword ?? ""} view={view} offset={offset} epoch={epoch} extra={myRoleButton} timeless={timeless || introActive}
+          skipControls={timeless || introActive ? undefined : { send, canSend }} />
       </header>
       <section className="mf-reveal__stage" hidden={introActive}>
         <div className={cardCls} data-keyword-card="" data-compact={kbOpen ? "true" : undefined} role="group" aria-label={KEYWORD_COPY.cardName}>

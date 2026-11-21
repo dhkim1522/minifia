@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { BAR_SEATS_FX } from "../../shared/game/map";
 import type { CreateRoomResponse } from "../../shared/protocol";
 import { openKeyword } from "../helpers/keyword";
-import { alarmOf, closePhase, connect, editRoom, framesOf, hello, joinOk, lastViewOf, mark, nextFrame, send, settle, storedRoom, writeRoomEdit } from "./helpers";
+import { alarmOf, closePhase, connect, editRoom, framesOf, hello, joinOk, lastViewOf, mark, nextFrame, openDiscussionSkip, send, settle, storedRoom, writeRoomEdit } from "./helpers";
 import type { TestSocket } from "./helpers";
 
 const createRoom = (origin: string, options: { playtest?: true; testMode?: true }) => exports.default.fetch(`${origin}/api/rooms`, {
@@ -16,8 +16,8 @@ async function settleAll(sockets: TestSocket[]) {
   for (const sock of sockets) await settle(sock, mark(sock));
 }
 
-async function seatFour() {
-  const response = await createRoom("http://localhost", { playtest: true, testMode: true });
+async function seatFour(playtest = true) {
+  const response = await createRoom("http://localhost", { ...(playtest === true ? { playtest } : {}), testMode: true });
   expect(response.status).toBe(201);
   const { code, token } = await response.json() as CreateRoomResponse;
   const host = await connect(code);
@@ -128,7 +128,7 @@ describe("첫날 실험방 HTTP·소켓", () => {
         expect(lastViewOf(sock).day?.suspectLog).toEqual([{ n: 1, from: hostSeat, to: nearSeat }]);
       }
 
-      const opensAt = lastViewOf(host).day!.voteOpensAt!;
+      await openDiscussionSkip(code);
       send(host, { t: "endDiscussion", on: true });
       await settle(host, mark(host));
       expect(lastViewOf(host).me.endDiscussion).toBe(true);
@@ -137,11 +137,9 @@ describe("첫날 실험방 HTTP·소켓", () => {
         await settle(sock, mark(sock));
       }
       expect((await storedRoom(code)).phase).toBe("discussion");
-      expect(await alarmOf(code)).toBe(opensAt);
       const firstBallotFrom = mark(host);
       send(sockets[3]!, { t: "endDiscussion", on: true });
       await settleAll(sockets);
-      expect(Date.now()).toBeLessThan(opensAt);
       expect(lastViewOf(host)).toMatchObject({ phase: "verdict", phaseDurationMs: 28_000, day: { firstBallot: { count: 0 } } });
       const gatheredAgain = framesOf(host).slice(firstBallotFrom).filter((m) => m.t === "world" && m.k === "move");
       expect(gatheredAgain).toEqual([]); // 토론에서 이미 착석한 사람의 경로를 투표 때 다시 만들지 않는다.
@@ -220,16 +218,58 @@ describe("첫날 실험방 HTTP·소켓", () => {
     }
   }, 30_000);
 
-  it("45초 전에 과반이 누르면 추가 입력 없이 45초에 첫 투표로 들어간다", async () => {
+  it("동의 창이 닫혀 있거나 다른 차례에서 보낸 건너뛰기 입력은 거절한다", async () => {
     const { code, host, sockets } = await seatFour();
-    const opensAt = Date.now() + 2_500;
-    await writeRoomEdit(env.ROOM.getByName(code), (state) => ({ ...state, phase: "discussion", phaseEndsAt: opensAt + 75_000, day: 1 }));
-    for (const sock of sockets.slice(0, 3)) {
-      send(sock, { t: "endDiscussion", on: true });
-      await settle(sock, mark(sock));
+    const startsAt = Date.now();
+    const opensAt = startsAt + 3_000;
+    const phaseEndsAt = startsAt + 120_000;
+    await writeRoomEdit(env.ROOM.getByName(code), (state) => ({ ...state, phase: "discussion", phaseStartsAt: startsAt, phaseEndsAt, day: 1 }));
+    send(host, { t: "phaseSkip", opensAt, on: true });
+    await nextFrame(host, (m) => m.t === "error" && m.code === "WRONG_PHASE");
+
+    const openedAt = Date.now() - 100;
+    await writeRoomEdit(env.ROOM.getByName(code), (state) => ({ ...state, phaseStartsAt: openedAt - 3_000 }));
+    send(host, { t: "phaseSkip", opensAt, on: true });
+    await nextFrame(host, (m) => m.t === "error" && m.code === "WRONG_PHASE");
+
+    send(host, { t: "phaseSkip", opensAt: openedAt, on: true });
+    await settleAll(sockets);
+    for (const socket of sockets) {
+      const view = lastViewOf(socket);
+      expect(view.phaseSkip).toEqual({ count: 1, total: 4, canVote: true, opensAt: openedAt });
+      expect(view.me.phaseSkip).toBe(socket === host ? true : undefined);
     }
-    expect((await storedRoom(code)).phase).toBe("discussion");
-    expect(await alarmOf(code)).toBe(opensAt);
-    await nextFrame(host, (m) => m.t === "state" && m.view.phase === "verdict" && m.view.phaseEndsAt === opensAt + 28_000, 5_000);
-  }, 10_000);
+    send(host, { t: "phaseSkip", opensAt: openedAt, on: false });
+    await settleAll(sockets);
+    expect(lastViewOf(host).phaseSkip?.count).toBe(0);
+    expect(lastViewOf(host).me.phaseSkip).toBeUndefined();
+
+    for (const socket of sockets) {
+      send(socket, { t: "phaseSkip", opensAt: openedAt, on: true });
+      await settle(socket, mark(socket));
+    }
+    expect(lastViewOf(host).phase).toBe("verdict");
+    expect(lastViewOf(host).phaseSkip?.count).toBe(0);
+    const stored = await storedRoom(code);
+    expect(await alarmOf(code)).toBe(stored.phaseEndsAt);
+  });
+
+  it("일반 방에서도 전원이 역할을 확인하면 마감 전에 진행한다", async () => {
+    const { code, host, sockets } = await seatFour(false);
+    const phaseEndsAt = Date.now() + 15_000;
+    await writeRoomEdit(env.ROOM.getByName(code), (state) => ({
+      ...state, phase: "roleReveal", phaseEndsAt, day: 1,
+      players: (state.players as Array<Record<string, unknown>>).map((p) => ({ ...p, role: "citizen" })),
+    }));
+    for (const socket of sockets.slice(0, 3)) {
+      send(socket, { t: "roleReady" });
+      await settle(socket, mark(socket));
+      expect(lastViewOf(socket).me.roleReady).toBe(true);
+    }
+    expect((await storedRoom(code)).phase).toBe("roleReveal");
+    send(sockets[3]!, { t: "roleReady" });
+    await settleAll(sockets);
+    expect(lastViewOf(host).phase).toBe("dayAnnounce");
+    expect(lastViewOf(host).phaseEndsAt).toBeLessThan(phaseEndsAt);
+  });
 });

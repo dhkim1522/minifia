@@ -3,7 +3,7 @@
 // 토론 끝내기 → 찬반(후보 없음, 집계만 실시간 공개) → 순차 지목 → 변론(유언 자리) → 처형 → 밤을 실제 방 DO 와 소켓 프레임으로 돈다.
 import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
-import { closePhase, endAs, framesOf, lastViewOf, mark, pointAll, settle, startedGame, storedRoom, threeAliveGame, verdictAll } from "./helpers";
+import { closePhase, endAs, openDiscussionSkip, framesOf, lastViewOf, mark, pointAll, settle, startedGame, storedRoom, threeAliveGame, verdictAll } from "./helpers";
 import type { Game } from "./helpers";
 import { send } from "./helpers";
 
@@ -18,9 +18,10 @@ async function settleAll(g: Game): Promise<void> {
 /** 모든 소켓의 마지막 view 의 day.verdictCount 를 한 줄 문자열로. */
 const countLines = (g: Game): string[] => g.socks.map((s) => JSON.stringify(lastViewOf(s).day?.verdictCount));
 
-/** 토론 끝내기 과반(4명 판은 3명)으로 찬반에 들어선다. */
+/** 토론 건너뛰기 전원 동의로 찬반에 들어선다. */
 async function intoVerdict(g: Game): Promise<void> {
-  for (const a of g.actors.slice(0, 3)) {
+  await openDiscussionSkip(g.code);
+  for (const a of g.actors) {
     endAs(a.sock, true);
     await settle(a.sock, mark(a.sock));
   }
@@ -29,8 +30,8 @@ async function intoVerdict(g: Game): Promise<void> {
 }
 
 describe("낮 흐름 (D-10~D-13)", () => {
-  it("토론 끝내기 과반 → 찬반(집계 방송·번복) → 순차 지목 → 변론 → 처형 → 밤, 단계 수열에 지목이 찬반보다 먼저 오지 않는다", async () => {
-    const g = await startedGame("discussion", 3); // 4명 판: 과반 3
+  it("토론 건너뛰기 전원 동의 → 찬반(집계 방송·번복) → 순차 지목 → 변론 → 처형 → 밤, 단계 수열에 지목이 찬반보다 먼저 오지 않는다", async () => {
+    const g = await startedGame("discussion", 3);
     const start = g.socks.map(mark);
     await intoVerdict(g);
 

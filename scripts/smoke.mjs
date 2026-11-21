@@ -1,6 +1,6 @@
 // 스모크: 배포(또는 로컬) 주소에서 방 만들기 → WebSocket hello → 대기실 상태까지 확인한다.
 // full 단계는 한 판을 끝까지 돈다(22페이즈 D-10 새 낮 흐름): 로비 채팅 한 줄 → 낮 시작 발표 → 낮 토론(자유 채팅, 결정 0058)
-// → 과반이 토론 끝내기(DAY-03) → 찬반 10초(D-11: 후보 없이 산 사람 전원이 답하고 공개 값은 집계 수 day.verdictCount 뿐, 값 변경은 마감 전 번복)
+// → 전원이 토론 스킵에 동의 → 찬반(D-11: 후보 없이 산 사람 전원이 답하고 공개 값은 집계 수 day.verdictCount 뿐, 값 변경은 마감 전 번복)
 // → 차례 지목(D-12: 산 사람이 한 명씩 자기 차례에 point, 자기 지목·유령 지목은 BAD_MESSAGE, day.points 는 모두에게 같고 단계가 끝나면 없다) → 유언 10초(D-15)
 // → 처형 6.6초(DAY-07: 좌석만 공개·유언이 있으면 will, 역할 키 없음) → 밤 30초(역할별 행동·마피아 채널 채팅)
 // → 아침 5초(탈락 발표·탈락자 채널 채팅) → 승패가 날 때까지 다음 낮을 같은 방식으로 돌아 ended 에서 끝난다.
@@ -31,7 +31,7 @@ import { exitIfV1 } from "./deploy-target.mjs";
 
 const TOTAL_LIMIT_MS = 30_000;
 const STATE_LIMIT_MS = 10_000;
-const FULL_TOTAL_LIMIT_MS = 900_000; // 시작 → ended. 낮 하루(과반 토론 끝내기 → 순차 지목 최악 3 + 산 사람 수 × 8.9 + 2 (스크립트는 차례마다 곧바로 지목해 약 10초) + 유언 10 + 찬반 10 + 처형 5 + 밤 30 + 아침 5~15 초) 최대 3일 + 여유
+const FULL_TOTAL_LIMIT_MS = 900_000; // 시작 → ended. 토론 스킵 대기와 순차 지목·유언·밤·아침을 포함해 최대 3일을 기다린다.
 // 낮 단계 길이(shared/game/phases.ts 와 같은 값, 결정 0060-1). 스크립트는 TS 를 import 하지 않는다.
 const DISCUSSION_MS = 90_000;
 // 기본판 동시 투표(결정 0072): 산 사람 모두 한 번에 15초. shared/game/phases.ts 의 NOMINATION_MS 와 같은 값 — 고치면 함께.
@@ -732,30 +732,35 @@ async function stageFull(url, args) {
     // 기본판(결정 0072): 산 사람이 3명이어도 토론 → 투표 흐름이다(마지막 3인 결전은 꺼짐).
     const label = `${n}일차`;
     const others = alive.filter((c) => c !== victim);
-    const discEndsAt = firstState(alive[0], "discussion", inDay(n)).msg.view.phaseEndsAt;
+    const discussion = firstState(alive[0], "discussion", inDay(n)).msg.view;
+    const discEndsAt = discussion.phaseEndsAt;
 
-    // (a) 토론 끝내기(DAY-03): 개수만 모두에게, 누른 본인 값은 본인에게만. 과반(산 사람의 절반 + 1)이 누르면 마감을 기다리지 않고 지목으로 넘어간다.
-    const need = Math.floor(alive.length / 2) + 1;
-    const pressers = alive.slice(0, need);
-    if (ghosts.length > 0) await expectError(ghosts[0], { t: "endDiscussion", on: true }, "BAD_MESSAGE", `${label} 유령의 토론 끝내기`);
-    for (let k = 0; k < need; k++) {
-      pressers[k].ws.send(JSON.stringify({ t: "endDiscussion", on: true }));
-      pressers[k].pressed = true;
-      if (k === need - 1) break;
+    // (a) 스킵이 열린 뒤 전원이 동의한다. 집계는 전체에, 동의 여부는 본인에게만 간다.
+    const skip = discussion.phaseSkip;
+    if (!skip?.canVote || skip.total !== alive.length) fail(`${label} 토론 스킵 분모 또는 입력 자격 오류`);
+    const opensAt = skip.opensAt;
+    const vote = { t: "phaseSkip", opensAt, on: true };
+    await sleep(Math.max(0, opensAt - discussion.serverNow) + 50);
+    if (ghosts.length > 0) await expectError(ghosts[0], vote, "BAD_MESSAGE", `${label} 유령의 스킵 동의`);
+    for (let k = 0; k < alive.length; k++) {
+      const actor = alive[k];
+      actor.ws.send(JSON.stringify(vote));
+      (actor.skipVotesSent ??= new Set()).add(opensAt);
+      if (k === alive.length - 1) break;
       await waitUntil(
-        () => alive.every((c) => lastView(c)?.phase === "discussion" && lastView(c).day?.n === n && lastView(c).day.endCount === k + 1),
+        () => alive.every((c) => lastView(c)?.phase === "discussion" && lastView(c).day?.n === n && lastView(c).phaseSkip?.count === k + 1),
         STATE_LIMIT_MS,
-        `${label} ${k + 1}번째 토론 끝내기 뒤 모든 클라이언트의 day.endCount 가 ${k + 1} 로 같아지지 않음`,
+        `${label} ${k + 1}번째 동의 뒤 모든 클라이언트의 스킵 집계가 ${k + 1}이 되지 않음`,
       );
       for (const c of alive) {
-        const want = pressers.slice(0, k + 1).includes(c) ? true : undefined;
-        if (lastView(c).me.endDiscussion !== want) fail(`${label} ${k + 1}번째 표 뒤 ${c.nickname} 의 me.endDiscussion 이 ${want} 가 아님: ${lastView(c).me.endDiscussion}`);
+        const want = alive.slice(0, k + 1).includes(c) ? true : undefined;
+        if (lastView(c).me.phaseSkip !== want) fail(`${label} ${k + 1}번째 표 뒤 ${c.nickname} 의 me.phaseSkip 이 ${want} 가 아님: ${lastView(c).me.phaseSkip}`);
       }
     }
 
-    // (b) 찬반(22페이즈 D-10·D-11): 과반 직후 넘어왔다(마감 90초를 기다리지 않음). 후보 없이 산 사람 전원이 "오늘 처형할까?" 에 답한다 — 첫 길이는 VERDICT_MS 이고
+    // (b) 찬반: 전원 동의 직후 넘어왔다. 후보 없이 산 사람 전원이 "오늘 처형할까?" 에 답한다 — 첫 길이는 VERDICT_MS 이고
     // 공개 값은 집계 수 day.verdictCount 뿐이다(던진 좌석 day.voted·찬반 기록 day.ballots·후보 day.candidate 는 없다, D-26). 개인 선택은 me.verdictVote 로 본인에게만 간다.
-    await waitUntil(() => allSee(alive, "verdict", n), STATE_LIMIT_MS, `${label} 토론 끝내기 과반 뒤 verdict 가 모든 클라이언트에 오지 않음`);
+    await waitUntil(() => allSee(alive, "verdict", n), STATE_LIMIT_MS, `${label} 스킵 전원 동의 뒤 verdict 가 모든 클라이언트에 오지 않음`);
     const verdictEnds = new Set(alive.map((c) => firstState(c, "verdict", inDay(n)).msg.view.phaseEndsAt));
     if (verdictEnds.size !== 1) fail(`${label} verdict 의 phaseEndsAt 이 클라이언트마다 다름 (${verdictEnds.size}종)`);
     for (const c of alive) {
@@ -764,8 +769,10 @@ async function stageFull(url, args) {
       if (JSON.stringify(vv.day.verdictCount) !== JSON.stringify({ yes: 0, no: 0 })) fail(`${c.nickname} 의 ${label} verdict 첫 day.verdictCount 가 {yes:0,no:0} 이 아님: ${JSON.stringify(vv.day.verdictCount)}`);
       for (const key of ["voted", "ballots", "candidate", "points", "turn", "verdict"]) if (vv.day[key] !== undefined) fail(`${c.nickname} 의 ${label} verdict view 에 day.${key} 가 있음(찬반에는 후보·던진 좌석·기록이 없다, D-11·D-26)`);
       if (vv.me.verdictVote !== undefined) fail(`${c.nickname} 의 ${label} verdict 첫 view 에 verdictVote 가 이미 있음`);
-      if (vv.serverNow >= discEndsAt - 5_000) fail(`${label} 과반 토론 끝내기 뒤에도 토론 마감(${discEndsAt})을 거의 다 기다림 (serverNow ${vv.serverNow})`);
+      if (vv.serverNow >= discEndsAt - 5_000) fail(`${label} 전원 동의 뒤에도 토론 마감(${discEndsAt})을 거의 다 기다림 (serverNow ${vv.serverNow})`);
     }
+    const verdictView = firstState(alive[0], "verdict", inDay(n)).msg.view;
+    await sleep(Math.max(0, (verdictView.phaseStartsAt ?? verdictView.serverNow) - verdictView.serverNow) + 50);
     if (ghosts.length > 0) await expectError(ghosts[0], { t: "verdict", agree: true }, "BAD_MESSAGE", `${label} 유령의 찬반`);
     const voters = alive; // 후보가 없어 산 사람 전원이 던진다(처형 대상 victim 도)
     const sent = new Map();
@@ -1345,7 +1352,7 @@ async function stageFull(url, args) {
   }
 
   // ---- 낮 처형 누설 단언 (DAY-03~07, 결정 0053·0060, T-08-02·T-08-03) ----
-  // 공개 값은 자기 단계에서만 있고, 개인 값(me.endDiscussion·me.verdictVote)은 본인이 보낸 값뿐이다. 남의 찬반 값을 알 수 있는 키(agree·값 달린 목록)는 어떤 프레임에도 없다.
+  // 참가자가 보낸 자기 동의와 선택을 확인하고, 공개 값에 동의자 목록이 들어가지 않는지 본다.
   for (const c of clients) {
     const sentVerdicts = new Set(c.verdictSent ?? []);
     for (const f of states(c)) {
@@ -1367,7 +1374,8 @@ async function stageFull(url, args) {
       if (v.day?.showdown?.voted !== undefined && !v.day.showdown.voted.every((seat) => Number.isInteger(seat))) fail(`${c.nickname} 의 day.showdown.voted 가 좌석 번호 목록이 아님`);
       if (v.me.ballot !== undefined && (v.phase !== "showdown" || !(c.ballotSent ?? []).includes(v.me.ballot))) fail(`${c.nickname} 의 ${v.phase} 프레임 me.ballot(${v.me.ballot})이 본인이 보낸 값이 아님`);
       if (v.me.verdictVote !== undefined && (v.phase !== "verdict" || !sentVerdicts.has(v.me.verdictVote))) fail(`${c.nickname} 의 ${v.phase} 프레임 me.verdictVote(${v.me.verdictVote})가 본인이 보낸 값이 아님`);
-      if (v.me.endDiscussion !== undefined && (v.phase !== "discussion" || c.pressed !== true)) fail(`${c.nickname} 의 ${v.phase} 프레임에 누르지 않은 me.endDiscussion 이 있음`);
+      if (v.phaseSkip !== undefined && sortedKeys(v.phaseSkip) !== "canVote,count,opensAt,total") fail(`${c.nickname} 의 ${v.phase} 스킵 공개 값에 추가 키가 있음`);
+      if (v.me.phaseSkip !== undefined && !c.skipVotesSent?.has(v.phaseSkip?.opensAt)) fail(`${c.nickname} 의 ${v.phase} 프레임에 누르지 않은 me.phaseSkip 이 있음`);
     }
   }
 

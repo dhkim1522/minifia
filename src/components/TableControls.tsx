@@ -7,12 +7,13 @@ import type { WorldPick } from "./WorldStage";
 interface TableControlsProps {
   players: readonly PublicPlayer[];
   focus?: number;
+  selected?: number;
   pick?: WorldPick;
   notes: ReadonlyMap<number, readonly number[]>;
   onChoose(seat: number): void;
 }
 
-export function TableControls({ players, focus, pick, notes, onChoose }: TableControlsProps) {
+export function TableControls({ players, focus, selected, pick, notes, onChoose }: TableControlsProps) {
   return (
     <div className="mf-table-controls" role="group" aria-label={pick?.group ?? "테이블 참가자"} data-table-controls="">
       {players.map((player) => {
@@ -27,7 +28,7 @@ export function TableControls({ players, focus, pick, notes, onChoose }: TableCo
               ...(pick.attr ? { [pick.attr]: seat } : {}),
             } : {})}
             aria-label={count > 0 ? `${name}, ${SUSPECT_TEXT.count(count)}` : name}
-            aria-pressed={pick ? pick.mine === seat : focus === seat} disabled={disabled} onClick={() => onChoose(seat)}>
+            aria-pressed={(pick ? pick.mine : selected ?? focus) === seat} disabled={disabled} onClick={() => onChoose(seat)}>
             <PlayerPortrait seat={seat} animal={player.animal} />
             <span className="mf-table-controls__name">{player.nickname}</span>
             {count > 0 ? <span className="mf-table-controls__count" aria-hidden="true"><V2Icon name="postit" size={11} />{count}</span> : null}

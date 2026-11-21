@@ -84,6 +84,7 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
   // 8페이즈 낮 처형(결정 0060, 08-07): 모두 strictObject — 행위자는 소켓 첨부 playerId 로만 정해지므로 seat·id·ch 가 덧붙으면 거부한다(T-08-04, T-08-24).
   // 토론 끝내기 on / 지목 target(0..7, 취소 없음 — null 거부) / 찬반 agree. 단계·산 사람·자기 자신·변론자 검사는 서버 규칙(shared/game/{discussion,nomination,verdict}.ts)이 한다.
   z.strictObject({ t: z.literal("endDiscussion"), on: z.boolean() }),
+  z.strictObject({ t: z.literal("phaseSkip"), opensAt: z.number().int(), on: z.boolean() }),
   z.strictObject({ t: z.literal("point"), target: z.number().int().min(0).max(7) }),
   // 행위자는 소켓 첨부 playerId 로 정해지고, remove는 해당 대상에 붙인 자기 표시만 뗀다.
   z.strictObject({ t: z.literal("suspect"), target: z.number().int().min(0).max(7), remove: z.literal(true).optional() }),

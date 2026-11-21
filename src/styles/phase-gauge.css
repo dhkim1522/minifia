@@ -1,8 +1,9 @@
 .mf-game-phase-header {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(var(--tap-min), auto) 6px;
   align-items: center;
-  gap: var(--space-sm);
+  gap: var(--space-xs) var(--space-sm);
   min-height: var(--tap-min);
 }
 
@@ -13,7 +14,11 @@
 
 /* 지도와 역할 확인·답안의 머리는 같은 조작 좌표를 쓴다. */
 .mf-game__header:has(.mf-game-phase-header),
-.mf-reveal > .mf-reveal__header:has(.mf-game-phase-header),
+.mf-reveal > .mf-reveal__header:has(.mf-game-phase-header) {
+  height: 62px;
+  padding: 4px 10px 4px 14px;
+}
+
 header.mf-lobby__header,
 header.mf-result__header {
   height: 62px;
@@ -42,7 +47,8 @@ header.mf-result__header {
 }
 
 .mf-game-phase-header__actions {
-  grid-column: 3;
+  grid-column: 2;
+  grid-row: 1;
   display: flex;
   justify-content: flex-end;
   gap: var(--space-xs);
@@ -61,9 +67,55 @@ header.mf-result__header {
   clip-path: inset(50%);
 }
 
+.mf-phase-skip {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: var(--space-xs);
+  box-sizing: border-box;
+  min-height: var(--tap-min);
+  padding-inline: 7px;
+  border: 1px solid var(--noir-control-line);
+  border-radius: var(--noir-control-radius);
+  background: var(--noir-control);
+  color: var(--noir-paper);
+  font: var(--type-label-strong);
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  animation: mf-phase-skip-in 200ms var(--ease-out);
+}
+
+.mf-phase-skip .mv-count {
+  margin: 0;
+  padding: 0;
+  font-size: inherit;
+  color: inherit;
+}
+
+.mf-phase-skip[aria-pressed="true"] {
+  border-color: var(--noir-accent);
+  background: var(--noir-action);
+  color: var(--noir-accent);
+}
+
+.mf-phase-skip[aria-disabled="true"] { opacity: .5; cursor: default; }
+.mf-phase-skip:focus-visible { outline: 2px solid var(--noir-paper); outline-offset: -2px; }
+
+@keyframes mf-phase-skip-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mf-phase-skip { animation: none; }
+}
+
 .mf-phase-gauge {
-  grid-column: 2;
-  height: 8px;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  box-sizing: border-box;
+  height: 6px;
   overflow: hidden;
   border: 1px solid var(--noir-line);
   border-radius: var(--radius-pill);
@@ -75,7 +127,6 @@ header.mf-result__header {
   height: 100%;
   background: var(--mf-gauge-fill, var(--noir-paper));
   transform-origin: left center;
-  transition: transform 250ms linear;
 }
 
 .mf-phase-gauge[data-tone="warn"] {
@@ -89,8 +140,4 @@ header.mf-result__header {
 /* 긴 토론 막대가 마지막에 아주 짧아져도 색 상태가 읽히게 테두리에도 반영한다. */
 .mf-phase-gauge:is([data-tone="warn"], [data-tone="urgent"]) {
   border-color: var(--mf-gauge-fill);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mf-phase-gauge__fill { transition: none; }
 }

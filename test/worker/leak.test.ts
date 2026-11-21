@@ -11,6 +11,7 @@ import {
   advanceToKeep,
   chatMsg,
   closePhase,
+  openDiscussionSkip,
   collect,
   connect,
   forceDue,
@@ -788,8 +789,9 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
         return got;
       };
 
-      /** 토론 끝내기: 과반(산 사람 수의 ⌊n/2⌋+1)이 누르면 찬반으로 넘어간다. 누를 때마다 모든 소켓의 day.endCount 가 같고 me.endDiscussion 은 누른 본인에게만 있다. */
+      /** 토론 끝내기: 산 사람 전원이 누르면 찬반으로 넘어간다. 누를 때마다 모든 소켓의 day.endCount 가 같고 me.endDiscussion 은 누른 본인에게만 있다. */
       const pressEnd = async (who: SeatedActor[]): Promise<void> => {
+        await openDiscussionSkip(code);
         const day = dayNow();
         const mine = byDay(pressed, day, () => new Set<number>());
         for (const [i, a] of who.entries()) {
@@ -802,7 +804,7 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
           expect(views[0]!.day?.endCount).toBe(i + 1);
           for (const [j, v] of views.entries()) expect(Object.hasOwn(v.me, "endDiscussion")).toBe(mine.has(actors[j]!.seat));
         }
-        // 마지막 표(과반)가 마감을 당겨 단계를 넘겼다(토론 → 찬반) — settle 이 이미 그 프레임을 읽었으므로 마지막 view 로 본다.
+        // 마지막 동의가 마감을 당겨 단계를 넘겼다(토론 → 찬반) — settle 이 이미 그 프레임을 읽었으므로 마지막 view 로 본다.
         for (const a of actors) expect(lastViewOf(a.sock).phase).toBe("verdict");
       };
 
@@ -924,7 +926,7 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
         for (const sock of socks) await settle(sock, mark(sock));
         for (const a of actors) expect(lastViewOf(a.sock).players.some((pl) => Object.hasOwn(pl, "badge") || Object.hasOwn(pl, "badgeSwapped"))).toBe(false);
       }
-      await pressEnd(bySeat.slice(0, 4)); // 6명 판의 과반 4 → 찬반
+      await pressEnd(bySeat); // 6명 전원 동의 → 찬반
       for (const a of actors) expect(Object.hasOwn(lastViewOf(a.sock).day ?? {}, "candidate")).toBe(false); // 찬반에는 후보가 없다(D-11)
       const voters1 = alive(dead);
       await castVerdicts(voters1, (a) => a.seat !== voters1[1]!.seat, true); // 찬성 5 · 반대 1 → 통과
@@ -1027,6 +1029,8 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
             // 개인 값은 본인 경로 밖에 없다
             if (key === "verdictVote") expect(path).toBe(".view.me.verdictVote");
             if (key === "endDiscussion") expect(path).toBe(".view.me.endDiscussion");
+            if (key === "phaseSkip") expect([".view.me.phaseSkip", ".view.phaseSkip"]).toContain(path);
+            expect(key).not.toBe("phaseSkipVotes");
           }
           // 시상 칭호는 없다(결정 0089-20, D-19): 어느 소켓·어느 단계 프레임에도 awards 키가 0건(ended 포함).
           expect(`${msg.t}:${raw.includes('"awards"')}`).toBe(`${msg.t}:false`);
@@ -1126,8 +1130,8 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
 
       // 받을 사람은 실제로 받았다 — 아무도 못 받는 검사가 되지 않게.
       const everyone = bySeat.map((a) => a.seat);
-      // 누른 사람만 본인 표시를 받는다. 네 번째 표는 과반이라 곧장 지목으로 넘어가 토론 프레임을 더 받지 않는다.
-      expect([...seen.endMine].sort()).toEqual(bySeat.slice(0, 3).map((a) => a.seat));
+      // 마지막 동의는 곧장 찬반으로 넘어간다. 앞서 동의한 사람만 본인 표시가 있는 토론 프레임을 받는다.
+      expect([...seen.endMine].sort()).toEqual(bySeat.slice(0, -1).map((a) => a.seat));
       expect([...seen.points].sort()).toEqual(everyone);
       expect([...seen.counted].sort()).toEqual(everyone);
       expect([...seen.verdict].sort()).toEqual(everyone);

@@ -1455,7 +1455,7 @@ export async function tapAt(page, pt) {
 /**
  * 게임 맵 화면 한 장: 루트 data-game-stage 가 없으면 null.
  * { phase, ghostView, kbOpen, title, guide: { count, text }, header, stage, panel(사각형), chatChannel, hasInput, end: { present, pressed, on, total } | null,
- *   turn: { compact, no, seat, tone, block, pill, bar, pillScrollW, pillClientW, docScrollW, docClientW, minFontPx, line: { text } | null, hasLineEl } | null(09.1-08, 지목 차례 알약),
+ *   phaseSkip: { inHeader, rect } | null, turn: { compact, no, seat, tone, block, pill, bar, pillScrollW, pillClientW, docScrollW, docClientW, minFontPx, line: { text } | null, hasLineEl } | null(09.1-08, 지목 차례 알약),
  *   dim: "on" | "off" | null(어둡게 막), 지목 단계의 stage.top = 알약·막대 아랫변 + 4,
  *   verdictRow: { hasPicker, hasCount } | null, verdictCounts: { yes, no } | null, willSheets, willReveals[], chatLockedCount, verdictBtns, picks: [{ seat, rect, pressed, label }], tags: [{ seat, me, count, lead, sure, mine, done, ring, ghostSeat, roleChip, opacity }],
  *   announce: { text, fontPx, lineCount, wordBreak } | null, counts: { ghostView, roleChips, ghostSeats, ghostTexts }, ring, testButton, nightPanel }
@@ -1479,6 +1479,7 @@ export async function readGame(page) {
     const header = q(".mf-game__header");
     const panel = q("[data-world-panel]");
     const endBtn = q("[data-end-discussion]");
+    const skipBtn = q("[data-phase-skip]");
     const vrow = q("[data-verdict-row]");
     const ann = q("[data-announce]");
     const annText = ann ? q(".mf-announce__text", ann) : null;
@@ -1546,6 +1547,7 @@ export async function readGame(page) {
       hasChat: !!q("[data-chat-panel]"),
       hasInput: !!q("[data-chat-input]"),
       end: endBtn ? { pressed: endBtn.getAttribute("aria-pressed") === "true", ...(count(endBtn) ?? { on: 0, total: 0 }) } : null,
+      phaseSkip: skipBtn ? { inHeader: header?.contains(skipBtn) === true, rect: rect(skipBtn) } : null,
       // 22페이즈(D-11·P22-2): 찬반 숫자 줄은 두 덩이 [data-verdict-count=yes|no] 의 숫자뿐이다 — 'n / N' 모양이 아니다. 개인 표 표식은 없다
       verdictRow: vrow ? { hasPicker: !!q(".mv-verdict", vrow), hasCount: !!q(".mv-count", vrow) } : null,
       verdictCard: rect(vrow?.closest(".mf-phase-event__card")),
@@ -1589,13 +1591,12 @@ export async function tapPick(page, seat) {
 }
 
 /**
- * 순차 지목에서 내 차례에 대상을 누르고 그 좌석의 선택 표식을 확인한다. 눈높이 시야 밖 이름표도 검사한다.
- * 누르면 버튼이 사라지므로(서버 확인 전에도 즉시) aria-pressed 를 기다리지 않는다. tapPick 은 밤 마피아용으로 그대로 둔다.
+ * 순차 지목에서 대상을 누르면 얼굴판 선택 상태 또는 이전 맵 이름표의 선택 표식이 남는다.
  */
 export async function tapTurnPick(page, seat) {
   const btn = page.locator(`[data-pick="${seat}"]`);
   await btn.click({ timeout: 4000 });
-  await page.waitForSelector(`[data-seat="${seat}"] .mv-head[data-mine]`, { timeout: 3000, state: "attached" });
+  await page.waitForSelector(`[data-table-seat="${seat}"][aria-pressed="true"], [data-seat="${seat}"] .mv-head[data-mine]`, { timeout: 3000, state: "attached" });
 }
 
 /** 찬반 버튼을 눌러 그 쪽이 aria-pressed 가 될 때까지 기다린다. */
@@ -1605,10 +1606,10 @@ export async function chooseVerdict(page, yes) {
   await page.waitForSelector(`[data-verdict="${v}"][aria-pressed="true"]`, { timeout: 3000 });
 }
 
-/** [토론 끝내기] 를 눌러 aria-pressed 가 바뀔 때까지 기다린다(on = 누른 뒤 기대 상태). */
+/** 토론에서 열리는 스킵을 누르고 동의·취소 표시를 확인한다. */
 export async function pressEndDiscussion(page, on = true) {
-  await page.locator("[data-end-discussion]").click({ timeout: 4000 });
-  // 내 눌림으로 과반이 되면 서버가 바로 지목으로 넘겨 [토론 끝내기] 가 사라진다 — 단계가 넘어가 버튼이 없어진 것도 눌린 결과로 본다(on 일 때만)
+  await page.locator("[data-end-discussion]").click({ timeout: 6000 });
+  // 마지막 동의 뒤에는 버튼이 다음 단계로 전환되면서 사라질 수 있다.
   await page.waitForFunction(
     ({ want }) => {
       const b = document.querySelector("[data-end-discussion]");

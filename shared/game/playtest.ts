@@ -8,18 +8,12 @@ import type { DeadlineResult } from "./tick";
 export const PLAYTEST_ROLE_MS = 55_000;
 export const PLAYTEST_KEYWORD_MS = KEYWORD_READ_MS + 30_000;
 export const PLAYTEST_DISCUSSION_MS = 120_000;
-export const PLAYTEST_DISCUSSION_MIN_MS = 45_000;
 export const PLAYTEST_BALLOT_MS = 28_000;
 export const PLAYTEST_RESULT_MS = 7_000;
 export const PLAYTEST_MORNING_EXTRA_MS = 3_000;
 
 export function firstPlaytestDay(state: Pick<RoomState, "playtest" | "day">): boolean {
   return state.playtest === true && (state.day ?? 1) === 1;
-}
-
-export function voteOpensAt(state: RoomState): number | undefined {
-  if (!firstPlaytestDay(state) || state.phase !== "discussion" || state.phaseEndsAt === null) return undefined;
-  return state.phaseEndsAt - PLAYTEST_DISCUSSION_MS + PLAYTEST_DISCUSSION_MIN_MS;
 }
 
 export function keywordReadUntil(state: RoomState): number | undefined {
@@ -36,7 +30,6 @@ export function humanSeats(state: RoomState): Player[] {
 type ActionResult = { ok: true; state: RoomState } | { ok: false; error: "BAD_MESSAGE" | "WRONG_PHASE" };
 
 export function confirmRole(state: RoomState, actorId: string): ActionResult {
-  if (state.playtest !== true) return { ok: false, error: "BAD_MESSAGE" };
   if (state.phase !== "roleReveal") return { ok: false, error: "WRONG_PHASE" };
   const actor = humanSeats(state).find((p) => p.id === actorId);
   if (!actor?.role) return { ok: false, error: "BAD_MESSAGE" };

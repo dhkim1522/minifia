@@ -6,7 +6,7 @@ import type { RoomView, ServerMessage } from "../../shared/protocol";
 import { DEFENSE_MS, DISCUSSION_MS, NOMINATION_GATHER_MS, PHASE_DEFS, PICK_GAP_MS, PICK_TURN_MS, VERDICT_MS } from "../../shared/game/phases";
 import { env } from "cloudflare:workers";
 import { runDurableObjectAlarm } from "cloudflare:test";
-import { advanceTo, alarmOf, chatMsg, closePhase, connect, editRoom, endAs, flushWorld, hello, killSeats, lastViewOf, layOf, mark, mapPlayers, pause, pointAs, segEndsBySeat, send, settle, startedGame, storedRoom, summary, toPhase, verdictAs, worldFramesOf } from "./helpers";
+import { advanceTo, alarmOf, chatMsg, closePhase, connect, editRoom, endAs, openDiscussionSkip, flushWorld, hello, killSeats, lastViewOf, layOf, mark, mapPlayers, pause, pointAs, segEndsBySeat, send, settle, startedGame, storedRoom, summary, toPhase, verdictAs, worldFramesOf } from "./helpers";
 import type { Actor, Game } from "./helpers";
 import { RULES } from "../../shared/game/ruleset";
 
@@ -260,36 +260,42 @@ describe("찬반 방송 규율 (DAY-06, 결정 0053, 22-09 D-11·D-26, T-22-15·
 describe("토론 끝내기 (DAY-03, 결정 0060-2)", () => {
   it("누르면 네 소켓 모두의 day.endCount 가 1 이고 me.endDiscussion 은 누른 사람에게만 있다; 취소하면 0 이고 키가 사라진다", async () => {
     const g = await startedGame("discussion", 3);
+    await openDiscussionSkip(g.code);
     const a = g.actors[1]!;
-    const on = await castAll(g, () => endAs(a.sock, true));
+    const on = await castAll(g, () => endAs(a!.sock, true));
     expect(lines(on)).toBe("[state:discussion] [state:discussion] [state:discussion] [state:discussion]");
     expect(on.map((f) => String(viewsOf(f)[0]?.day?.endCount)).join(" ")).toBe("1 1 1 1");
     expect(on.map((f) => String(viewsOf(f)[0]?.me.endDiscussion)).join(" ")).toBe("undefined true undefined undefined");
     expect(on.map((f) => Object.hasOwn(viewsOf(f)[0]?.me ?? {}, "endDiscussion")).join(" ")).toBe("false true false false");
-    const off = await castAll(g, () => endAs(a.sock, false));
+    const off = await castAll(g, () => endAs(a!.sock, false));
     expect(off.map((f) => String(viewsOf(f)[0]?.day?.endCount)).join(" ")).toBe("0 0 0 0");
     expect(off.map((f) => Object.hasOwn(viewsOf(f)[0]?.me ?? {}, "endDiscussion")).join(" ")).toBe("false false false false");
   });
 
   it("같은 값을 다시 누르면 프레임이 없다", async () => {
     const g = await startedGame("discussion", 3);
+    await openDiscussionSkip(g.code);
     const a = g.actors[1]!;
-    await castAll(g, () => endAs(a.sock, true));
-    expect(lines(await castAll(g, () => endAs(a.sock, true)))).toBe("[] [] [] []");
+    await castAll(g, () => endAs(a!.sock, true));
+    expect(lines(await castAll(g, () => endAs(a!.sock, true)))).toBe("[] [] [] []");
   });
 
-  it("과반(산 4 중 3)에 닿는 순간 마감을 지금으로 당겨 다음 단계로 넘기고 새 마감은 now + 다음 단계 길이이며 알람이 따라 옮겨진다", async () => {
+  it("전원(산 4 중 4)에 닿는 순간 마감을 지금으로 당겨 다음 단계로 넘기고 새 마감은 now + 다음 단계 길이이며 알람이 따라 옮겨진다", async () => {
     const g = await startedGame("discussion", 3);
-    const [a, b, c] = [g.actors[1]!, g.actors[2]!, g.actors[3]!];
-    await castAll(g, () => endAs(a.sock, true));
-    const two = await castAll(g, () => endAs(b.sock, true));
+    await openDiscussionSkip(g.code);
+    const [a, b, c, d] = g.actors;
+    await castAll(g, () => endAs(a!.sock, true));
+    const two = await castAll(g, () => endAs(b!.sock, true));
     expect(two.map((f) => String(viewsOf(f)[0]?.day?.endCount)).join(" ")).toBe("2 2 2 2");
+    const three = await castAll(g, () => endAs(c!.sock, true));
+    expect(three.map((f) => viewsOf(f)[0]?.phaseSkip?.count)).toEqual([3, 3, 3, 3]);
+    expect((await storedRoom(g.code)).phase).toBe("discussion");
     const nextId = PHASE_DEFS.discussion.next!;
     const next = PHASE_DEFS[nextId];
     const before = Date.now();
-    const third = await castAll(g, () => endAs(c.sock, true));
+    const fourth = await castAll(g, () => endAs(d!.sock, true));
     const after = Date.now();
-    expect(third.map((f) => viewsOf(f).at(-1)?.phase).join(" ")).toBe(Array(4).fill(nextId).join(" "));
+    expect(fourth.map((f) => viewsOf(f).at(-1)?.phase).join(" ")).toBe(Array(4).fill(nextId).join(" "));
     const stored = await storedRoom(g.code);
     expect(stored.phase).toBe(nextId);
     const dur = next.durationMs!;
@@ -299,6 +305,7 @@ describe("토론 끝내기 (DAY-03, 결정 0060-2)", () => {
 
   it("유령의 토론 끝내기는 BAD_MESSAGE 이다", async () => {
     const g = await startedGame("discussion", 3);
+    await openDiscussionSkip(g.code);
     const ghost = g.actors[3]!;
     await killSeats(g, [ghost.seat]);
     expect(lines(await castAll(g, () => endAs(ghost.sock, true)))).toBe("[] [] [] [error:BAD_MESSAGE,state:discussion]");
@@ -383,11 +390,12 @@ function roleValuePaths(value: unknown, path = ""): string[] {
 /** 모든 소켓의 마지막 view. */
 const lastViews = (g: Game): RoomView[] => g.socks.map((s) => lastViewOf(s));
 
-/** 방장 포함 5명 판을 토론에서 시작해, 과반(3명)이 토론 끝내기를 눌러 찬반으로 넘긴다. */
+/** 5명 판을 토론에서 시작해, 전원 동의로 찬반으로 넘긴다. */
 async function toVerdictByEnd(): Promise<{ g: Game; before: number; after: number }> {
   const g = await startedGame("discussion", 4);
+  await openDiscussionSkip(g.code);
   const before = Date.now();
-  for (const a of g.actors.slice(0, 3)) {
+  for (const a of g.actors) {
     endAs(a.sock, true);
     await settle(a.sock, mark(a.sock));
   }
@@ -579,9 +587,9 @@ describe("실제 흐름 (결정 0060-1)", () => {
     expect(lastViews(g).map((v) => v.day?.noExecution?.reason).join(",")).toBe("rejected,rejected,rejected,rejected,rejected");
   }, 60_000);
 
-  it("둘째 날 토론이 시작되면 전날의 endVote·nominate·verdictVote·verdict·execution 이 없고 토론이 바로 끝나지 않는다", async () => {
+  it("둘째 날 토론이 시작되면 전날의 건너뛰기 동의·지목·찬반·처형 기록이 남지 않는다", async () => {
     const { g } = await toNominationByEnd();
-    expect((await storedFlow(g.code)).players.filter((p) => p.endVote !== undefined).length).toBe(3);
+    expect((await storedRoom(g.code)).phaseSkipVotes).toBeUndefined();
     const defender = g.actors.find((a) => a.role !== "mafia")!;
     const others = g.actors.filter((a) => a.seat !== defender.seat);
     const bySeat: Record<number, number> = { [defender.seat]: others[0]!.seat };
@@ -601,6 +609,7 @@ describe("실제 흐름 (결정 0060-1)", () => {
     expect(day2.day).toBe(2);
     expect(day2.verdict).toBeUndefined();
     expect(day2.execution).toBeUndefined();
+    expect((await storedRoom(g.code)).phaseSkipVotes).toBeUndefined();
     for (const key of ["endVote", "nominate", "verdictVote"]) {
       expect(day2.players.filter((p) => p[key] !== undefined).length).toBe(0);
     }
