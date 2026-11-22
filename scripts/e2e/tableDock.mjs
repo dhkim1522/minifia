@@ -3,9 +3,13 @@ import {
   closeSheet,
   installFakeViewport,
   openTableDockPane,
+  openTestSheet,
   readChatLines,
   readGame,
+  setBots,
+  skipOnce,
   skipTo,
+  startGame,
   tapTurnPick,
   typeAndSendChat,
 } from "./browser.mjs";
@@ -13,6 +17,63 @@ import { rectInside, TAP_MIN } from "./lib.mjs";
 
 function dockMode(page, name) {
   return page.locator(`[data-table-dock][data-dock-open="${name}"]`);
+}
+
+export function makeFirstBallotDockFlow({ recorder, startHost, openGuest, checkRoomWidth }) {
+  return async function firstBallotDockFlow(ctx) {
+    const id = "first-ballot-dock";
+    const rec = recorder(ctx);
+    const { page, tracker } = await startHost(ctx, id, { playtest: true });
+    const { guest, seat } = await openGuest(ctx, "첫날친구");
+    try {
+      await openTestSheet(page);
+      await setBots(page, tracker, 6);
+      await startGame(page, tracker);
+      await skipTo(page, tracker, "discussion");
+      await guest.tracker.waitFor((view) => view.phase === "discussion", 4000, "친구 화면의 첫 토론");
+      await openTableDockPane(guest.page, "people");
+      const guestSeats = guest.page.locator("[data-table-seat]");
+      const seatOrder = await guestSeats.evaluateAll((seats) => seats.map((el) => el.getAttribute("data-table-seat")));
+
+      await skipTo(page, tracker, "verdict");
+      const hostBallot = page.locator('[data-dock-pane="people"] [data-first-ballot]');
+      await hostBallot.waitFor({ timeout: 4000 });
+      await checkRoomWidth(ctx, id, page, GAME_RAILS, ["[data-first-ballot]"]);
+      rec(id, "FB1", "첫날 지목은 후보 7명과 안 뽑기 하나를 같은 하단 판에 표시한다",
+        await hostBallot.locator("[data-pick]").count() === 7
+        && await hostBallot.locator("[data-first-ballot-hold]").count() === 1
+        && await page.locator('[data-phase-event="first-ballot"]').count() === 0);
+
+      await guest.page.locator("[data-dock-pending]").waitFor({ timeout: 4000 });
+      rec(id, "FB2", "참가자 판을 보고 있던 사람에겐 명시적으로 지목을 열기 전까지 투표 버튼이 없다",
+        await guest.page.locator("[data-pick], [data-first-ballot-hold]").count() === 0);
+      await openTableDockPane(guest.page, "people");
+      const voteOrder = await guestSeats.evaluateAll((seats) => seats.map((el) => el.getAttribute("data-table-seat")));
+      rec(id, "FB3", "바라보기와 첫날 지목에서 후보 좌석 순서가 같다",
+        await guest.page.locator("[data-first-ballot] [data-pick]").count() === 7 && JSON.stringify(seatOrder) === JSON.stringify(voteOrder));
+
+      const pick = hostBallot.locator(`[data-pick="${seat}"]`);
+      const hold = hostBallot.locator("[data-first-ballot-hold]");
+      await pick.click();
+      await tracker.waitFor((view) => view.me.firstBallot === seat, 4000, "첫날 지목 서버 반영");
+      await hostBallot.locator(`[data-pick="${seat}"][aria-pressed="true"]`).waitFor({ timeout: 2500 });
+      rec(id, "FB4", "서버가 받은 첫날 지목은 같은 얼굴에 선택 표시를 남긴다",
+        await pick.getAttribute("aria-pressed") === "true");
+      await hold.click();
+      await tracker.waitFor((view) => view.me.firstBallot === null, 4000, "첫날 안 뽑기 서버 반영");
+      await hostBallot.locator('[data-first-ballot-hold][aria-pressed="true"]').waitFor({ timeout: 2500 });
+      rec(id, "FB5", "마감 전 같은 화면에서 후보 선택을 안 뽑기로 바꾸고 서버 집계를 본다",
+        await hold.getAttribute("aria-pressed") === "true" && /\d+\/8명 선택/.test(await hostBallot.getByRole("status").textContent()));
+      await skipOnce(page, tracker);
+      await tracker.waitFor((view) => view.day?.firstBallot?.result !== undefined, 4000, "첫날 지목 결과");
+      const result = page.locator('[data-phase-event="first-ballot"] [data-first-ballot-result]');
+      await result.waitFor({ timeout: 3000 });
+      rec(id, "FB6", "첫날 집계가 끝나면 선택판이 닫히고 중앙에 공개 결과만 남는다",
+        await hostBallot.count() === 0 && await result.count() === 1);
+    } finally {
+      await guest.context.close().catch(() => {});
+    }
+  };
 }
 
 async function swipe(page, selector, direction, mobile) {
@@ -111,7 +172,15 @@ export function makeTableDockFlow({ recorder, openGame, closeGame, writeSheet, g
         && await tools.locator("[data-suspect-btn]").count() === 1
         && await tools.locator("[data-will-button]").count() === 1);
       await tools.locator("[data-suspect-btn]").click();
-      await openTableDockPane(hp, "people");
+      await hp.getByRole("region", { name: "딱지 붙이기" }).waitFor({ timeout: 3500 });
+      rec(sc, "TD8A", "딱지 도구를 선택하면 참가자 판이 바로 열리고 무대 이름표는 대상 버튼이 되지 않는다",
+        await roster.locator("[data-suspect-tag]").count() === 3 && await hp.locator("[data-world-stage] [data-suspect-tag]").count() === 0);
+      await roster.locator("[data-dock-handle]").click();
+      await dockMode(hp, "closed").waitFor({ timeout: 3500 });
+      rec(sc, "TD8C", "딱지 대상 패널을 닫으면 보내지 않고 취소한다",
+        ht.last().me.suspectTo === undefined && await hp.locator('[data-suspect-mode="off"]').count() === 1);
+      await openTableDockPane(hp, "tools");
+      await tools.locator("[data-suspect-btn]").click();
       await roster.locator(`[data-table-seat="${first.seat}"][data-suspect-tag]`).click();
       await ht.waitFor((view) => view.me.suspectTo === first.seat, 4000, "의심 딱지 서버 반영");
       rec(sc, "TD8", "도구에서 의심 대상을 골라 서버에 반영한다", ht.last().me.suspectTo === first.seat);
@@ -166,10 +235,24 @@ export function makeTableDockFlow({ recorder, openGame, closeGame, writeSheet, g
       if (ctx.size.mobile === false) await guestVote.click();
       else await guestVote.tap();
       await dockMode(first.page, "people").waitFor({ timeout: 3000 });
+      await openTableDockPane(second.page, "people");
       await tapTurnPick(first.page, game.hostSeat);
       await first.tracker.waitFor((view) => view.day?.points?.some((point) => point.seat === first.seat && point.target === game.hostSeat),
         4000, "다음 사람 지목 서버 반영");
       rec(voteScenario, "TD13", "입력 중 지목 탭을 한 번 누르면 얼굴판이 열려 대상을 고를 수 있다", true);
+
+      const secondVote = second.page.locator('[data-dock-tab="people"][data-dock-pending]');
+      await secondVote.waitFor({ timeout: 4000 });
+      const viewed = second.page.locator(`[data-table-seat="${first.seat}"]`);
+      await viewed.click({ timeout: 2500 });
+      rec(voteScenario, "TD14", "얼굴판을 보는 중 내 차례가 와도 바라보기 터치가 표로 제출되지 않는다",
+        await viewed.getAttribute("aria-pressed") === "true"
+        && await second.page.locator("[data-pick]").count() === 0
+        && !second.tracker.last().day?.points?.some((point) => point.seat === second.seat));
+      await tapTurnPick(second.page, game.hostSeat);
+      await second.tracker.waitFor((view) => view.day?.points?.some((point) => point.seat === second.seat && point.target === game.hostSeat),
+        4000, "바라보기 뒤 내 표 반영");
+      rec(voteScenario, "TD15", "열려 있는 참가자 탭의 지목을 누른 뒤 얼굴을 골라 표를 보낸다", true);
     } finally {
       await closeGame(game);
     }

@@ -146,7 +146,7 @@ import { makeKeywordFlows } from "./keyword.mjs";
 import { SHORT_PHONE_H, readBenchView, readRematchState, readResultHidden, readRestSheet, readResultStage, rematchChecks, resultHiddenChecks, resultSkipChecks, resultStageChecks } from "./result.mjs";
 import { makePoliticsFlows } from "./politics.mjs";
 import { makeSoundFlows } from "./sound.mjs";
-import { makeTableDockFlow } from "./tableDock.mjs";
+import { makeFirstBallotDockFlow, makeTableDockFlow } from "./tableDock.mjs";
 import { makeHostFlows } from "./host.mjs";
 import { CHAT_OPEN_STAGE_MIN, ghostViewChecks, liveGhostChecks, makePolishFlows, readLiveGhost } from "./polish.mjs";
 
@@ -184,9 +184,9 @@ export async function attempt(fn) {
 }
 
 /** 방 만들기 → 방장 페이지 → S1·S2. */
-export async function startHost(ctx, flowId, { nickname = HOST_NICK, initScripts = [] } = {}) {
+export async function startHost(ctx, flowId, { nickname = HOST_NICK, initScripts = [], playtest = false } = {}) {
   const rec = recorder(ctx);
-  const room = await createTestRoom(ctx.origin, nickname);
+  const room = await createTestRoom(ctx.origin, nickname, { playtest });
   ctx.secrets.push(room.token);
   ctx.roomCode = room.code; // 링크 참가 probe(UX2-J)용. 방 코드는 비밀이 아니다 — 토큰은 남기지 않는다
   ctx.hostToken = room.token; // 방장이 끊겼다 돌아오는 흐름(host-handoff, 11-12)이 같은 자리로 다시 붙는 데만 쓴다. 출력에는 ctx.secrets 로 가려진다
@@ -4016,6 +4016,7 @@ const { emceeBandFlow, emceeToolsFlow, emceeLeakFlow, emceeSoundFlow } = makeHos
 // 18.1 화면 다듬기(18.1-08): polish-reveal(역할 확인 카드 문구·무대 겹침, 네 직업 × 폰 6종). 흐름 본문은 polish.mjs, 도우미만 넘긴다
 const { polishRevealFlow } = makePolishFlows({ recorder, attempt, openGame, closeGame });
 const tableDockFlow = makeTableDockFlow({ recorder, openGame, closeGame, writeSheet, gameGH, checkRoomWidth });
+const firstBallotDockFlow = makeFirstBallotDockFlow({ recorder, startHost, openGuest, checkRoomWidth });
 
 export const FLOWS = [
   // lobby·world 는 LOBBY_SIZES 6개 크기로 돈다: 기본 크기 4개에 더해 390x844·402x874 (run.mjs 의 extraSizes)
@@ -4055,6 +4056,7 @@ export const FLOWS = [
   { id: "chat-game", run: chatGameFlow, size: GAME_SIZE },
   { id: "table-dock", run: tableDockFlow },
   { id: "table-dock-pc", run: tableDockFlow, size: { w: 1280, h: 800, label: "1280x800", mobile: false } },
+  { id: "first-ballot-dock", run: firstBallotDockFlow, size: GAME_SIZE },
   // 13페이즈 기본판(결정 0072): basic-off = 봇 판 한 판 전체(로비 → 낮 → 밤 → 결과)에서 꺼진 장치 DOM·프레임·단계 순서·결과 탭 0건, basic-vote = 8명 투표 화면(이름표 버튼 7개 44×44·무가림, 묶음 G·H). 폰 6종은 basic-vote 만
   { id: "basic-off", run: basicOffFlow, size: GAME_SIZE },
   { id: "basic-vote", run: basicVoteFlow, extraSizes: LOBBY_EXTRA_SIZES },

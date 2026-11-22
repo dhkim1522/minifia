@@ -41,7 +41,7 @@ function selectorFor(target: TutorialTargetId, scene: TutorialSceneId, playtest:
     case "role-ready": return "[data-role-ready]";
     case "send": return "[data-answer-send]";
     case "endDiscussion": return "[data-end-discussion]";
-    case "first-ballot": return "[data-first-ballot] [data-face], [data-first-ballot-hold]";
+    case "first-ballot": return "[data-first-ballot] [data-pick], [data-first-ballot] [data-face], [data-first-ballot-hold]";
     case "yes": return '[data-verdict="yes"]';
     case "tag-4": return scene === "postit" ? '[data-table-seat="4"][data-suspect-tag="4"]' : '[data-table-seat="4"][data-pick="4"]';
     case "face-0": return '[data-face="0"]';

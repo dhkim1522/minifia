@@ -33,6 +33,6 @@
 .mf-playtest__ballot-count { display: flex; align-items: center; gap: 6px; }
 .mf-playtest__ballot-count svg { color: var(--noir-paper); }
 
-/* 첫 투표는 후보 카드에, 키보드가 열리면 입력 영역에 집중한다. */
-[data-first-round-playtest] [data-game-stage]:has([data-first-ballot], [data-first-ballot-result]) .mf-world__tag,
+/* 중앙에서 투표 결과를 읽거나 키보드가 올라오면 읽는 영역에 집중한다. */
+[data-first-round-playtest] [data-game-stage]:has([data-phase-event="first-ballot"]) .mf-world__tag,
 [data-first-round-playtest] [data-game-stage][data-kb-open="true"] .mf-world__tag { visibility: hidden; }

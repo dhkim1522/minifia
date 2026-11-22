@@ -27,13 +27,13 @@ export class SetupError extends Error {
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** HTTP 로 테스트 방을 만든다. 실패는 상태 코드만 담는다(본문·토큰을 싣지 않는다). */
-export async function createTestRoom(origin, nickname) {
+export async function createTestRoom(origin, nickname, { playtest = false } = {}) {
   let res;
   try {
     res = await fetch(`${origin}/api/rooms`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ nickname, testMode: true }),
+      body: JSON.stringify({ nickname, testMode: true, ...(playtest ? { playtest: true } : {}) }),
     });
   } catch (e) {
     throw new SetupError(`방 만들기 요청 실패: ${e instanceof Error ? e.name : "오류"}`);
@@ -721,7 +721,9 @@ export async function collapseChatLog(page) {
 export async function openTableDockPane(page, name) {
   const tab = page.locator(`[data-dock-tab="${name}"]`);
   if (await tab.count() === 0) return false;
-  if (await tab.getAttribute("aria-expanded") !== "true") await tab.click({ timeout: 4000 });
+  if (await tab.getAttribute("aria-expanded") !== "true" || await tab.getAttribute("data-dock-pending") !== null) {
+    await tab.click({ timeout: 4000 });
+  }
   await page.locator(`[data-dock-pane="${name}"]`).waitFor({ state: "visible", timeout: 3000 });
   return true;
 }

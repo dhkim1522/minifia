@@ -18,11 +18,19 @@ const TABS = [
 
 const SWIPE_DISTANCE = 32;
 
+export interface PeopleAction {
+  kind: "vote" | "suspect";
+  title: string;
+  content: ReactNode;
+  onLeave?: () => void;
+}
+
 interface GameDockProps {
   scope: string;
   initialPane: DockPane;
-  voting: boolean;
+  peopleAction?: PeopleAction;
   preserveWriting: boolean;
+  keepLooking: boolean;
   keepToolsOpen: boolean;
   paused: boolean;
   inputRef?: RefObject<HTMLInputElement | null>;
@@ -36,10 +44,13 @@ interface GameDockProps {
   tools: ReactNode;
 }
 
-export function GameDock({ scope, initialPane, voting, preserveWriting, keepToolsOpen, paused, inputRef, chatStore, channel, mySeat, latest, peopleCount, chat, people, tools }: GameDockProps) {
+export function GameDock({ scope, initialPane, peopleAction, preserveWriting, keepLooking, keepToolsOpen, paused, inputRef, chatStore, channel, mySeat, latest, peopleCount, chat, people, tools }: GameDockProps) {
   const id = useId();
-  const [selection, setSelection] = useState({ scope, pane: initialPane });
-  const contents = { chat, people, tools };
+  const [selection, setSelection] = useState({ scope, pane: initialPane, waiting: false, action: peopleAction?.kind });
+  const voting = peopleAction?.kind === "vote";
+  const armed = selection.scope === scope && !selection.waiting;
+  const title = armed && peopleAction ? peopleAction.title : "참가자";
+  const contents = { chat, people: armed && peopleAction ? peopleAction.content : people, tools };
   const pane = selection.pane !== "closed" && contents[selection.pane] ? selection.pane : "closed";
   const tabs = useRef<Partial<Record<Pane, HTMLButtonElement | null>>>({});
   const paneRef = useRef<HTMLDivElement>(null);
@@ -50,12 +61,22 @@ export function GameDock({ scope, initialPane, voting, preserveWriting, keepTool
     if (selection.scope === scope) return;
     const field = inputRef?.current;
     const writing = preserveWriting && pane === "chat" && field !== null && field !== undefined && field === document.activeElement;
-    const next = writing || (keepToolsOpen && pane === "tools") ? pane : initialPane;
+    // 이미 상대를 바라보는 중이라면 얼굴을 누르던 조작이 새 투표가 되지 않게 한다.
+    const waiting = voting && pane === "people";
+    const wasMarking = selection.action === "suspect";
+    const looking = keepLooking && pane === "people" && selection.action === undefined;
+    const next = waiting || looking || writing || (keepToolsOpen && pane === "tools") ? pane
+      : wasMarking && !peopleAction ? (pane === "people" ? "closed" : pane)
+      : initialPane;
     if (pane !== "closed" && pane !== next && paneRef.current?.contains(document.activeElement)) {
       tabs.current[pane]?.focus({ preventScroll: true });
     }
-    setSelection({ scope, pane: next });
-  }, [scope, selection.scope, initialPane, pane, inputRef, preserveWriting, keepToolsOpen]);
+    if (peopleAction?.kind === "suspect" && next === "people") tabs.current.people?.focus({ preventScroll: true });
+    if (selection.action && pane === "people" && next === "closed" && document.activeElement === document.body) {
+      tabs.current.people?.focus({ preventScroll: true });
+    }
+    setSelection({ scope, pane: next, waiting, action: peopleAction?.kind });
+  }, [scope, selection.scope, selection.action, initialPane, pane, inputRef, preserveWriting, keepLooking, keepToolsOpen, peopleAction, voting]);
 
   // Store를 읽는 GameMap의 구독이 새 채팅 줄을 그린다. 열린 채널만 읽은 것으로 표시한다.
   useLayoutEffect(() => {
@@ -65,7 +86,8 @@ export function GameDock({ scope, initialPane, voting, preserveWriting, keepTool
   const unread = pane !== "chat" && chat && channel !== null ? chatStore.unreadCount(channel, mySeat) : 0;
   const open = (next: DockPane) => {
     if (next !== "chat") inputRef?.current?.blur();
-    setSelection({ scope, pane: next });
+    if (pane === "people" && next !== "people") peopleAction?.onLeave?.();
+    setSelection({ scope, pane: next, waiting: false, action: peopleAction?.kind });
   };
   const close = () => {
     if (pane === "closed") return;
@@ -119,14 +141,18 @@ export function GameDock({ scope, initialPane, voting, preserveWriting, keepTool
       ) : null}
       {pane !== "closed" ? (
         <div ref={paneRef} id={id} className="mf-game-dock__pane" data-dock-pane={pane} role="region"
-          aria-label={pane === "chat" ? "채팅" : pane === "people" ? voting ? "지목할 사람" : "참가자" : "도구"}>
+          aria-label={pane === "chat" ? "채팅" : pane === "people" ? title : "도구"}>
           <button type="button" className="mf-game-dock__handle" data-dock-handle="" aria-label="하단 패널 닫기"
             onPointerDown={startSwipe} onPointerUp={(event) => endSwipe(event, 1, close)}
             onPointerCancel={() => { gesture.current = undefined; }} onClick={(event) => afterSwipe(event, close)}>
             <span aria-hidden="true" />
           </button>
-          {pane === "people" ? <div className="mf-game-dock__title"><strong>{voting ? "지목할 사람" : "참가자"}</strong><span>{peopleCount}명</span></div> : null}
-          {contents[pane]}
+          {pane === "people" ? (
+            <>
+              <div className="mf-game-dock__title"><strong>{title}</strong>{!armed || !peopleAction ? <span>{peopleCount}명</span> : null}</div>
+              <div key={armed ? peopleAction?.kind ?? "people" : "people"} className="mf-game-dock__people">{contents[pane]}</div>
+            </>
+          ) : contents[pane]}
         </div>
       ) : null}
       <nav className="mf-game-dock__tabs" aria-label="게임 하단 조작">
@@ -135,6 +161,7 @@ export function GameDock({ scope, initialPane, voting, preserveWriting, keepTool
           const count = tab === "chat" ? unread : 0;
           return (
             <button key={tab} ref={(node) => { tabs.current[tab] = node; }} type="button" data-dock-tab={tab} data-dock-vote={vote ? "" : undefined}
+              data-dock-pending={vote && !armed ? "" : undefined}
               disabled={!contents[tab]} aria-label={vote ? "지목" : count > 0 ? `${label}, 읽지 않은 메시지 ${count}개` : label}
               aria-expanded={pane === tab} aria-controls={pane === tab ? id : undefined}
               onPointerDown={(event) => {
@@ -142,7 +169,7 @@ export function GameDock({ scope, initialPane, voting, preserveWriting, keepTool
                 if (tab === "people") startSwipe(event);
               }}
               onMouseDown={holdInputUntilTap}
-              onClick={(event) => afterSwipe(event, () => open(pane === tab ? "closed" : tab))}
+              onClick={(event) => afterSwipe(event, () => open(pane === tab && !(vote && !armed) ? "closed" : tab))}
               {...(tab === "people" ? { onPointerUp: (event: PointerEvent<HTMLButtonElement>) => endSwipe(event, -1, () => open(tab)), onPointerCancel: () => { gesture.current = undefined; } } : {})}>
               <V2Icon name={icon} size={21} />
               {vote ? <span>지목</span> : null}

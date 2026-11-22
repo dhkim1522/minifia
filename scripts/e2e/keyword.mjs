@@ -607,8 +607,7 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       const chooseHat = async (actor, target, acceptedTarget) => {
         await openTableDockPane(actor.page, "tools");
         await actor.page.locator("[data-suspect-btn]").click({ timeout: 4000 });
-        await openTableDockPane(actor.page, "people");
-        await actor.page.locator(`[data-table-seat="${target}"][data-pick]`).click({ timeout: 3000 });
+        await actor.page.getByRole("region", { name: "딱지 붙이기" }).locator(`[data-table-seat="${target}"][data-suspect-tag]`).click({ timeout: 3000 });
         await actor.tracker.waitFor(v => v.me.suspectTo === acceptedTarget, 3000, "내 고깔 변경");
       };
       await chooseHat(markedBy, sharedTarget, sharedTarget);

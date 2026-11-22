@@ -5,6 +5,7 @@ import { MAP_PHASES } from "../../shared/game/movement";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { Button } from "../components/Button";
 import { GameDock } from "../components/GameDock";
+import type { PeopleAction } from "../components/GameDock";
 import { PhaseEvent } from "../components/PhaseEvent";
 import { RoomChatDock } from "../components/v2/RoomChatDock";
 import type { RoomChatBinding, RoomChatDockProps } from "../components/v2/RoomChatDock";
@@ -58,17 +59,18 @@ export interface GamePanelProps {
   suspect?: RoomChatDockProps["suspect"];
   notice?: ReactNode;
   tableControls?: ReactNode;
-  dock?: { chatStore: ChatStore; voting: boolean; peopleCount: number };
+  tableFirstBallot?: boolean;
+  dock?: { chatStore: ChatStore; peopleAction?: PeopleAction; peopleCount: number };
   answerPresentation?: ReactNode;
   /** 전날 결과가 잠깐 보이는 동안에는 밤 선택을 같은 자리에 겹쳐 놓지 않는다. */
   pauseNightEvent?: boolean;
 }
 
 /**
- * 단계별 선택은 중앙에 보여 주고 채팅과 상시 도구는 화면 아래에 둔다.
+ * 원탁에서 사람을 고르는 조작과 채팅·상시 도구는 모두 화면 아래에 둔다.
  * 눌림은 서버 view 가 기준이고, 내가 누른 즉시 바뀌는 것은 내 눌림 표시 하나뿐이다. 숫자는 서버 집계를 표시한다.
  */
-export function GamePanel({ view, introActive = false, send, canSend, binding, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef, suspect, notice, tableControls, dock, answerPresentation, pauseNightEvent = false }: GamePanelProps) {
+export function GamePanel({ view, introActive = false, send, canSend, binding, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef, suspect, notice, tableControls, tableFirstBallot = false, dock, answerPresentation, pauseNightEvent = false }: GamePanelProps) {
   const playtest = view.playtest === true;
   const presenting = answerPresentation !== undefined;
   // 거절이 오면 서버 값으로 되돌린다. 처음 그릴 때(거절 0)는 아무것도 하지 않는다.
@@ -92,7 +94,8 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
   // 찬반 줄(22-10, D-11·D-26): 처형 후보가 없어 산 사람 전원이 던진다. 유령은 같은 숫자 줄만 본다(보기 패널).
   // 숫자는 서버가 모두에게 같게 보낸 집계(day.verdictCount)뿐이다 — 누가 던졌는지는 어디에도 없다.
   const firstBallot = playtest && view.phase === "verdict" ? view.day?.firstBallot : undefined;
-  const verdictPhase = view.phase === "verdict";
+  const firstBallotAtTable = tableFirstBallot && firstBallot !== undefined && firstBallot.result === undefined;
+  const verdictPhase = view.phase === "verdict" && !(dock && firstBallotAtTable);
   useLayoutEffect(() => {
     // 토론 중 쓰던 글은 그대로 저장하고, 투표가 열릴 때 키보드만 내려 선택지를 드러낸다.
     const field = inputRef?.current;
@@ -147,8 +150,8 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
   const showNoteRow = !playtest && nightFaces && myRole === "mafia" && onOpenNote !== undefined;
   const noteHintId = useId();
   const showWillRow = !playtest && nightFaces && myRole !== "mafia" && onOpenWill !== undefined;
-  const nominationChat = dock !== undefined && view.phase === "nomination" && view.me.chat !== undefined;
-  const playtestChat = discussion || nominationChat || (!chatLocked && view.me.chat === "ghost");
+  const selectionChat = dock !== undefined && (view.phase === "nomination" || firstBallotAtTable) && view.me.chat !== undefined;
+  const playtestChat = discussion || selectionChat || (!chatLocked && view.me.chat === "ghost");
   const showChat = !presenting && chatChannelOk && (!playtest || playtestChat);
   const canReact = !chatLocked && (!playtest || discussion);
   const showRoleTool = !presenting && (showNoteRow || showWillRow || penOn);
@@ -216,10 +219,12 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
   ) : null;
   const chatTools = showChat && (penOn || (discussion && suspect !== undefined) || (canReact && binding.onEmote !== undefined && ((playtest && discussion) || (binding.emotes?.length ?? 0) > 0)));
   const channel = view.me.chat ?? null;
-  const waitingToNominate = view.phase === "nomination" && dock?.voting === false;
+  const peopleAction = dock?.peopleAction;
+  const waitingToNominate = view.phase === "nomination" && dock !== undefined && peopleAction?.kind !== "vote";
   const peek = waitingToNominate && showChat && channel !== null
     ? [...binding.messages].reverse().find((message) => message.kind === "player" && message.ch === channel)
     : undefined;
+  const firstBallotCount = firstBallotAtTable ? <PlaytestBallotCount view={view} count={firstBallot.count} /> : null;
 
   return (
     <>
@@ -242,7 +247,7 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
           </div>
         </PhaseEvent>
       ) : null}
-      {!introActive && (firstBallot !== undefined ? (
+      {!introActive && (firstBallot !== undefined ? !firstBallotAtTable && (
         <PhaseEvent kind="first-ballot" title="첫날 지목" interactive={meAlive && firstBallot.result === undefined} className="mf-event-choice">
           <PlaytestBallot view={view} ballot={firstBallot} canVote={meAlive && canSend} send={send} />
         </PhaseEvent>
@@ -269,25 +274,30 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
       ) : null)}
       <section
         ref={panelRef}
-        inert={introActive}
+        inert={introActive && !firstBallotAtTable}
         data-phase-panel-paused={introActive ? "" : undefined}
         className={`mf-game__panel${lifted ?? kbOpen ? " mf-game__panel--kb" : ""}${dock ? " mf-game__panel--dock" : showChat ? " mf-game__panel--chat" : ""}${!dock && panelEmpty ? " mf-game__panel--empty" : ""}`}
         data-world-panel=""
         data-answer-panel={presenting ? "" : undefined}
         {...(veiled ? { "data-will-hide-panel": "true" } : {})}
       >
-        {!dock ? tableControls : null}
+        {!dock && firstBallotAtTable ? <div data-first-ballot="">{tableControls}{firstBallotCount}</div> : !dock ? tableControls : null}
         {notice}
         {answerPresentation}
+        {dock && firstBallotAtTable && !peopleAction ? firstBallotCount : null}
         {dock && !presenting ? (
           <GameDock
-            scope={`${view.round ?? 1}:${view.day?.n ?? 0}:${view.phase}:${dock.voting}`}
-            initialPane={discussion ? "chat" : dock.voting ? "people" : "closed"}
-            preserveWriting={view.phase === "nomination"}
+            scope={`${view.round ?? 1}:${view.day?.n ?? 0}:${view.phase}:${peopleAction?.title ?? ""}`}
+            initialPane={peopleAction ? "people" : discussion ? "chat" : "closed"}
+            preserveWriting={view.phase === "nomination" || firstBallotAtTable}
+            keepLooking={view.phase === "nomination" || firstBallotAtTable}
             keepToolsOpen={willOpen || noteOpen}
             paused={introActive}
             inputRef={inputRef}
             {...dock}
+            {...(peopleAction && firstBallotAtTable ? {
+              peopleAction: { ...peopleAction, content: <div data-first-ballot="">{peopleAction.content}{firstBallotCount}</div> },
+            } : {})}
             channel={channel}
             mySeat={view.me.seat}
             latest={peek}
@@ -341,10 +351,16 @@ function PlaytestBallot({ view, ballot, canVote, send }: {
           }}>오늘은 안 뽑기</button>
         </>
       ) : null}
-      <p className="mf-playtest__ballot-count" role="status">
-        {chosen !== undefined ? <><V2Icon name="check" size={18} /><span className="mf-sr-only">선택했어요 · </span></> : null}
-        {ballot.count}/{alive.length}명 선택
-      </p>
+      <PlaytestBallotCount view={view} count={ballot.count} />
     </div>
+  );
+}
+
+function PlaytestBallotCount({ view, count }: { view: RoomView; count: number }) {
+  return (
+    <p className="mf-playtest__ballot-count" role="status">
+      {view.me.firstBallot !== undefined ? <><V2Icon name="check" size={18} /><span className="mf-sr-only">선택했어요 · </span></> : null}
+      {count}/{view.players.filter(isAlive).length}명 선택
+    </p>
   );
 }

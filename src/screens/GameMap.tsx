@@ -238,8 +238,10 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
   const [resultStage, setResultStage] = useState<WorldStageProps>();
   const activeResultStage = inEnding && resultStage?.view.round === view.round ? resultStage : undefined;
   const tableCameraOn = view.map === "bar" && !camera && !panelless;
-  const tableOn = tableCameraOn && (view.phase === "discussion" || view.phase === "nomination" || view.phase === "runoff" || view.phase === "showdown");
   const tableDock = tableCameraOn && !inOpening && !inEnding && !timeless;
+  const firstBallot = tableCameraOn && playtest && view.phase === "verdict" ? view.day?.firstBallot : undefined;
+  const firstBallotOpen = firstBallot !== undefined && firstBallot.result === undefined;
+  const tableOn = tableCameraOn && (view.phase === "discussion" || view.phase === "nomination" || view.phase === "runoff" || view.phase === "showdown" || firstBallotOpen);
   const rawTableFocus = tableChoice?.key === tableKey ? tableChoice.focus : undefined;
   const tableFocus = view.players.some((p) => p.seat === rawTableFocus && isAlive(p)) ? rawTableFocus : undefined;
   const tableFocusAt = tableFocus !== undefined && tableChoice?.key === tableKey ? tableChoice.focusAt : undefined;
@@ -424,9 +426,9 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
   }, [recordCue]);
   // 동점 결선(09.1.1-14): 후보가 아닌 산 사람이 투표 창(step 1)에 후보 둘 중 하나를 누른다. 서버 값은 view.me.ballot(본인에게만 온다)
   const runoff = view.phase === "runoff" ? view.day?.runoff : undefined;
-  const runoffVoting = runoff !== undefined && runoff.step === 1 && meAlive && canSend && !runoff.cand.includes(view.me.seat);
+  const runoffVoting = runoff !== undefined && runoff.step === 1 && meAlive && (canSend || tableDock) && !runoff.cand.includes(view.me.seat);
   // 마지막 3인 동시 지목(09.1.1-15, UI-SPEC E-3): 산 세 사람이 나를 뺀 두 사람의 이름표를 직접 눌러 가리킨다(마감까지 바꾸기 가능). 서버 값은 view.me.ballot(본인에게만 온다)
-  const showdownPointing = showdownStage === "point" && canSend && pointSeatsOf(view).length > 0;
+  const showdownPointing = showdownStage === "point" && (canSend || tableDock) && pointSeatsOf(view).length > 0;
   const tableBallot = tableOn && (nominating || runoff !== undefined || showdownStage === "point" || showdownStage === "reveal");
   const serverMine = nominating
     ? view.day?.points?.find((l) => l.seat === view.me.seat)?.target
@@ -491,18 +493,20 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
     // 번호가 바뀔 때만 한 번 — 알림 글자는 그 렌더의 view 로 만든다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [whisperInNonce]);
-  const pick: WorldPick | undefined = suspect.mode
+  const dockSuspect = tableDock && suspect.visible && suspect.mode;
+  const pick: WorldPick | undefined = suspect.mode && suspect.visible
     ? {
         seats: suspect.targets,
         hit: "body",
         // 연결이 끊긴 동안은 버튼이 aria-disabled 이고 눌러도 보내지 않는다
         ...(canSend ? {} : { disabled: true as const }),
+        ...(view.me.suspectTo === undefined ? {} : { mine: view.me.suspectTo }),
         label: (nickname, seat) => SUSPECT_TEXT.target(nickname, seat !== undefined && seat === view.me.suspectTo),
         onPick: (seat) => {
           suspect.pick(seat);
           panelRef.current?.querySelector<HTMLButtonElement>('[data-suspect-btn]')?.focus({ preventScroll: true });
         },
-        group: suspect.used ? SUSPECT_TEXT.moved : SUSPECT_TEXT.ready,
+        group: dockSuspect ? "딱지 붙이기" : suspect.used ? SUSPECT_TEXT.moved : SUSPECT_TEXT.ready,
         attr: "data-suspect-tag",
       }
     : whisper.mode
@@ -763,8 +767,43 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
     lookAtTableSeat(seat);
   };
 
-  const tablePlayers = view.players.filter((player) => player.seat !== view.me.seat && isAlive(player));
-  const dockVoting = tableBallot && !introActive && pick !== undefined && !pick.disabled && pick.seats.size > 0;
+  const tablePlayers = view.players.filter((player) => player.seat !== view.me.seat && isAlive(player)).sort((a, b) => a.seat - b.seat);
+  const dockVoting = tableBallot && !introActive && pick !== undefined && pick.seats.size > 0;
+  const firstChoice = view.me.firstBallot;
+  const chooseFirst = (target: number | null): void => {
+    if (meAlive && canSend && firstBallotOpen && layerKind === null && firstChoice !== target) send({ t: "firstBallot", target });
+  };
+  const firstTarget: WorldPick | undefined = firstBallotOpen && !introActive && meAlive ? {
+    seats: new Set(tablePlayers.map((player) => player.seat)),
+    ...(typeof firstChoice === "number" ? { mine: firstChoice } : {}),
+    ...(!canSend || layerKind !== null ? { disabled: true } : {}),
+    label: (nickname) => `${nickname} 님에게 투표`,
+    group: "첫날 지목",
+    onPick: chooseFirst,
+  } : undefined;
+  const dockTarget = firstTarget ?? (dockVoting || dockSuspect ? pick : undefined);
+  const dockTitle = firstTarget ? "첫날 지목" : dockSuspect ? "딱지 붙이기" : runoff ? "결선 지목" : "처형 지목";
+  const dockAction = dockTarget ? {
+    kind: dockSuspect ? "suspect" as const : "vote" as const,
+    title: dockTitle,
+    ...(dockSuspect ? { onLeave: suspect.off } : {}),
+    content: (
+      <>
+        <TableControls
+          players={tablePlayers}
+          pick={layerKind === null ? dockTarget : { ...dockTarget, disabled: true }}
+          notes={suspectStack}
+          onChoose={dockTarget.onPick}
+          extra={firstTarget ? (
+            <button type="button" data-first-ballot-hold="" disabled={firstTarget.disabled} aria-label="오늘은 안 뽑기" aria-pressed={firstChoice === null} onClick={() => chooseFirst(null)}>
+              안 뽑기
+            </button>
+          ) : undefined}
+        />
+        {dockSuspect && suspect.used ? <p className="mf-game-dock__hint" role="status">{SUSPECT_TEXT.editHint}</p> : null}
+      </>
+    ),
+  } : undefined;
 
   const scene = useMemo(() => {
     const look = sceneLook(view, { stageH, ...(fading ? { fading } : {}), ...(mine !== undefined ? { mine } : {}), ...(verdictZoom !== undefined ? { verdictZoom } : {}) });
@@ -838,8 +877,8 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
         }
         {...(deny ? { deny } : {})}
         {...(surprise ? { surprise } : {})}
-        {...(pick && !introActive && !tableBallot ? { pick } : {})}
-        {...(tableOn ? { onTableSeat: tableBallot ? lookAtTableSeat : chooseTableSeat } : {})}
+        {...(pick && !introActive && !tableBallot && !dockSuspect ? { pick } : {})}
+        {...(tableOn ? { onTableSeat: tableBallot || dockSuspect || firstBallotOpen ? lookAtTableSeat : chooseTableSeat } : {})}
         {...(stageTagProps ? { tagProps: stageTagProps } : {})}
         onNotice={(text) => show(text)}
         onLeave={() => onLeave?.()}
@@ -912,18 +951,19 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
             <AnswerPresentation turn={presentation} player={speaker} mySeat={view.me.seat} marked={speakerMarked}
               canSuspect={canSuspectSpeaker} {...(timeless ? {} : { onSuspect: suspectSpeaker })} />
           ) : undefined}
-          tableControls={tableDock || (tableOn && (!kbLifted || (tableBallot && pick !== undefined))) ? (
+          tableControls={!tableDock && firstBallotOpen ? dockAction?.content : tableDock || (tableOn && (!kbLifted || (tableBallot && pick !== undefined))) ? (
             <TableControls
               players={tablePlayers}
               readOnly={!tableOn}
               {...(tableFocus !== undefined ? { focus: tableFocus } : {})}
               {...(tableBallot && mine !== undefined ? { selected: mine } : {})}
-              {...(pick ? { pick } : {})}
+              {...(pick && (!tableDock || (pick !== dockTarget && !tableBallot)) ? { pick } : {})}
               notes={suspectStack}
-              onChoose={chooseTableSeat}
+              onChoose={tableDock && (tableBallot || dockSuspect || firstBallotOpen) ? lookAtTableSeat : chooseTableSeat}
             />
           ) : undefined}
-          dock={tableDock ? { chatStore: chat, voting: dockVoting, peopleCount: tablePlayers.length } : undefined}
+          tableFirstBallot={firstBallot !== undefined}
+          dock={tableDock ? { chatStore: chat, peopleCount: tablePlayers.length, ...(dockAction ? { peopleAction: dockAction } : {}) } : undefined}
           suspect={suspect.visible && (!playtest || layerKind === null) ? {
             ...suspect,
             disabled: layerKind !== null || suspect.disabled,

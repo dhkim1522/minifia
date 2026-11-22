@@ -58,10 +58,12 @@
 }
 
 .mf-game-dock__title > span { color: var(--noir-silver); }
-.mf-game-dock__pane > .mf-table-controls { padding-inline: 0; }
+.mf-game-dock__people .mf-table-controls { padding-inline: 0; }
 .mf-game-dock .mf-table-controls button { min-height: 52px; font: var(--type-label); }
 .mf-game-dock .mf-table-controls button[aria-pressed="true"] { color: var(--noir-accent); border-color: var(--noir-action-line); }
 .mf-game-dock .mf-table-controls button[data-table-readonly] { opacity: 1; cursor: default; }
+.mf-game-dock .mf-playtest__ballot-count { justify-content: flex-end; margin-top: 5px; }
+.mf-game-dock__hint { margin: 5px 2px 0; color: var(--noir-silver); }
 
 .mf-game-dock__pane .mf-room-chat { padding: 0; }
 .mf-game-dock__pane .mf-room-chat::before { display: none; }

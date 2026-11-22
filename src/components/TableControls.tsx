@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { PublicPlayer } from "../../shared/protocol";
 import { SUSPECT_TEXT } from "../game/suspectView";
 import { PlayerPortrait } from "./PlayerPortrait";
@@ -11,10 +12,11 @@ interface TableControlsProps {
   readOnly?: boolean;
   pick?: WorldPick;
   notes: ReadonlyMap<number, readonly number[]>;
+  extra?: ReactNode;
   onChoose(seat: number): void;
 }
 
-export function TableControls({ players, focus, selected, readOnly = false, pick, notes, onChoose }: TableControlsProps) {
+export function TableControls({ players, focus, selected, readOnly = false, pick, notes, extra, onChoose }: TableControlsProps) {
   return (
     <div className="mf-table-controls" role="group" aria-label={pick?.group ?? "테이블 참가자"} data-table-controls="">
       {players.map((player) => {
@@ -36,6 +38,7 @@ export function TableControls({ players, focus, selected, readOnly = false, pick
           </button>
         );
       })}
+      {extra}
     </div>
   );
 }
