@@ -196,9 +196,10 @@ function buildFaces(head: Object3D, R: number, browR: number): void {
 
 /** 동물의 눈·입·안경을 고유 얼굴 위치에 맞춘다. 모든 표정은 기존 병합 캐시와 같은 이름으로 선택한다. */
 function buildAnimalFaces(head: Object3D, animal: AnimalId): void {
+  const eyeColor = "#302826";
+  const mouthColor = "#634741";
   const layout = animalLayout(animal);
-  const [x, y, eyeDepth] = layout.eye;
-  const z = animal === "crocodile" ? eyeDepth + 0.098 : eyeDepth;
+  const [x, y, z] = layout.eye;
   const [mx, my, mz] = layout.mouth;
   const scenePart = (parent: Object3D, mesh: Mesh, px: number, py: number, pz: number, roll = 0): void => {
     mesh.position.set(px, py, pz);
@@ -217,26 +218,26 @@ function buildAnimalFaces(head: Object3D, animal: AnimalId): void {
     for (const side of [-1, 1]) {
       const px = side * x;
       if (face === "happy" || face === "cry") {
-        scenePart(expression, arc(0.050, 0.015, EYE), px, y, z + 0.026, face === "cry" ? Math.PI : 0);
+        scenePart(expression, arc(0.050, 0.012, eyeColor), px, y, z + 0.023, face === "cry" ? Math.PI : 0);
         if (face === "cry") scenePart(expression, faceSphere(0.030, "#9ec2ff", 1, 1.55, 0.63), px, y - 0.11, z + 0.045);
       } else if (face === "dead") {
-        for (const tilt of [0.8, -0.8]) scenePart(expression, faceBox(0.12, 0.022, EYE), px, y, z + 0.017, tilt);
+        for (const tilt of [0.8, -0.8]) scenePart(expression, faceBox(0.12, 0.022, eyeColor), px, y, z + 0.017, tilt);
       } else if (face === "sus") {
-        scenePart(expression, faceBox(0.113, 0.031, EYE), px, y + 0.008, z + 0.018, side * 0.12);
+        scenePart(expression, faceBox(0.113, 0.028, eyeColor), px, y + 0.008, z + 0.018, side * 0.12);
       } else {
         const wide = face === "surprise";
-        scenePart(expression, faceSphere(wide ? 0.075 : 0.064, EYE, 0.89, wide ? 1.17 : 1.29, 0.48), px, y, z + 0.017);
-        scenePart(expression, faceSphere(0.013, "#f8f3e9"), px - 0.016, y + 0.024, z + 0.048);
-        if (face === "angry") scenePart(expression, faceBox(0.137, 0.024, EYE), px, y + 0.095, z - 0.016, side * 0.36);
+        scenePart(expression, faceSphere(wide ? 0.075 : 0.064, eyeColor, 0.94, wide ? 1.12 : 1.14, 0.43), px, y, z + 0.015);
+        scenePart(expression, faceSphere(0.010, "#eddfcc"), px - 0.016, y + 0.020, z + 0.044);
+        if (face === "angry") scenePart(expression, faceBox(0.137, 0.024, eyeColor), px, y + 0.095, z - 0.016, side * 0.36);
       }
     }
     // 주둥이·부리·코 자체가 입인 동물은 그 위에 다른 입을 겹쳐 쓰지 않는다.
     if (animal === "crocodile" || animal === "elephant" || animal === "parrot" || animal === "penguin") continue;
-    if (face === "surprise") scenePart(expression, faceSphere(0.057, MOUTH, 1, 1.13, 0.37), mx, my, mz + 0.004);
-    else if (face === "angry" || face === "dead") scenePart(expression, faceBox(0.117, 0.022, MOUTH), mx, my, mz);
+    if (face === "surprise") scenePart(expression, faceSphere(0.051, mouthColor, 1, 1.13, 0.37), mx, my, mz + 0.004);
+    else if (face === "angry" || face === "dead") scenePart(expression, faceBox(0.110, 0.019, mouthColor), mx, my, mz);
     else {
-      const smile = arc(animal === "frog" ? 0.15 : 0.064, 0.014, MOUTH);
-      smile.scale.y = animal === "frog" ? 0.48 : 0.88;
+      const smile = arc(animal === "frog" ? 0.15 : 0.062, 0.011, mouthColor);
+      smile.scale.y = animal === "frog" ? 0.42 : 0.79;
       scenePart(expression, smile, mx, my, mz, Math.PI);
     }
   }
@@ -252,30 +253,24 @@ function buildAnimalFaces(head: Object3D, animal: AnimalId): void {
   hatRest.add(hatMount);
   buildHats(hatMount, fit.radius, "", 28, fit.brim, false);
 
-  // 귀와 뿔을 덮지 않도록 동물의 후드는 목 뒤로 접어 입는다.
-  const hood = tagged(new Group(), "hat:hood");
-  head.add(hood);
-  const hoodFabric = part(hood, new SphereGeometry(1, 18, 12), "#5a5f6c");
-  hoodFabric.scale.set(0.295, 0.15, 0.19);
-  hoodFabric.position.set(0, -0.345, -0.28);
-  const hoodFold = part(hood, new TorusGeometry(0.23, 0.046, 8, 24), "#4e5360");
-  hoodFold.scale.set(1.04, 0.81, 0.74);
-  hoodFold.rotation.x = Math.PI * 0.59;
-  hoodFold.position.set(0, -0.284, -0.289);
-
   const shades = group("acc:shades");
   for (const side of [-1, 1]) {
     const px = side * x;
-    scenePart(shades, faceSphere(0.133, "#14161c", 1.04, 0.78, 0.33), px, y + 0.005, z + 0.053);
-    scenePart(shades, faceBox(0.075, 0.014, "#78889b"), px - 0.020, y + 0.038, z + 0.098, 0.23);
-    const from = new Vector3(px + 0.098 * side, y + 0.013, z + 0.045);
-    const to = new Vector3(side * (x + 0.113), y - 0.008, z - (animal === "frog" || animal === "crocodile" ? 0.188 : 0.15));
+    const frame = new Group();
+    frame.position.set(px, y + 0.005, z + 0.037);
+    frame.rotation.y = side * 0.17;
+    shades.add(frame);
+    scenePart(frame, faceSphere(0.133, "#14161c", 1.04, 0.78, 0.31), 0, 0, 0);
+    scenePart(frame, faceBox(0.068, 0.012, "#78889b"), -0.020, 0.033, 0.042, 0.23);
+    const from = new Vector3(0.105 * side, 0.008, 0).applyEuler(frame.rotation).add(frame.position);
+    const templeDepth = animal === "frog" ? 0.22 : animal === "crocodile" ? 0.19 : 0.16;
+    const to = new Vector3(side * (x + 0.113), y - 0.008, z - templeDepth);
     const direction = to.clone().sub(from);
     const temple = part(shades, new CylinderGeometry(0.014, 0.014, direction.length(), 8), "#14161c");
     temple.position.copy(from).addScaledVector(direction, 0.5);
     temple.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), direction.normalize());
   }
-  if (animal !== "parrot") scenePart(shades, faceBox(x * 1.22, 0.033, "#14161c"), 0, y + 0.02, z + 0.063);
+  if (animal !== "parrot") scenePart(shades, faceBox(x * 1.22, 0.028, "#14161c"), 0, y + 0.02, z + 0.052);
 }
 
 // ---------- 모자 (원문 brimGeo·buildHats) ----------
@@ -499,13 +494,13 @@ function clothProfile(points: readonly (readonly [radius: number, y: number])[],
 }
 const ANIMAL_COAT_PROFILE = [
   [0, 0.221], [0.154, 0.225], [0.275, 0.239], [0.341, 0.252], [0.365, 0.273], [0.381, 0.296],
-  [0.388, 0.355], [0.382, 0.41], [0.362, 0.53], [0.338, 0.67], [0.318, 0.81], [0.307, 0.91],
-  [0.295, 0.966], [0.266, 1.014], [0.221, 1.052], [0.155, 1.083], [0.083, 1.096], [0, 1.10],
+  [0.388, 0.355], [0.382, 0.41], [0.362, 0.53], [0.338, 0.67], [0.318, 0.81], [0.316, 0.91],
+  [0.303, 0.968], [0.273, 1.021], [0.221, 1.063], [0.155, 1.097], [0.083, 1.115], [0, 1.12],
 ] as const;
 const ANIMAL_SLEEVE_PROFILE = [
   [0, -0.418], [0.071, -0.416], [0.089, -0.397], [0.098, -0.36], [0.103, -0.28],
-  [0.112, -0.17], [0.123, -0.052], [0.124, 0.012], [0.108, 0.058],
-  [0.078, 0.088], [0.041, 0.103], [0, 0.109],
+  [0.113, -0.17], [0.128, -0.052], [0.136, 0.012], [0.120, 0.064],
+  [0.090, 0.094], [0.047, 0.115], [0, 0.122],
 ] as const;
 const ANIMAL_TROUSER_PROFILE = [
   [0, -0.251], [0.072, -0.245], [0.090, -0.229], [0.095, -0.187],
@@ -520,14 +515,19 @@ function coatFront(x: number, y: number): number {
   return Math.sqrt(Math.max(0, radius ** 2 - x ** 2));
 }
 
-function fitCoatPanel(geometry: BufferGeometry, offset: number, height = 0): void {
+function fitCoatPanel(geometry: BufferGeometry, relief: number, height = 0): void {
+  geometry.computeBoundingBox();
+  const { min, max } = geometry.boundingBox!;
   const position = geometry.getAttribute("position");
   for (let i = 0; i < position.count; i++) {
     const x = position.getX(i);
     const y = position.getY(i) + height;
-    position.setXYZ(i, x, y, coatFront(x, y) + offset + position.getZ(i));
+    // 앞판의 뒷면을 몸통에 넣고 표면만 솟게 해 옆에서 뜬 선이 생기지 않게 한다.
+    const depth = (position.getZ(i) - min.z) / (max.z - min.z);
+    position.setXYZ(i, x, y, coatFront(x, y) - 0.020 + depth * (relief + 0.020));
   }
   geometry.computeVertexNormals();
+  geometry.boundingBox = null;
 }
 
 function cutCoatPanel(points: readonly (readonly [number, number])[], offset: number): BufferGeometry {
@@ -549,12 +549,12 @@ function addCoatDetails(body: Group): void {
     const x = side * 0.202;
     const y = 0.386;
     const patch = part(body, new SphereGeometry(1, 8, 5), "coatShade");
-    patch.scale.set(0.084, 0.058, 0.019);
-    patch.position.set(x, y, coatFront(x, y) + 0.004);
+    patch.scale.set(0.083, 0.057, 0.013);
+    patch.position.set(x, y, coatFront(x, y));
     patch.rotation.y = side * 0.58;
     const welt = part(body, new SphereGeometry(1, 8, 4), "coatLight");
-    welt.scale.set(0.084, 0.012, 0.018);
-    welt.position.set(x, y + 0.042, coatFront(x, y + 0.042) + 0.014);
+    welt.scale.set(0.084, 0.011, 0.016);
+    welt.position.set(x, y + 0.042, coatFront(x, y + 0.042) + 0.005);
     welt.rotation.y = patch.rotation.y;
     welt.rotation.z = side * 0.13;
   }
@@ -567,6 +567,19 @@ function addCoatDetails(body: Group): void {
     const stitch = part(body, new BoxGeometry(0.014, 0.005, 0.004), "#6e4c39", undefined, FINISH.smooth);
     stitch.position.copy(button.position).add(new Vector3(0, 0, 0.016));
   }
+}
+
+/** 접어 둔 후드는 고개를 따라가지 않고 코트 뒷목에 붙는다. */
+function addFoldedAnimalHood(body: Group): void {
+  const hood = tagged(new Group(), "hat:hood");
+  body.add(hood);
+  const fabric = part(hood, new SphereGeometry(1, 14, 8), "coat");
+  fabric.scale.set(0.264, 0.115, 0.174);
+  fabric.position.set(0, 0.906, -0.305);
+  const fold = part(hood, new TorusGeometry(0.20, 0.034, 6, 18), "coatShade");
+  fold.scale.set(1.04, 0.79, 0.71);
+  fold.rotation.x = Math.PI * 0.59;
+  fold.position.set(0, 0.958, -0.332);
 }
 
 /** 원문 create(fig) 의 부품을 Mesh 대신 "지오메트리 + 색 + 보이기 이름" 으로 모은 관절별 목록 */
@@ -606,9 +619,12 @@ function bakeFig(fig: Fig, animal?: AnimalId): Record<JointName, Part[]> {
   } else {
     // 앞쪽 곡률은 의심딱지를 붙이는 원통과 같게 맞춘다.
     part(body, clothProfile(ANIMAL_COAT_PROFILE, 24), "coat");
-    const collar = part(body, new SphereGeometry(1, 16, 10), "shirt");
-    collar.scale.set(0.195, 0.13, 0.178);
-    collar.position.set(0, 1.043, 0.012);
+    const collar = part(body, new SphereGeometry(1, 14, 9), "shirt");
+    collar.scale.set(0.176, 0.154, 0.169);
+    collar.position.set(0, 1.054, 0.010);
+    const neckJoin = part(body, new SphereGeometry(1, 12, 7), "skin");
+    neckJoin.scale.set(0.132, 0.139, 0.129);
+    neckJoin.position.y = 1.106;
   }
   if (animal === undefined) {
     const shirt = part(body, new ConeGeometry(0.12, 0.3, 3), "shirt");
@@ -619,9 +635,9 @@ function bakeFig(fig: Fig, animal?: AnimalId): Record<JointName, Part[]> {
     tie.position.set(0, 0.8, 0.305);
     tie.rotation.x = -0.18;
   } else {
-    part(body, cutCoatPanel([[-0.133, 1.014], [0, 0.762], [0.133, 1.014], [0, 1.037]], 0.031), "shirt");
+    part(body, cutCoatPanel([[-0.133, 1.014], [0, 0.762], [0.133, 1.014], [0, 1.037]], 0.038), "shirt");
     part(body, cutCoatPanel([[-0.037, 0.984], [0.037, 0.984], [0.027, 0.928], [0.049, 0.791], [0, 0.748],
-      [-0.049, 0.791], [-0.027, 0.928]], 0.042), "tie", "tie");
+      [-0.049, 0.791], [-0.027, 0.928]], 0.046), "tie", "tie");
   }
   for (const s of [-1, 1]) {
     const lapel = coatLapel(animal !== undefined);
@@ -631,7 +647,7 @@ function bakeFig(fig: Fig, animal?: AnimalId): Record<JointName, Part[]> {
       lap.position.set(0, 0.86, s < 0 ? 0.315 : 0.298);
       lap.rotation.x = -0.11;
     } else {
-      fitCoatPanel(lapel, s < 0 ? 0.061 : 0.047, 0.86);
+      fitCoatPanel(lapel, 0.054, 0.86);
     }
   }
   if (animal === undefined) {
@@ -642,6 +658,7 @@ function bakeFig(fig: Fig, animal?: AnimalId): Record<JointName, Part[]> {
     }
   } else {
     addCoatDetails(body);
+    addFoldedAnimalHood(body);
   }
   const star = part(body, new SphereGeometry(0.05, 10, 8), "#c9d3ea", "badge:star");
   star.scale.z = 0.4;
@@ -722,15 +739,15 @@ function bakeFig(fig: Fig, animal?: AnimalId): Record<JointName, Part[]> {
       part(g, new CylinderGeometry(0.088, 0.086, 0.039, 12), "shirt").position.y = -0.393;
       part(g, new SphereGeometry(0.1, 14, 10), "hand").position.y = -0.43;
     } else {
-      const sleeve = part(g, clothProfile(ANIMAL_SLEEVE_PROFILE, 16), "coat");
-      sleeve.position.x = -Math.sign(x) * 0.028;
-      sleeve.rotation.z = -Math.sign(x) * 0.07;
-      const cuff = part(g, clothProfile([[0.077, -0.419], [0.088, -0.415], [0.097, -0.402], [0.100, -0.379], [0.091, -0.375]], 12), "coatLight");
-      cuff.position.x = sleeve.position.x;
-      cuff.rotation.z = sleeve.rotation.z;
-      const hand = part(g, new SphereGeometry(1, 14, 10), "hand");
-      hand.position.y = -0.427;
-      hand.scale.set(0.091, 0.09, 0.093);
+      const sleeve = new Group();
+      sleeve.position.x = -Math.sign(x) * 0.026;
+      sleeve.rotation.z = Math.sign(x) * 0.060;
+      g.add(sleeve);
+      part(sleeve, clothProfile(ANIMAL_SLEEVE_PROFILE, 16), "coat");
+      part(sleeve, clothProfile([[0.074, -0.419], [0.085, -0.415], [0.094, -0.405], [0.100, -0.378], [0.092, -0.373]], 14), "coatLight");
+      const hand = part(sleeve, new SphereGeometry(1, 14, 10), "hand");
+      hand.position.y = -0.426;
+      hand.scale.set(0.092, 0.088, 0.093);
     }
     return g;
   }
@@ -867,9 +884,9 @@ function slotColor(p: Part, o: Outfit, fig: Fig, skin: string): Color {
     case "coat":
       return col(o.coat);
     case "coatLight":
-      return col(o.coat).clone().lerp(col("#bdb8ac"), 0.10);
+      return col(o.coat).clone().lerp(col("#bdb8ac"), 0.075);
     case "coatShade":
-      return col(o.coat).clone().multiplyScalar(0.68);
+      return col(o.coat).clone().multiplyScalar(0.78);
     case "shirt":
       return col(o.shirt);
     case "pants":
@@ -1411,8 +1428,10 @@ export function createCharacter(
     groups.armA.rotation.set(p.aAx, 0, p.aAz);
     groups.armB.rotation.set(p.aBx, pointYaw, p.aBz, "YXZ");
     const shoulderTravel = species === undefined ? 1 : 0.66;
+    // 반대편 좌석을 가리킬 때 소매가 가슴을 통과하지 않게 어깨를 옷 앞쪽으로 조금 옮긴다.
+    const acrossChest = species === undefined || firstPerson ? 0 : Math.max(0, Math.sin(pointYaw)) * 0.13;
     groups.armA.position.z = p.fA * shoulderTravel + (firstPerson ? 0.31 : 0);
-    groups.armB.position.z = p.fB * shoulderTravel + (firstPerson ? 0.29 : 0);
+    groups.armB.position.z = p.fB * shoulderTravel + acrossChest + (firstPerson ? 0.29 : 0);
     groups.legA.rotation.x = p.lA;
     groups.legB.rotation.x = p.lB;
     groups.head.rotation.set(p.hx + gazePitch, p.hy + gazeYaw, p.hz);

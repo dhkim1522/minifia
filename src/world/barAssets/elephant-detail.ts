@@ -12,11 +12,11 @@ import {
   Vector3,
 } from "three";
 import { MarchingCubes } from "three/addons/objects/MarchingCubes.js";
-import { markExpressionPart, sculptRoot, sculptSegments, type HeadDensity } from "./head-sculpt";
+import { eyes, sculptRoot, sculptSegments, type HeadDensity } from "./head-sculpt";
 
 type Point = readonly [number, number, number];
 const blue = new Color("#90b6df");
-const crownBlue = new Color("#a0bfe0");
+const crownBlue = new Color("#a4bed6");
 const pink = new Color("#b18d9e");
 const foldBlue = new Color("#7195be");
 const nostrilBlue = new Color("#465b7b");
@@ -71,9 +71,9 @@ function foldField(x: number, y: number, z: number): number {
 
 /** 머리, 볼, 콧등, 코끝을 하나의 등치면으로 만들고 코끝을 안으로 파낸다. */
 function faceField(x: number, y: number, z: number): number {
-  const cranium = ellipsoid(x, y - 0.025, z + 0.018, 0.506, 0.45, 0.46);
-  const cheek = ellipsoid(Math.abs(x) - 0.264, y + 0.104, z - 0.248, 0.236, 0.211, 0.208);
-  let d = blend(cranium, cheek, 0.107);
+  const cranium = ellipsoid(x, y - 0.025, z + 0.018, 0.512, 0.454, 0.46);
+  const cheek = ellipsoid(Math.abs(x) - 0.263, y + 0.102, z - 0.239, 0.248, 0.215, 0.207);
+  let d = blend(cranium, cheek, 0.119);
   const bridge = ellipsoid(x, y + 0.074, z - 0.356, 0.207, 0.204, 0.196);
   d = blend(d, bridge, 0.112);
 
@@ -88,7 +88,7 @@ function faceField(x: number, y: number, z: number): number {
     const pz = rz - dz * t;
     trunk = Math.min(trunk, Math.sqrt(px * px + py * py + pz * pz) - (startRadius + radiusDelta * t));
   }
-  d = blend(d, trunk, 0.102) + foldField(x, y, z) * 0.012;
+  d = blend(d, trunk, 0.126) + foldField(x, y, z) * 0.008;
   if (z > 0.77 && y < -0.365) {
     const opening = ellipsoid(Math.abs(x - 0.127) - 0.037, y + 0.425, z - 0.869, 0.024, 0.028, 0.046);
     d = -blend(-d, opening, 0.010);
@@ -134,9 +134,9 @@ function sculptFace(resolution: number): BufferGeometry {
     const nostril = z > 0.80 && y < -0.375
       ? Math.exp(-((Math.abs(x - 0.127) - 0.037) ** 2 / 0.00048 + (y + 0.425) ** 2 / 0.00059))
       : 0;
-    const pores = 0.019 * Math.sin(x * 86 + Math.sin(z * 64)) * Math.sin(y * 85 - z * 61);
+    const pores = 0.011 * Math.sin(x * 86 + Math.sin(z * 64)) * Math.sin(y * 85 - z * 61);
     const crown = Math.max(0, y + 0.07);
-    tint.copy(blue).lerp(crownBlue, crown).lerp(pink, blush * 0.57).lerp(foldBlue, Math.min(1, foldField(x, y, z)) * 0.45)
+    tint.copy(blue).lerp(crownBlue, crown).lerp(pink, blush * 0.50).lerp(foldBlue, Math.min(1, foldField(x, y, z)) * 0.32)
       .lerp(nostrilBlue, nostril * 0.9).multiplyScalar(1 + pores);
     tint.toArray(colors, i * 3);
   }
@@ -152,7 +152,7 @@ function sculptEar(head: Group, side: number): SphereGeometry {
   const geometry = new SphereGeometry(1, sculptSegments(head, 36, 20), sculptSegments(head, 26, 16));
   const position = geometry.getAttribute("position");
   const colors = new Float32Array(position.count * 3);
-  const lining = new Color("#748aae");
+  const lining = new Color("#8396b7");
   const tint = new Color();
   const angle = -side * 0.24;
   for (let i = 0; i < position.count; i++) {
@@ -161,11 +161,11 @@ function sculptEar(head: Group, side: number): SphereGeometry {
     const w = position.getZ(i);
     const lateral = u * (0.26 + 0.036 * v) - side * 0.024 * Math.max(0, -v);
     const vertical = v * 0.341;
-    const x = side * 0.522 + lateral * Math.cos(angle) - vertical * Math.sin(angle);
+    const x = side * 0.502 + lateral * Math.cos(angle) - vertical * Math.sin(angle);
     const y = -0.011 + lateral * Math.sin(angle) + vertical * Math.cos(angle);
-    const well = Math.max(w, 0) ** 3 * 0.085;
-    const ridge = Math.max(w, 0) * 0.040 * Math.exp(-(((u + side * 0.37 + v * 0.23) / 0.20) ** 2));
-    const z = -0.068 + w * 0.127 + side * u * 0.072 - well + ridge;
+    const well = Math.max(w, 0) ** 3 * 0.062;
+    const ridge = Math.max(w, 0) * 0.024 * Math.exp(-(((u + side * 0.37 + v * 0.23) / 0.25) ** 2));
+    const z = -0.065 + w * 0.128 + side * u * 0.065 - well + ridge;
     position.setXYZ(i, x, y, z);
     const inside = Math.max(0, Math.min(1, (w - 0.28) / 0.57));
     tint.copy(blue).lerp(lining, inside).multiplyScalar(1 - inside * 0.059 + ridge);
@@ -174,18 +174,6 @@ function sculptEar(head: Group, side: number): SphereGeometry {
   geometry.setAttribute("color", new Float32BufferAttribute(colors, 3));
   geometry.computeVertexNormals();
   return geometry;
-}
-
-function volume(parent: Group, color: string, at: Point, scale: Point, roughness = 0.79): Mesh {
-  const highlight = Math.max(...scale) < 0.02;
-  const width = sculptSegments(parent, 24, 12);
-  const height = sculptSegments(parent, 16, 8);
-  const shape = width !== 24 && highlight ? new SphereGeometry(1, 8, 5) : new SphereGeometry(1, width, height);
-  const mesh = new Mesh(shape, new MeshStandardMaterial({ color, roughness }));
-  mesh.position.set(...at);
-  mesh.scale.set(...scale);
-  parent.add(mesh);
-  return mesh;
 }
 
 function crease(parent: Group, color: string, points: readonly Point[], radius: number): void {
@@ -211,18 +199,9 @@ export function makeElephantDetail(density: HeadDensity = "close"): Group {
   head.add(face);
   for (const ear of shape.ears) head.add(new Mesh(ear, skin));
 
+  eyes(head, [0.205, 0.062, 0.455], "#8eabca", 0.028, [0.053, 0.065]);
   for (const side of [-1, 1]) {
-    const socket = markExpressionPart(new Group(), "eye");
-    socket.position.set(side * 0.203, 0.063, 0.438);
-    socket.rotation.y = side * 0.38;
-    head.add(socket);
-    volume(socket, "#769ac2", [0, -0.005, -0.006], [0.089, 0.105, 0.033]);
-    volume(socket, "#344d69", [0, -0.001, 0.014], [0.062, 0.081, 0.025], 0.51);
-    volume(socket, "#202637", [0, -0.006, 0.032], [0.052, 0.068, 0.016], 0.32);
-    volume(socket, "#f1eee4", [-0.017, 0.025, 0.046], [0.014, 0.017, 0.006], 0.42);
-    volume(socket, "#9eb8c9", [0.016, -0.025, 0.045], [0.006, 0.007, 0.003], 0.49);
-    crease(socket, "#a1c0df", [[-0.068, 0.026, 0.009], [-0.044, 0.075, 0.020], [0.008, 0.086, 0.021], [0.054, 0.059, 0.012]], 0.010);
-    crease(head, "#6083a9", [[side * 0.16, -0.18, 0.46], [side * 0.226, -0.205, 0.437], [side * 0.274, -0.187, 0.432]], 0.008);
+    crease(head, "#728fae", [[side * 0.16, -0.18, 0.46], [side * 0.226, -0.205, 0.437], [side * 0.274, -0.187, 0.432]], 0.006);
   }
   head.traverse((node) => {
     if (node instanceof Mesh) {

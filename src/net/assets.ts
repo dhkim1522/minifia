@@ -29,9 +29,9 @@ export type PreloadItem = { href: string; imageSrcSet?: string };
  * 정적 그림 주소 끝에 붙이는 값. 파일 이름이 같아도 그림을 바꾼 배포가 바로 보이게 한다
  * (정적 그림 캐시가 max-age 1일이라 같은 주소는 하루 동안 옛 그림이 나온다). 그림을 바꾸면 값을 바꾼다.
  */
-export const ASSET_VERSION = "noir-13";
+export const ASSET_VERSION = "noir-14";
 /** 입장 배경은 캐릭터·맵 그림과 별도로 갱신한다. */
-export const ENTRY_ART_VERSION = "home-table-3";
+export const ENTRY_ART_VERSION = "home-table-4";
 export const STATIONERY_VERSION = "stationery-1";
 
 type StationeryAsset = "paper" | "will-paper" | "seal" | "role-front" | "role-back" | "note" | `journal-${JournalRole}`;
@@ -93,9 +93,9 @@ export function outfitCardSrc(id: OutfitId, animal?: AnimalId): string {
   return `/outfits/outfit-${id}.png?v=${ASSET_VERSION}`;
 }
 
-/** 참가자 카드는 같은 3D 모델의 공개 의상 그림에서 상반신을 보여 준다. */
+/** 참가자 카드는 같은 3D 모델과 공개 의상의 상반신을 렌더한 그림을 쓴다. */
 export function participantPortraitSrc(seat: number, animal?: AnimalId, outfit: OutfitId = "coat"): string {
-  return animal === undefined ? figureSrc(seat).src : outfitCardSrc(outfit, animal);
+  return animal === undefined ? figureSrc(seat).src : animalImageSrc(animal, `participant-${outfit}.webp`);
 }
 
 // 직업 그림은 150px 로 표시한다. @2x 파일은 1x, @4x 파일은 2x. 역할을 보낼 수 있는 화면에서만 쓴다.

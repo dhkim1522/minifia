@@ -10,7 +10,7 @@
 - **v2.0 완료 처리(2026-11-07)**: 태그 `v2.0`, 문서는 `.planning/milestones/v2.0-*`. 열린 감사 항목 26개는 STATE.md 미룬 항목. main 은 v1.0 그대로, v3.0 실테스트 통과 뒤 반영.
 - **캐릭터·맵**의 B안 모델은 `src/world/character.ts`, `src/world/ghost3d.ts`, `src/world/maps/`에 있다. 시안은 `design/v3.0/redesign/b-noir.png`. 이미지 재생성은 [에셋 자동 검사](docs/screen-map.md#에셋-자동-검사) 참고.
 - **맵**: 일반·테스트·튜토리얼·다시 하기 모두 재즈 바. 이전 광장 방은 역할·단계를 유지해 원탁으로 옮긴다. 광장 자료는 개발 측정에서만 쓴다.
-- **브랜치**: 지금은 **`v3`**. `v2` 는 v2.0 그대로, `v1` 은 v1.0 배포본 수정 전용, `main` 은 배포된 v1.0. 다른 PC 는 `git fetch` 후 `git switch v3`.
+- **브랜치**: 동물 외형 개선은 [`design/soft-animal-characters`](docs/decisions/0121-soft-animal-characters.md). 공개 기준은 `v3`, `v2` 는 v2.0 그대로, `v1` 은 v1.0 배포본 수정 전용, `main` 은 배포된 v1.0. 다른 PC 는 `git fetch` 후 `git switch v3`.
 - 배포: v3 https://minifia-v3.dhplay.workers.dev (Worker `minifia-v3`, `scripts/deploy-target.mjs`), v2 https://minifia-v2.dhplay.workers.dev (비교용), v1.0 `https://minifia.dhplay.workers.dev`. `npm run deploy` 가 계정·배포 대상 가드를 거친다(가드는 우회하지 않는다).
 - 버전은 `/api/health`. `npm run e2e` 기본은 공개판, 로컬은 `-- --url http://localhost:5173 --only 흐름1,흐름2`. 모바일 전체 회귀는 나누어 실행하고 간헐 실패는 단독 재검수한다. `backdrop-filter`는 비접두 한 번만 쓴다.
 - 커밋 제외: `design/backgrounds/indoor-draft/`, `Claude outputs/`, `.planning/milestone.lock`, `.planning/state.json`.

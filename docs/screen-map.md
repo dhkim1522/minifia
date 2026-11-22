@@ -366,7 +366,7 @@ E2E 판정(`scripts/e2e/lib.mjs`): `sideColumnChecks` (SC1~SC6, 폰 6종) — �
 
 ## 에셋 자동 검사
 
-홈과 초대 링크 미리보기에는 실제 재즈 바와 좌석 모델을 렌더한 장면을 쓴다. 동물이나 재즈 바를 다듬었으면 로컬 개발 서버에서 `node scripts/render-noir-assets.mjs http://127.0.0.1:5173 --3d-art-refresh`를 실행한다. 동물의 공개 얼굴·전신·역할·의상, 재즈 바 카드와 배경, 홈과 공유 그림을 한 번에 갱신한다.
+홈과 초대 링크 미리보기에는 실제 재즈 바와 좌석 모델을 렌더한 장면을 쓴다. 동물이나 재즈 바를 다듬었으면 로컬 개발 서버에서 `node scripts/render-noir-assets.mjs http://127.0.0.1:5173 --3d-art-refresh`를 실행한다. 동물의 공개 얼굴·참가자 상반신·전신·역할·의상, 재즈 바 카드와 배경, 홈과 공유 그림을 한 번에 갱신한다.
 
 - 로컬 개발 서버 실행 후 `node scripts/render-noir-assets.mjs http://127.0.0.1:5173`으로 실제 Three.js 모델에서 모든 배경, 560×320 맵 카드, 전신·얼굴·역할·의상과 공유 그림을 만든다. `npm run backdrops -- http://127.0.0.1:5173`은 게임·입장 배경 WebP 7종을 만들고 용량 상한을 검사한다.
 - 사람 역할 카드 그림만 갱신할 때는 `node scripts/render-noir-assets.mjs http://127.0.0.1:5173 --role-portraits-only`를 쓴다.

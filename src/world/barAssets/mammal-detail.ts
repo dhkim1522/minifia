@@ -72,17 +72,17 @@ export function makeRabbitDetail(density: HeadDensity = "close"): Group {
   const head = sculptRoot(density);
   head.name = "rabbit-detail";
   ears(head, {
-    root: [0.163, 0.261, -0.02], tip: [0.319, 0.954, -0.066],
-    width: [0.147, 0.102], depth: [0.125, 0.080],
-    tint: white, inner: lavender, recess: 0.029, bend: 0.018,
+    root: [0.161, 0.233, -0.025], tip: [0.309, 0.943, -0.065],
+    width: [0.149, 0.108], depth: [0.128, 0.083],
+    tint: white, inner: lavender, recess: 0.024, bend: 0.018,
   });
-  const front = face(head, [0.51, 0.458, 0.47],
-    (x, y) => 0.063 * bell(x, 0.24) * bell(y + 0.134, 0.146)
-      + 0.046 * bell(Math.abs(x) - 0.26, 0.2) * bell(y + 0.14, 0.13)
-      - 0.019 * bell(Math.abs(x) - 0.183, 0.078) * bell(y - 0.016, 0.075),
+  const front = face(head, [0.519, 0.460, 0.470],
+    (x, y) => 0.052 * bell(x, 0.26) * bell(y + 0.134, 0.149)
+      + 0.057 * bell(Math.abs(x) - 0.26, 0.207) * bell(y + 0.145, 0.144)
+      - 0.014 * bell(Math.abs(x) - 0.183, 0.087) * bell(y - 0.016, 0.081),
     (u, p, out) => {
       const cheek = bell(Math.abs(p.x) - 0.293, 0.065) * bell(p.y + 0.123, 0.052) * ramp(u.z, 0.37, 0.7);
-      out.copy(white).lerp(lavender, 0.16 * ramp(-p.y, 0.06, 0.44)).lerp(rabbitBlush, cheek * 0.79);
+      out.copy(white).lerp(lavender, 0.14 * ramp(-p.y, 0.06, 0.44)).lerp(rabbitBlush, cheek * 0.58);
     });
   eyes(head, place(front, 0.177, 0.019), rabbitLid, 0.04, [0.049, 0.069]);
   oval(head, "#ac7584", place(front, 0, -0.093, 0.011), [0.056, 0.035, 0.025], 0, 0.54);
@@ -108,19 +108,19 @@ export function makePigDetail(density: HeadDensity = "close"): Group {
   const head = sculptRoot(density);
   head.name = "pig-detail";
   ears(head, {
-    root: [0.255, 0.287, 0.025], tip: [0.570, 0.203, 0.116],
+    root: [0.246, 0.264, 0.012], tip: [0.560, 0.210, 0.100],
     width: [0.151, 0.075], depth: [0.125, 0.069],
     tint: pigPink, inner: pigEar, recess: 0.020, bend: 0.082,
   });
-  const front = face(head, [0.518, 0.438, 0.461],
-    (x, y) => 0.154 * Math.exp(-(((x / 0.237) ** 2 + ((y + 0.115) / 0.141) ** 2) ** 2))
-      + 0.030 * bell(Math.abs(x) - 0.34, 0.15) * bell(y + 0.14, 0.15)
-      - 0.063 * snoutHoles(x, y) - 0.013 * bell(Math.abs(x) - 0.222, 0.08) * bell(y - 0.027, 0.074),
+  const front = face(head, [0.528, 0.438, 0.461],
+    (x, y) => 0.137 * Math.exp(-(((x / 0.243) ** 2 + ((y + 0.115) / 0.147) ** 2) ** 2))
+      + 0.048 * bell(Math.abs(x) - 0.33, 0.175) * bell(y + 0.142, 0.154)
+      - 0.054 * snoutHoles(x, y) - 0.010 * bell(Math.abs(x) - 0.222, 0.087) * bell(y - 0.027, 0.079),
     (u, p, out) => {
       const nose = Math.exp(-(((p.x / 0.213) ** 2 + ((p.y + 0.115) / 0.121) ** 2) ** 2));
       const front = ramp(u.z, 0.39, 0.84);
       const cheek = bell(Math.abs(p.x) - 0.335, 0.068) * bell(p.y + 0.12, 0.05);
-      out.copy(pigPink).lerp(pigBlush, 0.55 * front * cheek)
+      out.copy(pigPink).lerp(pigBlush, 0.46 * front * cheek)
         .lerp(pigSnout, 0.94 * front * nose)
         .lerp(pigNostril, front * ramp(snoutHoles(p.x, p.y), 0.13, 0.71));
     });
@@ -142,14 +142,14 @@ function mane(head: Group): void {
   surface(head, (u, p) => {
     const angle = Math.atan2(u.x, u.y);
     const edge = Math.hypot(u.x, u.y);
-    const curl = 0.089 * Math.cos(angle * 9 + 1.32 * u.z) + 0.026 * Math.sin(angle * 5 - 1.5 * u.z);
+    const curl = 0.075 * Math.cos(angle * 9 + 1.32 * u.z) + 0.023 * Math.sin(angle * 5 - 1.5 * u.z);
     const rim = 1 + curl * edge * edge;
     p.set(u.x * 0.598 * rim, u.y * 0.544 * rim + 0.006, -0.171 + u.z * (0.335 + curl * 0.41 * edge));
   }, (u, _p, out) => {
     const angle = Math.atan2(u.x, u.y);
     const edge = Math.hypot(u.x, u.y);
     const rill = 0.5 + 0.5 * Math.cos(angle * 9 + u.z * 3.25);
-    out.copy(maneLight).lerp(maneShade, 0.18 + 0.27 * rill * edge + 0.16 * ramp(-u.y, 0, 1));
+    out.copy(maneLight).lerp(maneShade, 0.16 + 0.21 * rill * edge + 0.14 * ramp(-u.y, 0, 1));
   }, 58, 34);
 }
 
@@ -158,14 +158,14 @@ export function makeLionDetail(density: HeadDensity = "close"): Group {
   head.name = "lion-detail";
   mane(head);
   ears(head, {
-    root: [0.314, 0.192, 0.19], tip: [0.438, 0.355, 0.237],
+    root: [0.302, 0.176, 0.177], tip: [0.433, 0.347, 0.227],
     width: [0.102, 0.092], depth: [0.089, 0.061],
     tint: lionGold, inner: lionOchre, recess: 0.019,
   });
-  const front = face(head, [0.457, 0.409, 0.436],
-    (x, y) => 0.080 * bell(x, 0.22) * bell(y + 0.10, 0.152)
-      + 0.047 * bell(Math.abs(x) - 0.19, 0.19) * bell(y + 0.143, 0.125)
-      - 0.018 * bell(Math.abs(x) - 0.174, 0.087) * bell(y - 0.027, 0.084),
+  const front = face(head, [0.471, 0.414, 0.438],
+    (x, y) => 0.072 * bell(x, 0.25) * bell(y + 0.10, 0.152)
+      + 0.060 * bell(Math.abs(x) - 0.207, 0.206) * bell(y + 0.141, 0.142)
+      - 0.013 * bell(Math.abs(x) - 0.174, 0.091) * bell(y - 0.027, 0.087),
     (u, p, out) => {
       const front = ramp(u.z, 0.29, 0.8);
       const muzzle = bell(p.x, 0.264) * bell(p.y + 0.14, 0.16);
@@ -174,7 +174,7 @@ export function makeLionDetail(density: HeadDensity = "close"): Group {
         + bell(Math.abs(p.x) - 0.151, 0.016) * bell(p.y + 0.116, 0.016);
       out.copy(lionGold).lerp(lionOchre, 0.31 * ramp(-p.y, 0.18, 0.40))
         .lerp(lionCream, 0.77 * muzzle * front).lerp(lionBlush, 0.66 * cheek * front)
-        .lerp(lionFreckles, 0.58 * freckles * front);
+        .lerp(lionFreckles, 0.41 * freckles * front);
     });
   eyes(head, place(front, 0.175, 0.034), "#b88250", 0.045, [0.053, 0.074]);
   oval(head, "#5d3940", place(front, 0, -0.077, 0.009), [0.079, 0.047, 0.031], 0, 0.44);
@@ -213,12 +213,12 @@ function horn(head: Group, side: number): void {
     const t = i / segments;
     path.getPointAt(t, center);
     const seam = (0.5 + 0.5 * Math.cos((t * 9.3 + t * t * 2) * Math.PI * 2)) ** 3;
-    const taper = MathUtils.lerp(1, 0.40, t) * (1 - 0.94 * ramp(t, 0.88, 1)) - 0.028 * seam;
+    const taper = MathUtils.lerp(1, 0.41, t) * (1 - 0.94 * ramp(t, 0.88, 1)) - 0.019 * seam;
     for (let j = 0; j <= around; j++) {
       const idx = i * (around + 1) + j;
       vertex.fromBufferAttribute(vertices, idx).lerp(center, 1 - taper);
       vertices.setXYZ(idx, vertex.x, vertex.y, vertex.z);
-      color.copy(hornBase).lerp(hornRib, 0.22 * seam + 0.26 * ramp(t, 0.64, 1) + 0.13 * Math.abs(j / around - 0.5));
+      color.copy(hornBase).lerp(hornRib, 0.16 * seam + 0.22 * ramp(t, 0.64, 1) + 0.13 * Math.abs(j / around - 0.5));
       colors.push(color.r, color.g, color.b);
     }
   }
@@ -243,12 +243,12 @@ function woolTufts(x: number, y: number): number {
 export function makeRamDetail(density: HeadDensity = "close"): Group {
   const head = sculptRoot(density);
   head.name = "ram-detail";
-  const front = face(head, [0.445, 0.476, 0.445],
+  const front = face(head, [0.456, 0.474, 0.446],
     (x, y) => {
       const fleece = ramp(y, woolLine(Math.abs(x)) - 0.02, 0.337);
       const tufts = woolTufts(x, y);
-      return 0.028 * fleece + 0.066 * tufts * ramp(y, 0.12, 0.23)
-        + 0.043 * bell(x, 0.227) * bell(y + 0.15, 0.145);
+      return 0.028 * fleece + 0.055 * tufts * ramp(y, 0.12, 0.23)
+        + 0.054 * bell(x, 0.271) * bell(y + 0.15, 0.151);
     }, (u, p, out) => {
       const lineY = woolLine(Math.abs(p.x)) - 0.101 * ramp(-u.z, 0.12, 0.70);
       const fleece = ramp(p.y, lineY - 0.033, lineY + 0.035);
@@ -265,8 +265,8 @@ export function makeRamDetail(density: HeadDensity = "close"): Group {
   return head;
 }
 
-const batPurple = new Color("#615282");
-const batEar = new Color("#aa7fae");
+const batPurple = new Color("#6b5a88");
+const batEar = new Color("#a784a9");
 const batWing = new Color("#423457");
 const batNose = new Color("#be90b7");
 const batNostril = new Color("#38294b");
@@ -288,14 +288,14 @@ export function makeBatDetail(density: HeadDensity = "close"): Group {
   const head = sculptRoot(density);
   head.name = "bat-detail";
   ears(head, {
-    root: [0.265, 0.111, -0.019], tip: [0.660, 0.506, 0.022],
-    width: [0.223, 0.082], depth: [0.147, 0.061],
-    tint: batPurple, inner: batEar, recess: 0.031, bend: 0.038,
+    root: [0.245, 0.096, -0.022], tip: [0.644, 0.504, 0.020],
+    width: [0.222, 0.090], depth: [0.148, 0.062],
+    tint: batPurple, inner: batEar, recess: 0.026, bend: 0.037,
   });
-  const front = face(head, [0.50, 0.414, 0.439],
-    (x, y) => 0.099 * bell(x, 0.132) * bell(y + 0.073, 0.083)
+  const front = face(head, [0.508, 0.423, 0.440],
+    (x, y) => 0.083 * bell(x, 0.148) * bell(y + 0.073, 0.091)
       - 0.033 * bell(Math.abs(x) - 0.037, 0.025) * bell(y + 0.078, 0.029)
-      + 0.036 * bell(Math.abs(x) - 0.27, 0.19) * bell(y + 0.132, 0.13),
+      + 0.046 * bell(Math.abs(x) - 0.27, 0.197) * bell(y + 0.132, 0.14),
     (u, p, out) => {
       const front = ramp(u.z, 0.31, 0.78);
       const muzzle = bell(p.x, 0.131) * bell(p.y + 0.073, 0.077);

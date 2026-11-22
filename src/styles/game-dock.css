@@ -129,6 +129,7 @@
   max-height: none;
   transform: translateX(-50%);
 }
+.mf-game-dock .mf-table-controls__portrait .is-participant-bust { width: 100%; }
 .mf-game-dock .mf-table-controls__portrait .is-fallback { width: 48%; aspect-ratio: 1; border-radius: 50%; }
 .mf-game-dock .mf-table-controls button[data-table-readonly] { opacity: 1; cursor: default; }
 .mf-game-dock .mf-playtest__ballot-count { justify-content: flex-end; margin-top: 5px; }

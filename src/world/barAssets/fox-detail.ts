@@ -27,14 +27,14 @@ function feltTexture(): DataTexture {
 const felt = new MeshStandardMaterial({
   vertexColors: true, roughness: 0.91, bumpMap: feltTexture(), bumpScale: 0.015,
 });
-const eyes = new MeshStandardMaterial({ color: "#211923", roughness: 0.29 });
-const nose = new MeshStandardMaterial({ color: "#38242a", roughness: 0.42 });
-const lids = new MeshStandardMaterial({ color: "#a46542", roughness: 0.95 });
-const mouth = new MeshStandardMaterial({ color: "#774f40", roughness: 0.95 });
-const glint = new MeshStandardMaterial({ color: "#e6bc98", emissive: "#6d4b36", emissiveIntensity: 0.32 });
-const orange = new Color("#dd8c47");
-const burntOrange = new Color("#a55333");
-const cream = new Color("#f1dfc3");
+const eyes = new MeshStandardMaterial({ color: "#27232a", roughness: 0.34 });
+const nose = new MeshStandardMaterial({ color: "#3d3031", roughness: 0.45 });
+const lids = new MeshStandardMaterial({ color: "#b97751", roughness: 0.95 });
+const mouth = new MeshStandardMaterial({ color: "#8b6250", roughness: 0.95 });
+const glint = new MeshStandardMaterial({ color: "#f7e6d1", roughness: 0.38 });
+const orange = new Color("#dc8b4e");
+const burntOrange = new Color("#b36743");
+const cream = new Color("#f2dfba");
 const pink = new Color("#d99979");
 const innerEar = new Color("#dda98c");
 const bridge = new Color("#ebaa65");
@@ -49,15 +49,15 @@ function gaussian(value: number, radius: number): number {
 }
 
 function faceWidth(unitY: number): number {
-  return 0.521 * (1 + 0.13 * gaussian(unitY + 0.17, 0.36) - 0.12 * MathUtils.smoothstep(-unitY, 0.27, 1));
+  return 0.534 * (1 + 0.16 * gaussian(unitY + 0.23, 0.42) - 0.078 * MathUtils.smoothstep(-unitY, 0.31, 1));
 }
 
 function faceZ(x: number, y: number, unitZ: number): number {
   const front = MathUtils.smoothstep(unitZ, 0.06, 0.72);
-  const muzzle = 0.142 * gaussian(x, 0.235) * gaussian(y + 0.135, 0.131);
-  const cheeks = 0.070 * gaussian(Math.abs(x) - 0.31, 0.165) * gaussian(y + 0.125, 0.12);
+  const muzzle = 0.106 * gaussian(x, 0.267) * gaussian(y + 0.133, 0.151);
+  const cheeks = 0.102 * gaussian(Math.abs(x) - 0.313, 0.191) * gaussian(y + 0.132, 0.147);
   const brow = 0.023 * gaussian(Math.abs(x) - 0.19, 0.11) * gaussian(y - 0.092, 0.07);
-  const eyeSocket = 0.019 * gaussian(Math.abs(x) - 0.194, 0.087) * gaussian(y - 0.016, 0.072);
+  const eyeSocket = 0.013 * gaussian(Math.abs(x) - 0.201, 0.094) * gaussian(y - 0.017, 0.077);
   return unitZ * 0.438 + front * (muzzle + cheeks + brow - eyeSocket);
 }
 
@@ -76,16 +76,16 @@ const faceSurface: Surface = (unit, out) => {
 function faceColor(unit: Vector3, position: Vector3, out: Color): void {
   const { x, y } = position;
   const side = Math.abs(x);
-  const whiteEdge = -0.079 + 0.10 * MathUtils.smoothstep(side, 0.03, 0.49);
-  const creamMask = (1 - MathUtils.smoothstep(y, whiteEdge - 0.036, whiteEdge + 0.025)) * MathUtils.smoothstep(unit.z, -0.55, 0.39);
+  const whiteEdge = -0.073 + 0.082 * MathUtils.smoothstep(side, 0.025, 0.49);
+  const creamMask = (1 - MathUtils.smoothstep(y, whiteEdge - 0.052, whiteEdge + 0.036)) * MathUtils.smoothstep(unit.z, -0.55, 0.39);
   const shade = 0.24 * gaussian(side - 0.46, 0.19) + 0.18 * MathUtils.smoothstep(y, 0.21, 0.42);
   const bridgeLight = 0.48 * gaussian(side, 0.21) * gaussian(y - 0.12, 0.17) * MathUtils.smoothstep(unit.z, 0.24, 0.79);
   out.copy(orange).lerp(burntOrange, shade).lerp(bridge, bridgeLight).lerp(cream, creamMask);
-  const blush = 0.75 * gaussian(side - 0.343, 0.062) * gaussian(y + 0.103, 0.046) * MathUtils.smoothstep(unit.z, 0.22, 0.72);
+  const blush = 0.51 * gaussian(side - 0.348, 0.081) * gaussian(y + 0.115, 0.062) * MathUtils.smoothstep(unit.z, 0.22, 0.72);
   out.lerp(pink, blush);
   for (const [dx, dy] of [[0.133, -0.152], [0.166, -0.169], [0.172, -0.127]] as const) {
     const spot = gaussian(side - dx, 0.013) * gaussian(y - dy, 0.013);
-    out.lerp(fur, 0.55 * spot * MathUtils.smoothstep(unit.z, 0.5, 0.8));
+    out.lerp(fur, 0.34 * spot * MathUtils.smoothstep(unit.z, 0.5, 0.8));
   }
 }
 
@@ -98,15 +98,15 @@ function earSurface(side: number): Surface {
   return (unit, out) => {
     const t = (unit.y + 1) / 2;
     return out.set(
-      side * (0.278 + 0.16 * t) + unit.x * (0.231 - 0.13 * t),
-      0.142 + 0.55 * t,
-      0.022 - 0.068 * t + unit.z * (0.126 - 0.045 * t) - 0.036 * earLining(unit),
+      side * (0.273 + 0.16 * t) + unit.x * (0.234 - 0.127 * t),
+      0.118 + 0.555 * t,
+      0.009 - 0.067 * t + unit.z * (0.132 - 0.049 * t) - 0.033 * earLining(unit),
     );
   };
 }
 
 function earColor(unit: Vector3, _position: Vector3, out: Color): void {
-  out.copy(orange).lerp(burntOrange, 0.36 + 0.60 * MathUtils.smoothstep(unit.y, 0.32, 0.87));
+  out.copy(orange).lerp(burntOrange, 0.22 + 0.49 * MathUtils.smoothstep(unit.y, 0.36, 0.92));
   out.lerp(innerEar, earLining(unit) * 0.96);
 }
 
@@ -190,17 +190,17 @@ export function makeFoxDetail(density: HeadDensity = "close"): Group {
   group.add(lips);
   for (const side of [-1, 1]) {
     group.add(new Mesh(sculpt(group, earSurface(side), earColor, 42, 34), felt));
-    const x = side * 0.194;
-    const y = 0.017;
-    const eye = markExpressionPart(insetSphere(group, x, y, [0.055, 0.079, 0.034], eyes, 0.005), "eye");
+    const x = side * 0.201;
+    const y = 0.021;
+    const eye = markExpressionPart(insetSphere(group, x, y, [0.050, 0.064, 0.032], eyes, -0.003), "eye");
     const highlight = new Mesh(new SphereGeometry(1, sculptSegments(group, 10, 8), sculptSegments(group, 7, 5)), glint);
-    highlight.scale.set(0.081, 0.057, 0.027);
-    highlight.position.set(-0.29, 0.29, 0.91);
+    highlight.scale.set(0.083, 0.066, 0.036);
+    highlight.position.set(-0.27, 0.28, 0.94);
     eye.add(highlight);
-    expression(group, [[x - 0.061, y + 0.027], [x - 0.036, y + 0.071], [x, y + 0.084], [x + 0.035, y + 0.066], [x + 0.058, y + 0.022]], 0.005, lids);
-    expression(lips, [[0, -0.153], [side * 0.027, -0.178], [side * 0.069, -0.181], [side * 0.109, -0.154]], 0.007, mouth);
+    expression(group, [[x - 0.049, y + 0.022], [x - 0.032, y + 0.056], [x, y + 0.065], [x + 0.031, y + 0.052], [x + 0.048, y + 0.018]], 0.003, lids);
+    expression(lips, [[0, -0.154], [side * 0.027, -0.17], [side * 0.064, -0.174], [side * 0.106, -0.158]], 0.006, mouth);
   }
-  insetSphere(group, 0, -0.099, [0.073, 0.044, 0.037], nose, 0.01);
+  insetSphere(group, 0, -0.099, [0.065, 0.041, 0.032], nose, 0.006);
   expression(group, [[0, -0.119], [0, -0.140], [0, -0.153]], 0.006, mouth);
   group.traverse(object => {
     if (object instanceof Mesh) object.receiveShadow = true;

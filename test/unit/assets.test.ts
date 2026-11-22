@@ -36,6 +36,7 @@ import {
 
 // node:fs 대신 Vite 의 import.meta.glob 으로 public/ 의 실제 파일 목록을 얻는다.
 const characterFiles = new Set(Object.keys(import.meta.glob("/public/characters/**/*.png")));
+const participantFiles = new Set(Object.keys(import.meta.glob("/public/characters/animals/*/participant-*.webp")));
 const backdropFiles = new Set(Object.keys(import.meta.glob("/public/backgrounds/*.webp")));
 const stationeryFiles = new Set(Object.keys(import.meta.glob("/public/stationery/*.webp")));
 
@@ -341,8 +342,14 @@ describe("outfitCardSrc (10-07)", () => {
   });
 
   it("참가자 상반신은 공개 동물과 의상 그림을 쓰고 동물이 없는 좌석의 인물도 표시한다", () => {
-    expect(participantPortraitSrc(2, "rabbit", "hood")).toBe(outfitCardSrc("hood", "rabbit"));
-    expect(participantPortraitSrc(2, "rabbit")).toBe(animalFigureSrc("rabbit").src);
+    for (const animal of ANIMAL_IDS) {
+      for (const outfit of OUTFIT_IDS) {
+        const path = `/characters/animals/${animal}/participant-${outfit}.webp`;
+        expect(participantPortraitSrc(2, animal, outfit)).toBe(`${path}?v=${ASSET_VERSION}`);
+        expect(participantFiles.has(`/public${path}`), path).toBe(true);
+      }
+    }
+    expect(participantPortraitSrc(2, "rabbit")).toBe(participantPortraitSrc(2, "rabbit", "coat"));
     expect(participantPortraitSrc(2)).toBe(figureSrc(2).src);
   });
 

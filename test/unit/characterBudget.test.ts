@@ -216,6 +216,66 @@ describe("동물 캐릭터의 외형과 렌더링 예산", () => {
     c.dispose();
   });
 
+  it("걷기와 좌우 가리키기에서 양쪽 소매가 몸통 어깨 안까지 맞물린다", () => {
+    const c = createCharacter(0, "coat", undefined, "fox");
+    const body = c.root.getObjectByName("body")!;
+    const torso = body.children.find((object) => (object as Mesh).isMesh) as Mesh;
+    const coat = new Color(OUTFITS.coat.coat);
+    const rgb = new Color();
+    const coatVertices = (geometry: BufferGeometry) => {
+      const colors = geometry.getAttribute("color");
+      const positions = geometry.getAttribute("position");
+      const points: Vector3[] = [];
+      for (let i = 0; i < positions.count; i++) {
+        rgb.fromBufferAttribute(colors, i);
+        if (Math.abs(rgb.r - coat.r) + Math.abs(rgb.g - coat.g) + Math.abs(rgb.b - coat.b) < 0.00001) {
+          points.push(new Vector3().fromBufferAttribute(positions, i));
+        }
+      }
+      return points;
+    };
+    // 몸통 메시의 실제 위도 링 사이에서 반경을 보간한다. 면 안쪽에 확실히 들어온 점만 센다.
+    const coatRings = new Map<number, number>();
+    for (const { x, y, z } of coatVertices(torso.geometry)) {
+      coatRings.set(y, Math.max(coatRings.get(y) ?? 0, Math.hypot(x, z)));
+    }
+    const rings = [...coatRings].sort(([left], [right]) => left - right);
+    const insideCoat = ({ x, y, z }: Vector3): boolean => {
+      const index = rings.findIndex(([height]) => y < height);
+      if (index < 1) return false;
+      const [low, lowRadius] = rings[index - 1];
+      const [high, highRadius] = rings[index];
+      const radius = lowRadius + (highRadius - lowRadius) * (y - low) / (high - low);
+      return Math.hypot(x, z) < radius * Math.cos(Math.PI / 24) - 0.005;
+    };
+    const sleeves = ["armA", "armB"].map((name) => {
+      const arm = body.getObjectByName(name)!;
+      const points = coatVertices((arm.children[0] as Mesh).geometry).filter(({ y }) => y > -0.09);
+      return { arm, points };
+    });
+    const check = (pose: string) => {
+      for (const { arm, points } of sleeves) {
+        arm.updateMatrix();
+        expect(points.some((point) => insideCoat(point.clone().applyMatrix4(arm.matrix))), `${pose}/${arm.name}`).toBe(true);
+      }
+    };
+    for (let frame = 0; frame < 12; frame++) {
+      c.update(1 / 30, frame / 30, true);
+      check(`walk ${frame}`);
+    }
+    c.setSeated(true, false);
+    c.holdPose("point");
+    for (const yaw of [-1.33, 0, 1.33]) {
+      c.setGaze(yaw * 0.8, 0.12, yaw);
+      c.update(0.15, 1, false);
+      check(`point ${yaw}`);
+    }
+    const acrossChest = body.getObjectByName("armB")!;
+    const forearm = new Vector3(0, -0.29, 0).applyMatrix4(acrossChest.matrix);
+    expect(insideCoat(forearm), "반대편을 가리킬 때 아래 소매의 중심이 코트 밖이다").toBe(false);
+    c.dispose();
+  });
+
   it("역할 의상과 종 변경을 같은 움직이는 모델에 적용한다", () => {
     const c = createCharacter(0, "coat", undefined, "rabbit");
     const head = c.root.getObjectByName("neck")!.children[0] as Mesh;

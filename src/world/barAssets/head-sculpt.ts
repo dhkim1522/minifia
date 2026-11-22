@@ -111,9 +111,10 @@ export function eyes(
     eye.position.set(side * x, y, z);
     eye.rotation.set(-0.05, side * 0.31, side * tilt);
     parent.add(eye);
-    oval(eye, lidTint, [0, 0.004, -0.017], [rx * 1.27, ry * 1.19, 0.040]);
-    oval(eye, "#241c25", [0, 0, 0.004], [rx, ry, 0.035], 0, 0.27);
-    oval(eye, "#f8dec3", [-rx * 0.26, ry * 0.30, 0.034], [0.011, 0.014, 0.006], 0, 0.31);
+    // 눈두덩 가장자리를 얼굴 안쪽에 묻어 작은 눈만 표면 위로 올라오게 한다.
+    oval(eye, lidTint, [0, 0.002, -0.021], [rx * 1.13, ry * 1.02, 0.027]);
+    oval(eye, "#262329", [0, 0, -0.005], [rx, ry * 0.92, 0.033], 0, 0.34);
+    oval(eye, "#f7e8d7", [-rx * 0.25, ry * 0.26, 0.024], [0.009, 0.011, 0.005], 0, 0.38);
   }
 }
 
