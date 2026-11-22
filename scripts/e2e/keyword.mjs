@@ -3,7 +3,7 @@
 // day.mjs·avatar.mjs 와 같은 모양: helpers 를 받고 서로 import 하지 않는다.
 // helpers: { recorder, attempt, openGame, closeGame, allAt, untilGame, gameGH, GAME_HOST_NICK }.
 // 표식(data-keyword-*·data-answer-*·data-announce-label·data-early)에는 역할·키워드 값이 없다 — 키워드는 텍스트 노드로만 읽는다(T-23-43).
-import { chooseVerdict, installFakeViewport, openRoleCard, openTableDockPane, settle, skipDayToExecution, skipTo, sleep, waitForPhaseStart, watchSockets } from "./browser.mjs";
+import { chooseVerdict, installFakeViewport, openRoleCard, openTableDockPane, settle, showPeopleTarget, skipDayToExecution, skipTo, sleep, waitForPhaseStart, watchSockets } from "./browser.mjs";
 import { OVERLAP_EPS, TAP_MIN } from "./lib.mjs";
 
 const isNum = (x) => typeof x === "number" && Number.isFinite(x);
@@ -616,7 +616,8 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       const chooseHat = async (actor, target, acceptedTarget) => {
         await openTableDockPane(actor.page, "tools");
         await actor.page.locator("[data-suspect-btn]").click({ timeout: 4000 });
-        await actor.page.getByRole("region", { name: "딱지 붙이기" }).locator(`[data-table-seat="${target}"][data-suspect-tag]`).click({ timeout: 3000 });
+        await actor.page.getByRole("region", { name: "딱지 붙이기" }).waitFor({ timeout: 3000 });
+        await (await showPeopleTarget(actor.page, `[data-table-seat="${target}"][data-suspect-tag]`)).click({ timeout: 3000 });
         await actor.tracker.waitFor(v => v.me.suspectTo === acceptedTarget, 3000, "내 고깔 변경");
       };
       await chooseHat(markedBy, sharedTarget, sharedTarget);
@@ -805,7 +806,7 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       const aliveOthers = (t) => t.last().players.filter((p) => p.seat !== seatOf(t) && p.alive !== false).map((p) => p.seat);
       for (const p of pages) {
         const target = aliveOthers(p.tracker)[0];
-        await p.page.locator(`[data-face="${target}"], [data-pick="${target}"]`).first().click({ timeout: 4000 });
+        await (await showPeopleTarget(p.page, `[data-face="${target}"], [data-pick="${target}"]`)).click({ timeout: 4000 });
       }
       // 봇이 모두 고르면(원래 마감보다 일찍) 마감이 now+1.5초로 줄어든다 — 그 순간을 잡아 다음 단계까지의 시간을 잰다
       const sn = performance.now();

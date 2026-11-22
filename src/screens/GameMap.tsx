@@ -35,6 +35,8 @@ import { WillSheet } from "../components/v2/WillSheet";
 import type { WillSheetProps } from "../components/v2/WillSheet";
 import { TensionVignette } from "../components/TensionVignette";
 import { TableControls } from "../components/TableControls";
+import type { TableControlsProps } from "../components/TableControls";
+import type { PeopleAction } from "../components/GameDock";
 import { WorldStage } from "../components/WorldStage";
 import type { WorldPick, WorldStageProps } from "../components/WorldStage";
 import { ownAnimalOf } from "../game/playerIdentity";
@@ -783,27 +785,34 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
   } : undefined;
   const dockTarget = firstTarget ?? (dockVoting || dockSuspect ? pick : undefined);
   const dockTitle = firstTarget ? "첫날 지목" : dockSuspect ? "딱지 붙이기" : runoff ? "결선 지목" : "처형 지목";
-  const dockAction = dockTarget ? {
-    kind: dockSuspect ? "suspect" as const : "vote" as const,
+  const firstHold = firstTarget ? (
+    <button type="button" className="mf-game-dock__hold" data-first-ballot-hold="" disabled={firstTarget.disabled} aria-label="오늘은 안 뽑기" aria-pressed={firstChoice === null} onClick={() => chooseFirst(null)}>
+      안 뽑기
+    </button>
+  ) : undefined;
+  const dockAction: PeopleAction | undefined = dockTarget ? {
+    kind: dockSuspect ? "suspect" : "vote",
     title: dockTitle,
     ...(dockSuspect ? { onLeave: suspect.off } : {}),
-    content: (
-      <>
-        <TableControls
-          players={tablePlayers}
-          pick={layerKind === null ? dockTarget : { ...dockTarget, disabled: true }}
-          notes={suspectStack}
-          onChoose={dockTarget.onPick}
-          extra={firstTarget ? (
-            <button type="button" data-first-ballot-hold="" disabled={firstTarget.disabled} aria-label="오늘은 안 뽑기" aria-pressed={firstChoice === null} onClick={() => chooseFirst(null)}>
-              안 뽑기
-            </button>
-          ) : undefined}
-        />
-        {dockSuspect && suspect.used ? <p className="mf-game-dock__hint" role="status">{SUSPECT_TEXT.editHint}</p> : null}
-      </>
-    ),
+    ...(firstTarget ? { firstBallot: true, footer: firstHold } : {}),
+    ...(dockSuspect && suspect.used ? { footer: <p className="mf-game-dock__hint" role="status">{SUSPECT_TEXT.editHint}</p> } : {}),
+    roster: {
+      players: tablePlayers,
+      pick: layerKind === null ? dockTarget : { ...dockTarget, disabled: true },
+      notes: suspectStack,
+      onChoose: dockTarget.onPick,
+    },
   } : undefined;
+  const tableRoster: TableControlsProps = {
+    players: tablePlayers,
+    readOnly: !tableOn,
+    ...(tableFocus !== undefined ? { focus: tableFocus } : {}),
+    ...(tableBallot && mine !== undefined ? { selected: mine } : {}),
+    ...(pick && (!tableDock || (!dockSuspect && !tableBallot)) ? { pick } : {}),
+    notes: suspectStack,
+    onChoose: tableDock && (tableBallot || dockSuspect || firstBallotOpen) ? lookAtTableSeat : chooseTableSeat,
+  };
+  const standaloneRoster = firstBallotOpen ? dockAction?.roster : tableOn && (!kbLifted || (tableBallot && pick !== undefined)) ? tableRoster : undefined;
 
   const scene = useMemo(() => {
     const look = sceneLook(view, { stageH, ...(fading ? { fading } : {}), ...(mine !== undefined ? { mine } : {}), ...(verdictZoom !== undefined ? { verdictZoom } : {}) });
@@ -951,19 +960,9 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
             <AnswerPresentation turn={presentation} player={speaker} mySeat={view.me.seat} marked={speakerMarked}
               canSuspect={canSuspectSpeaker} {...(timeless ? {} : { onSuspect: suspectSpeaker })} />
           ) : undefined}
-          tableControls={!tableDock && firstBallotOpen ? dockAction?.content : tableDock || (tableOn && (!kbLifted || (tableBallot && pick !== undefined))) ? (
-            <TableControls
-              players={tablePlayers}
-              readOnly={!tableOn}
-              {...(tableFocus !== undefined ? { focus: tableFocus } : {})}
-              {...(tableBallot && mine !== undefined ? { selected: mine } : {})}
-              {...(pick && (!tableDock || (pick !== dockTarget && !tableBallot)) ? { pick } : {})}
-              notes={suspectStack}
-              onChoose={tableDock && (tableBallot || dockSuspect || firstBallotOpen) ? lookAtTableSeat : chooseTableSeat}
-            />
-          ) : undefined}
+          tableControls={!tableDock && standaloneRoster ? <TableControls {...standaloneRoster} extra={firstHold} /> : undefined}
           tableFirstBallot={firstBallot !== undefined}
-          dock={tableDock ? { chatStore: chat, peopleCount: tablePlayers.length, ...(dockAction ? { peopleAction: dockAction } : {}) } : undefined}
+          dock={tableDock ? { chatStore: chat, roster: tableRoster, ...(dockAction ? { peopleAction: dockAction } : {}) } : undefined}
           suspect={suspect.visible && (!playtest || layerKind === null) ? {
             ...suspect,
             disabled: layerKind !== null || suspect.disabled,

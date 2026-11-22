@@ -4,6 +4,8 @@ import type { ChatChannel } from "../../shared/protocol";
 import type { ChatStore } from "../net/chatStore";
 import type { ChatPanelMessage } from "./v2/ChatPanel";
 import { PlayerPortrait } from "./PlayerPortrait";
+import { TableControls } from "./TableControls";
+import type { TableControlsProps } from "./TableControls";
 import { V2Icon } from "./v2/V2Icon";
 import "../styles/game-dock.css";
 
@@ -17,11 +19,14 @@ const TABS = [
 ] as const;
 
 const SWIPE_DISTANCE = 32;
+const PEOPLE_PER_PAGE = 4;
 
 export interface PeopleAction {
-  kind: "vote" | "suspect";
+  kind: "vote" | "suspect" | "night";
   title: string;
-  content: ReactNode;
+  roster: TableControlsProps;
+  footer?: ReactNode;
+  firstBallot?: boolean;
   onLeave?: () => void;
 }
 
@@ -38,31 +43,50 @@ interface GameDockProps {
   channel: ChatChannel | null;
   mySeat: number;
   latest?: ChatPanelMessage;
-  peopleCount: number;
   chat: ReactNode;
-  people: ReactNode;
+  people?: TableControlsProps | undefined;
   tools: ReactNode;
 }
 
-export function GameDock({ scope, initialPane, peopleAction, preserveWriting, keepLooking, keepToolsOpen, paused, inputRef, chatStore, channel, mySeat, latest, peopleCount, chat, people, tools }: GameDockProps) {
+export function GameDock({ scope, initialPane, peopleAction, preserveWriting, keepLooking, keepToolsOpen, paused, inputRef, chatStore, channel, mySeat, latest, chat, people, tools }: GameDockProps) {
   const id = useId();
   const [selection, setSelection] = useState({ scope, pane: initialPane, waiting: false, action: peopleAction?.kind });
   const voting = peopleAction?.kind === "vote";
+  const actionNeedsConfirmation = voting || peopleAction?.kind === "night";
   const armed = selection.scope === scope && !selection.waiting;
-  const title = armed && peopleAction ? peopleAction.title : "참가자";
-  const contents = { chat, people: armed && peopleAction ? peopleAction.content : people, tools };
+  const activeAction = armed ? peopleAction : undefined;
+  const title = activeAction?.title ?? "참가자";
+  const contents = { chat, people: activeAction?.roster ?? people, tools };
   const pane = selection.pane !== "closed" && contents[selection.pane] ? selection.pane : "closed";
   const tabs = useRef<Partial<Record<Pane, HTMLButtonElement | null>>>({});
   const paneRef = useRef<HTMLDivElement>(null);
   const gesture = useRef<{ id: number; x: number; y: number } | undefined>(undefined);
   const lastSwipe = useRef<{ target: HTMLButtonElement; at: number } | undefined>(undefined);
+  const roster = contents.people;
+  const [peoplePage, setPeoplePage] = useState<number>();
+  const [actionPage, setActionPage] = useState<{ scope: string; page: number }>();
+  const pageCount = Math.ceil((roster?.players.length ?? 0) / PEOPLE_PER_PAGE);
+  const selectedSeat = roster?.pick?.mine ?? roster?.selected ?? roster?.focus;
+  const selectedIndex = roster?.players.findIndex((player) => player.seat === selectedSeat) ?? -1;
+  const initialPage = selectedIndex >= 0 ? Math.floor(selectedIndex / PEOPLE_PER_PAGE) : 0;
+  const savedPage = activeAction ? actionPage?.scope === scope ? actionPage.page : undefined : peoplePage;
+  const page = Math.min(savedPage ?? initialPage, Math.max(0, pageCount - 1));
+  const rosterGesture = useRef<{ id: number; x: number; y: number } | undefined>(undefined);
+  const rosterSwipeAt = useRef(-Infinity);
+
+  const changePage = (direction: number) => {
+    const next = page + direction;
+    if (next < 0 || next >= pageCount) return;
+    if (activeAction) setActionPage({ scope, page: next });
+    else setPeoplePage(next);
+  };
 
   useLayoutEffect(() => {
     if (selection.scope === scope) return;
     const field = inputRef?.current;
     const writing = preserveWriting && pane === "chat" && field !== null && field !== undefined && field === document.activeElement;
     // 이미 상대를 바라보는 중이라면 얼굴을 누르던 조작이 새 투표가 되지 않게 한다.
-    const waiting = voting && pane === "people";
+    const waiting = actionNeedsConfirmation && pane === "people";
     const wasMarking = selection.action === "suspect";
     const looking = keepLooking && pane === "people" && selection.action === undefined;
     const next = waiting || looking || writing || (keepToolsOpen && pane === "tools") ? pane
@@ -76,7 +100,7 @@ export function GameDock({ scope, initialPane, peopleAction, preserveWriting, ke
       tabs.current.people?.focus({ preventScroll: true });
     }
     setSelection({ scope, pane: next, waiting, action: peopleAction?.kind });
-  }, [scope, selection.scope, selection.action, initialPane, pane, inputRef, preserveWriting, keepLooking, keepToolsOpen, peopleAction, voting]);
+  }, [scope, selection.scope, selection.action, initialPane, pane, inputRef, preserveWriting, keepLooking, keepToolsOpen, peopleAction, actionNeedsConfirmation]);
 
   // Store를 읽는 GameMap의 구독이 새 채팅 줄을 그린다. 열린 채널만 읽은 것으로 표시한다.
   useLayoutEffect(() => {
@@ -88,6 +112,17 @@ export function GameDock({ scope, initialPane, peopleAction, preserveWriting, ke
     if (next !== "chat") inputRef?.current?.blur();
     if (pane === "people" && next !== "people") peopleAction?.onLeave?.();
     setSelection({ scope, pane: next, waiting: false, action: peopleAction?.kind });
+  };
+  const pageBySwipe = (event: PointerEvent<HTMLDivElement>) => {
+    const start = rosterGesture.current;
+    rosterGesture.current = undefined;
+    if (!start || start.id !== event.pointerId) return;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    if (Math.abs(dx) < SWIPE_DISTANCE || Math.abs(dx) <= Math.abs(dy)) return;
+    // 경계에서 멈춘 밀기도 카드 누르기로 해석하지 않는다.
+    rosterSwipeAt.current = performance.now();
+    changePage(dx < 0 ? 1 : -1);
   };
   const close = () => {
     if (pane === "closed") return;
@@ -147,32 +182,67 @@ export function GameDock({ scope, initialPane, peopleAction, preserveWriting, ke
             onPointerCancel={() => { gesture.current = undefined; }} onClick={(event) => afterSwipe(event, close)}>
             <span aria-hidden="true" />
           </button>
-          {pane === "people" ? (
+          {pane === "people" && roster ? (
             <>
-              <div className="mf-game-dock__title"><strong>{title}</strong>{!armed || !peopleAction ? <span>{peopleCount}명</span> : null}</div>
-              <div key={armed ? peopleAction?.kind ?? "people" : "people"} className="mf-game-dock__people">{contents[pane]}</div>
+              <div className="mf-game-dock__title">
+                <strong>{title}</strong>
+                {pageCount > 1 ? (
+                  <div className="mf-game-dock__pagination">
+                    <button type="button" data-people-prev="" aria-label="이전 참가자" aria-disabled={page === 0} onClick={() => changePage(-1)}>
+                      <V2Icon name="chevronRight" size={18} />
+                    </button>
+                    <span data-people-page="" aria-live="polite">{page + 1}/{pageCount}</span>
+                    <button type="button" data-people-next="" aria-label="다음 참가자" aria-disabled={page + 1 === pageCount} onClick={() => changePage(1)}>
+                      <V2Icon name="chevronRight" size={18} />
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+              <div key={activeAction?.kind ?? "people"} className="mf-game-dock__people"
+                data-first-ballot={activeAction?.firstBallot ? "" : undefined} data-night-targets={activeAction?.kind === "night" ? "" : undefined}>
+                <div className="mf-game-dock__cards"
+                  onPointerDownCapture={(event) => {
+                    if (!event.isPrimary || event.button !== 0 || pageCount < 2) return;
+                    rosterSwipeAt.current = -Infinity;
+                    rosterGesture.current = { id: event.pointerId, x: event.clientX, y: event.clientY };
+                    if (event.isTrusted && event.target instanceof Element) {
+                      (event.target.closest("button") ?? event.currentTarget).setPointerCapture?.(event.pointerId);
+                    }
+                  }}
+                  onPointerUpCapture={pageBySwipe}
+                  onPointerCancel={() => { rosterGesture.current = undefined; }}
+                  onClickCapture={(event) => {
+                    if (event.detail === 0 || performance.now() - rosterSwipeAt.current > 350) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}>
+                  <TableControls {...roster} cards players={roster.players.slice(page * PEOPLE_PER_PAGE, (page + 1) * PEOPLE_PER_PAGE)} />
+                </div>
+                {activeAction?.footer}
+              </div>
             </>
-          ) : contents[pane]}
+          ) : pane === "chat" ? chat : tools}
         </div>
       ) : null}
       <nav className="mf-game-dock__tabs" aria-label="게임 하단 조작">
         {TABS.map(({ id: tab, label, icon }) => {
           const vote = tab === "people" && voting;
+          const pending = tab === "people" && actionNeedsConfirmation && !armed;
           const count = tab === "chat" ? unread : 0;
           return (
             <button key={tab} ref={(node) => { tabs.current[tab] = node; }} type="button" data-dock-tab={tab} data-dock-vote={vote ? "" : undefined}
-              data-dock-pending={vote && !armed ? "" : undefined}
-              disabled={!contents[tab]} aria-label={vote ? "지목" : count > 0 ? `${label}, 읽지 않은 메시지 ${count}개` : label}
+              data-dock-pending={pending ? "" : undefined}
+              disabled={!contents[tab]} aria-label={vote ? "지목" : pending ? "밤 대상 선택" : count > 0 ? `${label}, 읽지 않은 메시지 ${count}개` : label}
               aria-expanded={pane === tab} aria-controls={pane === tab ? id : undefined}
               onPointerDown={(event) => {
                 holdInputUntilTap(event);
                 if (tab === "people") startSwipe(event);
               }}
               onMouseDown={holdInputUntilTap}
-              onClick={(event) => afterSwipe(event, () => open(pane === tab && !(vote && !armed) ? "closed" : tab))}
+              onClick={(event) => afterSwipe(event, () => open(pane === tab && !pending ? "closed" : tab))}
               {...(tab === "people" ? { onPointerUp: (event: PointerEvent<HTMLButtonElement>) => endSwipe(event, -1, () => open(tab)), onPointerCancel: () => { gesture.current = undefined; } } : {})}>
               <V2Icon name={icon} size={21} />
-              {vote ? <span>지목</span> : null}
+              {vote ? <span>지목</span> : pending ? <span>밤 선택</span> : tab === "people" && pane === "people" ? <span>참가자</span> : null}
               {count > 0 ? <span data-dock-unread="" className="mf-game-dock__unread" aria-hidden="true">{count}</span> : null}
             </button>
           );

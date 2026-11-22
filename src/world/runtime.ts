@@ -24,7 +24,7 @@ import { createTapGate } from "./input";
 import { NOTE_COLORS } from "./palette";
 import { BLEND_SNAP_DIST, blendRemaining, createOwnMoves, predictSegment, stepYaw, travelYaw } from "./motion";
 import { DEFAULT_BUDGET_STEP, LIGHT_BLEND_SEC, nextLadderStep } from "./renderer";
-import type { CharacterHandle, WorldRenderer } from "./renderer";
+import type { CharacterHandle, NightRestSeat, WorldRenderer } from "./renderer";
 import { EXEC_END_OPACITY, executionFade, GHOST_OPACITY, GHOST_SPRITE, ghostFloatY, ghostTintOf, stageLiftY } from "./presence";
 import { easeInOut, pinAt, pinLevel, pinLights } from "./pinPlan";
 import type { SceneLook } from "./presence";
@@ -181,6 +181,7 @@ export interface WorldRuntimeDeps {
   players(): readonly { seat: number; nickname: string; connected: boolean; look?: string; animal?: AnimalId }[];
   reducedMotion(): boolean;
   suspectTargets?(): ReadonlySet<number> | undefined;
+  nightRing?(seat: number): RingKind | undefined;
   /** 스테이지 사각형의 위·아래 끝(px, 캔버스 위 끝 기준) */
   stageRect(): { top: number; bottom: number };
   onStatus(s: MapStatusState): void;
@@ -280,6 +281,7 @@ export interface WorldRuntime {
   ring(): { x: number; z: number } | null;
   /** 마지막 프레임에 그린 seat 의 위치(예측·섞기 포함)와 그 프레임의 Date.now(). 없으면 null. sample 과 달리 서버 값이 아니다 */
   shown(seat: number): { x: number; z: number; at: number } | null;
+  nightSeats(): ReadonlyArray<Pick<NightRestSeat, "seat" | "x" | "z">>;
   /** 지금 맵 상태 */
   status(): MapStatusState;
   /** performance.mark("map-interactive") 의 시각(ms). 아직 안 열렸으면 null */
@@ -442,6 +444,10 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     focus: number | undefined; focusAt: number | undefined; yaw: number; pitch: number;
     goalYaw: number; goalPitch: number; panning: boolean;
   } | null = null;
+  let nightRenderer: WorldRenderer | null = null;
+  let nightLook: SceneLook | null = null;
+  let nightHideSeat: number | undefined;
+  let nightRestSeats: NightRestSeat[] = [];
   /** 이 좌석을 그리나: 장면이 없으면 view 의 모든 좌석, 있으면 표에서 show 인 좌석만 */
   const isShown = (seat: number): boolean => look === null || look.seats[seat]?.show === true;
   /**
@@ -483,7 +489,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   /** 동작 하나를 재생 목록에 넣고 재생한다(서버 프레임·화면 연출 공통). 넣었으면 true */
   function startEmote(seat: number, id: EmoteId, target?: number): boolean {
     const a = actors.get(seat);
-    if (a === undefined || a.exit !== null) return false;
+    if (a === undefined || a.exit !== null || (look?.nightTable?.[seat] && !look.seats[seat]?.ghost)) return false;
     const now = Date.now();
     // 상한: 새 동작은 항상 재생하고, 넘치면 가장 먼저 시작한 것을 부드럽게 끝낸다(D-13). 순서는 도착 순서다
     const reduced = deps.reducedMotion();
@@ -624,6 +630,9 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     hideCue();
     const r = renderer;
     renderer = null;
+    nightRenderer = null;
+    nightLook = null;
+    nightRestSeats = [];
     kit = null;
     for (const a of actors.values()) {
       cancelPrewarm(a);
@@ -1098,11 +1107,37 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   function tablePosition(seat: number, serverNow: number, anchor = false): { x: number; z: number; slot: number } | null {
     const included = look?.seats[seat];
     if (!included?.show || (!anchor && (included.ghost || included.fadeAt !== undefined))) return null;
+    if (look?.nightTable !== undefined) return look.nightTable[seat] ?? null;
     const segment = store.segOf(seat);
     if (!segment || segmentEndsAt(segment) > serverNow) return null;
     const position = positionAt(segment, serverNow);
     const slot = barSeatAt(position);
     return slot === undefined ? null : { ...position, slot };
+  }
+
+  function showNightRest(r: WorldRenderer, scene: SceneLook | null, hideSeat: number | undefined): void {
+    if (nightRenderer === r && nightLook === scene && nightHideSeat === hideSeat) return;
+    const viewChanged = nightRenderer !== r || nightHideSeat !== hideSeat;
+    nightRenderer = r;
+    nightLook = scene;
+    nightHideSeat = hideSeat;
+    const viewerGhost = scene?.seats[deps.mySeat()]?.ghost === true;
+    const next: NightRestSeat[] = [];
+    for (const [key, { x, z }] of Object.entries(scene?.nightTable ?? {})) {
+      const seat = Number(key);
+      const appearance = scene?.seats[seat];
+      if (!appearance?.show || appearance.ghost) continue;
+      const ring = viewerGhost ? deps.nightRing?.(seat) : undefined;
+      next.push({ seat, x, z, ...(ring === undefined ? {} : { ring: RING_COLORS[ring] }) });
+    }
+    const seatsChanged = next.length !== nightRestSeats.length || next.some(({ seat, x, z, ring }, i) => {
+      const before = nightRestSeats[i]!;
+      return seat !== before.seat || x !== before.x || z !== before.z || ring !== before.ring;
+    });
+    if (viewChanged || seatsChanged) {
+      nightRestSeats = next;
+      r.setNightRest?.(nightRestSeats, hideSeat);
+    }
   }
 
   function aimTable(
@@ -1202,8 +1237,10 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     own.settle(sNow, store.segOf(deps.mySeat()));
     const ownNow = sNow + own.lead();
 
+    const night = compactBar ? look?.nightTable : undefined;
     for (const seat of store.takeEntered()) pendingEntered.add(seat);
     for (const seat of store.seats()) {
+      if (night?.[seat] && !look?.seats[seat]?.ghost) continue;
       if (!actors.has(seat) && isShown(seat)) createActor(seat, now);
     }
     // 산 사람 화면의 탈락자: 서버 구간이 없어도 마지막 구간이 있으면 유령으로 세운다(18.1 C-6)
@@ -1219,8 +1256,11 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     const mySeat = deps.mySeat();
     const lightNow = look?.lighting ?? deps.lighting ?? "talk";
     const suspectTargets = deps.suspectTargets?.();
-    const table = compactBar ? look?.table : undefined;
+    const table: SceneLook["table"] = night !== undefined
+      ? { mode: look?.table?.mode ?? "eye", centerTable: true }
+      : compactBar ? look?.table : undefined;
     const localTable = table === undefined ? null : tablePosition(mySeat, sNow, true);
+    showNightRest(r, night === undefined ? null : look, night !== undefined && table?.mode === "eye" && localTable !== null ? mySeat : undefined);
     const voice = table?.voice;
     const voiceAge = voice === undefined ? Infinity : sNow - voice.at;
     const speakerPosition = voice && voiceAge >= -100 && voiceAge < 1800 ? tablePosition(voice.seat, sNow) : null;
@@ -1230,12 +1270,24 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     const tableFurnished = compactBar && (table !== undefined || lightNow !== "trial");
     r.setTableScene?.(tableFurnished);
     for (const a of actors.values()) {
+      const seatLook = look?.seats[a.seat];
+      const resting = night?.[a.seat];
+      if (resting && seatLook?.show && !seatLook.ghost) {
+        // 숨겨 둔 낮 몸에는 움직임을 한 번 적용해 진행 중이던 동작을 끊는다.
+        if (a.handle.root.visible) a.handle.update(0, now / 1000, true);
+        a.handle.root.visible = false;
+        a.pos = { x: resting.x, z: resting.z };
+        a.headY = 1.58;
+        a.seg = undefined;
+        a.enter = a.exit = null;
+        walkingSeats.add(a.seat);
+        continue;
+      }
       const server = segFor(a.seat);
       if ((server === undefined || !isShown(a.seat)) && a.exit === null) {
         beginExit(a.seat, now); // 구간이 없어졌다(snap 에서 빠짐) 또는 장면이 이 좌석을 그리지 않는다.
         if (!actors.has(a.seat)) continue; // 모션 줄이기면 바로 지워졌다
       }
-      const seatLook = look?.seats[a.seat];
       const wantGhost = seatLook?.ghost === true;
       // 개인 화면이나 결과 연출의 직업 의상. 장면에서 지정한 동안만 입고 걷히면 고른 look 으로 돌아온다.
       const wantCostume = wantGhost ? null : (seatLook?.costume ?? null);
@@ -1256,7 +1308,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       }
       // 탈락자는 동물과 공개 의상은 유지하고 몸을 반투명하게 띄운다.
       // 밝기는 조명 단계와 연결 상태를 따른다.
-      const ghostTint = ghostTintOf(lightNow) * (a.dim ? 0.6 : 1);
+      const ghostTint = ghostTintOf(night !== undefined ? "nightGhost" : lightNow) * (a.dim ? 0.6 : 1);
       const ghostFlipped = wantGhost !== a.ghost;
       if (wantGhost && !a.ghost) {
         const start = reduced ? GHOST_SPRITE.opacity : 0;
@@ -1641,7 +1693,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       if (tag.style.opacity !== a.tagAlpha) tag.style.opacity = a.tagAlpha;
       boxes.push({ seat: a.seat, me: a.seat === mine, ghost: a.ghost, lead: tag.hasAttribute("data-lead"), turn: tag.hasAttribute("data-turn"), foot: feet.sy, x, bottom, w });
       // 발밑 고리: 이름표(WorldStage)가 data-ring-kind 로 알린 종류를 캐릭터에 옮긴다(바뀔 때만)
-      const kind = tag.getAttribute("data-ring-kind");
+      const kind = look?.nightTable?.[a.seat] && !a.ghost ? null : tag.getAttribute("data-ring-kind");
       if (kind !== a.ringKind) {
         a.ringKind = kind;
         a.handle.setRing?.(ringColorOfAttr(kind));
@@ -1690,7 +1742,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   }
 
   function tableSeatAt(clientX: number, clientY: number): number | null {
-    if (disposed || renderer === null || tableView === null || look?.table === undefined || inputBlocked(status)) return null;
+    if (disposed || renderer === null || tableView === null || look?.table === undefined || look.nightTable !== undefined || inputBlocked(status)) return null;
     const rect = host.getBoundingClientRect();
     const seat = renderer.bodyAt?.(clientX - rect.left, clientY - rect.top);
     if (seat == null || seat === deps.mySeat() || !tablePosition(seat, deps.serverNow())) return null;
@@ -1699,7 +1751,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   }
 
   function panTable(deltaX: number): void {
-    if (disposed || tableView?.mode !== "eye" || look?.table?.mode !== "eye" || look.table.centerTable || inputBlocked(status) || !Number.isFinite(deltaX)) return;
+    if (disposed || tableView?.mode !== "eye" || look?.table?.mode !== "eye" || look.table.centerTable || look.nightTable !== undefined || inputBlocked(status) || !Number.isFinite(deltaX)) return;
     tableView.yaw = tableYaw(tableView.yaw - deltaX * 0.0047, tableView.center);
     tableView.panning = true;
   }
@@ -1763,6 +1815,11 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     },
     syncPlayers,
     setScene(l) {
+      if (l?.nightTable && !look?.nightTable && !l.seats[deps.mySeat()]?.ghost) {
+        clearAckTimer();
+        clearRing();
+        hideCue();
+      }
       look = l;
     },
     tableSeatAt,
@@ -1829,6 +1886,9 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     shown(seat) {
       const a = actors.get(seat);
       return a === undefined ? null : { x: a.pos.x, z: a.pos.z, at: lastDrawAt };
+    },
+    nightSeats() {
+      return nightRestSeats.map(({ seat, x, z }) => ({ seat, x, z }));
     },
     status() {
       return status;

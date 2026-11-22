@@ -1,12 +1,15 @@
 import {
   chooseVerdict,
+  SetupError,
   closeSheet,
   installFakeViewport,
   openTableDockPane,
   openTestSheet,
   readChatLines,
   readGame,
+  readPeoplePages,
   setBots,
+  showPeopleTarget,
   skipOnce,
   skipTo,
   startGame,
@@ -19,9 +22,23 @@ function dockMode(page, name) {
   return page.locator(`[data-table-dock][data-dock-open="${name}"]`);
 }
 
+async function peoplePage(page) {
+  return page.locator('[data-dock-pane="people"] [data-table-seat]').evaluateAll((cards) => cards.map((card) => {
+    const { left, right, top, bottom, width, height } = card.getBoundingClientRect();
+    return { seat: Number(card.getAttribute("data-table-seat")), vote: card.hasAttribute("data-pick"), rect: { left, right, top, bottom, width, height } };
+  }));
+}
+
+function peoplePagesFit(pages, size) {
+  const viewport = { left: 0, top: 0, right: size.w, bottom: size.h };
+  return pages.length > 0 && pages.every((cards) => cards.length > 0 && cards.length <= 4 &&
+    cards.every(({ rect }) => rectInside(rect, viewport) && rect.width >= TAP_MIN && rect.height >= TAP_MIN &&
+      Math.abs(rect.top - cards[0].rect.top) <= 1));
+}
+
 export function makeFirstBallotDockFlow({ recorder, startHost, openGuest, checkRoomWidth }) {
   return async function firstBallotDockFlow(ctx) {
-    const id = "first-ballot-dock";
+    const id = ctx.size.mobile === false ? "first-ballot-dock-pc" : "first-ballot-dock";
     const rec = recorder(ctx);
     const { page, tracker } = await startHost(ctx, id, { playtest: true });
     const { guest, seat } = await openGuest(ctx, "첫날친구");
@@ -32,15 +49,21 @@ export function makeFirstBallotDockFlow({ recorder, startHost, openGuest, checkR
       await skipTo(page, tracker, "discussion");
       await guest.tracker.waitFor((view) => view.phase === "discussion", 4000, "친구 화면의 첫 토론");
       await openTableDockPane(guest.page, "people");
-      const guestSeats = guest.page.locator("[data-table-seat]");
-      const seatOrder = await guestSeats.evaluateAll((seats) => seats.map((el) => el.getAttribute("data-table-seat")));
+      const lookPages = await readPeoplePages(guest.page, peoplePage);
+      rec(id, "FB0", "8인 참가자 보기에서 일곱 얼굴이 한 줄씩 나눠지고 모든 카드가 44px 이상이다",
+        peoplePagesFit(lookPages, ctx.size) && lookPages[0].length === 4 && lookPages[1]?.length === 3);
+      await swipe(guest.page, "[data-table-controls]", -1, ctx.size.mobile !== false, "x");
+      await guest.page.locator("[data-people-page]").filter({ hasText: "2/2" }).waitFor({ timeout: 3000 });
+      rec(id, "FB0a", "참가자 카드를 옆으로 밀어도 다음 페이지로 넘어간다", (await peoplePage(guest.page))[0]?.seat === lookPages[1][0]?.seat);
+      await guest.page.locator("[data-people-prev]").click();
 
       await skipTo(page, tracker, "verdict");
       const hostBallot = page.locator('[data-dock-pane="people"] [data-first-ballot]');
       await hostBallot.waitFor({ timeout: 4000 });
       await checkRoomWidth(ctx, id, page, GAME_RAILS, ["[data-first-ballot]"]);
+      const hostPages = await readPeoplePages(page, peoplePage);
       rec(id, "FB1", "첫날 지목은 후보 7명과 안 뽑기 하나를 같은 하단 판에 표시한다",
-        await hostBallot.locator("[data-pick]").count() === 7
+        peoplePagesFit(hostPages, ctx.size) && hostPages.flat().filter(card => card.vote).length === 7
         && await hostBallot.locator("[data-first-ballot-hold]").count() === 1
         && await page.locator('[data-phase-event="first-ballot"]').count() === 0);
 
@@ -48,17 +71,22 @@ export function makeFirstBallotDockFlow({ recorder, startHost, openGuest, checkR
       rec(id, "FB2", "참가자 판을 보고 있던 사람에겐 명시적으로 지목을 열기 전까지 투표 버튼이 없다",
         await guest.page.locator("[data-pick], [data-first-ballot-hold]").count() === 0);
       await openTableDockPane(guest.page, "people");
-      const voteOrder = await guestSeats.evaluateAll((seats) => seats.map((el) => el.getAttribute("data-table-seat")));
+      const votePages = await readPeoplePages(guest.page, peoplePage);
       rec(id, "FB3", "바라보기와 첫날 지목에서 후보 좌석 순서가 같다",
-        await guest.page.locator("[data-first-ballot] [data-pick]").count() === 7 && JSON.stringify(seatOrder) === JSON.stringify(voteOrder));
+        votePages.flat().filter(card => card.vote).length === 7 &&
+        JSON.stringify(lookPages.flat().map(card => card.seat)) === JSON.stringify(votePages.flat().map(card => card.seat)));
 
-      const pick = hostBallot.locator(`[data-pick="${seat}"]`);
+      const secondPageSeat = hostPages[1]?.[0]?.seat;
+      const target = secondPageSeat ?? seat;
+      const pick = await showPeopleTarget(page, `[data-first-ballot] [data-pick="${target}"]`);
       const hold = hostBallot.locator("[data-first-ballot-hold]");
       await pick.click();
-      await tracker.waitFor((view) => view.me.firstBallot === seat, 4000, "첫날 지목 서버 반영");
-      await hostBallot.locator(`[data-pick="${seat}"][aria-pressed="true"]`).waitFor({ timeout: 2500 });
-      rec(id, "FB4", "서버가 받은 첫날 지목은 같은 얼굴에 선택 표시를 남긴다",
-        await pick.getAttribute("aria-pressed") === "true");
+      await tracker.waitFor((view) => view.me.firstBallot === target, 4000, "첫날 지목 서버 반영");
+      await page.locator("[data-people-prev]").click();
+      await page.locator("[data-people-next]").click();
+      await hostBallot.locator(`[data-pick="${target}"][aria-pressed="true"]`).waitFor({ timeout: 2500 });
+      rec(id, "FB4", "둘째 페이지에서 제출한 첫날 지목은 페이지를 왕복해도 같은 얼굴에 선택 표시를 남긴다",
+        secondPageSeat !== undefined && await pick.getAttribute("aria-pressed") === "true");
       await hold.click();
       await tracker.waitFor((view) => view.me.firstBallot === null, 4000, "첫날 안 뽑기 서버 반영");
       await hostBallot.locator('[data-first-ballot-hold][aria-pressed="true"]').waitFor({ timeout: 2500 });
@@ -76,23 +104,25 @@ export function makeFirstBallotDockFlow({ recorder, startHost, openGuest, checkR
   };
 }
 
-async function swipe(page, selector, direction, mobile) {
+async function swipe(page, selector, direction, mobile, axis = "y") {
   const area = await page.locator(selector).boundingBox();
   if (!area) throw new Error(`스와이프 영역이 보이지 않음: ${selector}`);
   const x = Math.round(area.x + area.width / 2);
   const y = Math.round(area.y + area.height / 2);
+  const point = (distance) => ({ x: x + (axis === "x" ? direction * distance : 0), y: y + (axis === "y" ? direction * distance : 0) });
   if (!mobile) {
     await page.mouse.move(x, y);
     await page.mouse.down();
-    await page.mouse.move(x, y + direction * 76, { steps: 5 });
+    const end = point(76);
+    await page.mouse.move(end.x, end.y, { steps: 5 });
     await page.mouse.up();
     return;
   }
   const cdp = await page.context().newCDPSession(page);
   try {
     await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
-    for (const dy of [18, 36, 54, 76]) {
-      await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y: y + direction * dy }] });
+    for (const distance of [18, 36, 54, 76]) {
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [point(distance)] });
     }
     await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   } finally {
@@ -101,6 +131,77 @@ async function swipe(page, selector, direction, mobile) {
 }
 
 const GAME_RAILS = [".mf-game__header", ".mf-game__panel"];
+
+const readPublicNight = (page) => page.evaluate(() => ({
+  nightSeats: window.__mfWorld?.nightSeats?.()?.map(({ seat, x, z }) => ({ seat, x, z })).sort((a, b) => a.seat - b.seat) ?? [],
+  signals: document.querySelectorAll("[data-table-night] .mf-world__tag, [data-table-night] [data-ring-kind], [data-table-night] [data-night-mark]").length,
+}));
+
+export function makeNightDockFlow({ recorder, openGame, closeGame, checkRoomWidth }) {
+  return async function nightDockFlow(ctx) {
+    const id = ctx.size.mobile === false ? "night-dock-pc" : "night-dock";
+    const rec = recorder(ctx);
+    const game = await openGame(ctx, id, { guests: 2, bots: 5, role: "mafia", vote: { exec: "no", pick: "other" }, to: "night" });
+    try {
+      const { hp, ht, guests } = game;
+      const observer = guests.find(g => g.tracker.last()?.me.role !== "mafia");
+      if (!observer) throw new SetupError("재즈 바 밤의 시민 편 관찰자를 찾지 못함");
+      const targets = '[data-dock-pane="people"] [data-night-targets]';
+      const activePages = [hp, ...guests.map(g => g.page)];
+      await Promise.all(activePages.map(async (page) => {
+        await page.locator(targets).waitFor({ timeout: 8000 });
+        await page.waitForFunction(() => window.__mfWorld?.nightSeats?.()?.length === 8, undefined, { timeout: 5000 });
+      }));
+      const cards = await readPeoplePages(hp, peoplePage);
+      await checkRoomWidth(ctx, id, hp, GAME_RAILS, [targets]);
+      rec(id, "ND1", "밤의 여덟 후보가 하단 참가자 탭에 한 줄씩 두 페이지로 들어간다",
+        peoplePagesFit(cards, ctx.size) && cards.length === 2 && cards.every(p => p.length === 4) &&
+        new Set(cards.flat().map(c => c.seat)).size === 8 && await hp.locator('[data-phase-event="night-action"]').count() === 0);
+
+      const publicBefore = await readPublicNight(observer.page);
+      const ownBefore = await readPublicNight(hp);
+      const face = (seat) => `[data-face="${seat}"]`;
+      const firstSeat = cards[0][0].seat;
+      const secondSeat = cards[1].find(c => !(ht.last().me.allies ?? []).includes(c.seat)).seat;
+      await swipe(hp, face(firstSeat), -1, ctx.size.mobile !== false, "x");
+      await hp.locator("[data-people-page]").filter({ hasText: "2/2" }).waitFor({ timeout: 3000 });
+      const selected = hp.locator(face(secondSeat));
+      rec(id, "ND2", "후보 카드를 가로로 밀면 선택 없이 페이지를 넘긴다", ht.last().me.pick === undefined &&
+        await hp.locator('[data-face][aria-pressed="true"]').count() === 0);
+      await selected.click();
+      await ht.waitFor(view => view.me.pick === secondSeat, 3000, "둘째 페이지 밤 선택 서버 반영");
+      await swipe(hp, face(cards[1].find(c => c.seat !== secondSeat).seat), 1, ctx.size.mobile !== false, "x");
+      await hp.locator("[data-people-page]").filter({ hasText: "1/2" }).waitFor({ timeout: 3000 });
+      await hp.locator("[data-people-next]").click();
+      rec(id, "ND3", "대상 선택과 마피아 집계는 다른 페이지를 거쳐도 유지된다",
+        ht.last().me.pick === secondSeat && await selected.getAttribute("aria-pressed") === "true" &&
+        await selected.locator(".mv-face__count").count() === 1);
+      await showPeopleTarget(observer.page, face(secondSeat));
+      const publicAfter = await readPublicNight(observer.page);
+      const ownAfter = await readPublicNight(hp);
+      const stageKey = ({ nightSeats }) => JSON.stringify(nightSeats);
+      rec(id, "ND4", "공개 밤 좌석은 두 참가자에게 같고 대상을 골라도 움직이거나 선택 표식이 나타나지 않는다",
+        publicBefore.nightSeats.length === 8 && stageKey(publicBefore) === stageKey(ownBefore) &&
+        stageKey(publicBefore) === stageKey(publicAfter) && stageKey(publicBefore) === stageKey(ownAfter) &&
+        [publicBefore, ownBefore, publicAfter, ownAfter].every(scene => scene.signals === 0));
+      rec(id, "ND5", "다른 편의 같은 카드와 수신 상태에는 내 선택과 마피아 집계가 나타나지 않는다",
+        await observer.page.locator(face(secondSeat)).getAttribute("aria-pressed") === "false" &&
+        await observer.page.locator(".mv-face__count").count() === 0 &&
+        observer.tracker.last().me.nightTally === undefined && observer.tracker.last().me.pick === undefined);
+      for (const guest of guests) {
+        const target = await showPeopleTarget(guest.page, face(guest.seat));
+        await target.click();
+        await guest.tracker.waitFor(view => view.me.pick === guest.seat, 3000, "참가자의 밤 선택 서버 반영");
+      }
+      await ht.waitFor(view => view.phase === "morning", 38_000, "밤 마감 뒤 아침");
+      await hp.locator('[data-game-stage][data-phase="morning"]').waitFor({ timeout: 8000 });
+      rec(id, "ND6", "아침이 열리면 밤 참가자 선택과 밤 전용 무대 표식이 사라진다",
+        await hp.locator("[data-night-targets], [data-table-night]").count() === 0);
+    } finally {
+      await closeGame(game);
+    }
+  };
+}
 
 export function makeTableDockFlow({ recorder, openGame, closeGame, writeSheet, gameGH, checkRoomWidth }) {
   return async function tableDockFlow(ctx) {

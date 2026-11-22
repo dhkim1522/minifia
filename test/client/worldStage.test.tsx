@@ -15,7 +15,7 @@ import { WorldStage } from "../../src/components/WorldStage";
 import { NETWORK_TEXT } from "../../src/net/copy";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import { LIGHT_BLEND_SEC, UnsupportedRendererError } from "../../src/world/renderer";
-import type { CharacterHandle, LightingPhase, RendererStatusEvent, WorldRenderer } from "../../src/world/renderer";
+import type { CharacterHandle, LightingPhase, NightRestSeat, RendererStatusEvent, WorldRenderer } from "../../src/world/renderer";
 import { BAR_FOLLOW_SHARE, gatherView, stageOffsetY, ZOOM_MAJORITY } from "../../src/world/camera";
 import { predictSegment, SEG_BLEND_MS, YAW_TURN_RATE } from "../../src/world/motion";
 import { GHOST_FADE_END_MS } from "../../src/game/dayView";
@@ -23,7 +23,7 @@ import { createWorldRuntime, ENTER_MS, EXIT_MS, MOVE_ACK_TIMEOUT_MS, RING_COLORS
 import type { WorldModules } from "../../src/world/runtime";
 import { installWorldTestHooks, WORLD_TEST_KEY, worldTestHooksEnabled } from "../../src/world/testHooks";
 import { WorldStore } from "../../src/world/store";
-import { cameraModeOf } from "../../src/world/presence";
+import { cameraModeOf, sceneLook } from "../../src/world/presence";
 import type { SceneLook, SeatLook } from "../../src/world/presence";
 
 // 06-13: 로비 맵 화면(WorldStage + 런타임). happy-dom 에는 WebGL 이 없어 loadModules 로 가짜 렌더러·가짜 캐릭터를 주입한다(가정 A1).
@@ -43,6 +43,7 @@ export interface FakeRenderer extends WorldRenderer {
   setPin: Mock<(pin: { x: number; z: number; strength: number } | null, dim: number) => void>;
   setChalk: Mock<(at: { x: number; z: number } | null, opacity: number) => void>;
   setSelfLight: Mock<(at: { x: number; z: number } | null) => void>;
+  setNightRest: Mock<(seats: readonly NightRestSeat[], hideSeat: number | undefined) => void>;
   emit(e: RendererStatusEvent): void;
   lost: boolean;
   renders: number;
@@ -73,6 +74,7 @@ export function makeFakeRenderer(): FakeRenderer {
     setPin: vi.fn(),
     setChalk: vi.fn(),
     setSelfLight: vi.fn(),
+    setNightRest: vi.fn(),
     addCharacter(seat: number, c: CharacterHandle) {
       r.chars.set(seat, c);
     },
@@ -2875,6 +2877,43 @@ describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연
       s.rerender({ scene: sceneOf(ALL, { lighting: "nightCitizen" }) });
       expect(() => frames(100)).not.toThrow();
     });
+  });
+
+  it("재즈 바 밤에는 산 몸과 실제 위치를 숨기고 아침에 기존 캐릭터를 복원한다", async () => {
+    const day: RoomView = { ...makeView(FOUR), phase: "discussion", map: "bar" };
+    const night: RoomView = { ...day, phase: "night" };
+    const s = await open({ view: day, scene: sceneLook(day, { stageH: 400 }) }, { players: FOUR, ents: FOUR_ENTS() });
+    const renderer = s.world.renderers[0]!;
+    const actor = renderer.chars.get(1)!;
+    expect(actor.root.visible).toBe(true);
+
+    s.rerender({ view: night, scene: sceneLook(night, { stageH: 400 }) });
+    snap(s.store, [seg(0, [200, 100])]);
+    frame();
+    expect(actor.root.visible).toBe(false);
+    expect(window.__mfWorld!.sample(1)).toBeNull();
+    expect(window.__mfWorld!.nightSeats()).toEqual([
+      { seat: 0, x: 0, z: 2.04 },
+      { seat: 1, x: 0.11, z: -2.04 },
+      { seat: 2, x: -2.04, z: -0.14 },
+      { seat: 3, x: 2.03, z: -0.18 },
+    ]);
+    expect(s.utils.container.querySelector("[data-table-night] [data-seat]")).toBeNull();
+    const draw = renderer.setNightRest.mock.calls.length;
+    const chosen = { ...night, me: { ...night.me, role: "police" as const, pick: 2 } };
+    s.rerender({ view: chosen, scene: sceneLook(chosen, { stageH: 400 }) });
+    frame();
+    expect(renderer.setNightRest.mock.calls).toHaveLength(draw);
+    expect(renderer.setNightRest.mock.calls.at(-1)?.[1]).toBe(0);
+
+    const morning = { ...day, phase: "morning" as const };
+    s.rerender({ view: morning, scene: sceneLook(morning, { stageH: 400 }) });
+    snap(s.store, FOUR_ENTS());
+    frame();
+    expect(renderer.setNightRest).toHaveBeenLastCalledWith([], undefined);
+    expect(window.__mfWorld!.nightSeats()).toEqual([]);
+    expect(actor.root.visible).toBe(true);
+    expect(s.utils.container.querySelector("[data-table-night]")).toBeNull();
   });
 
   describe("떠다님·무대 높이·처형 연출", () => {

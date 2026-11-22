@@ -77,6 +77,13 @@ export interface RendererStats {
   programs: number;
   pointLights: number;
 }
+export interface NightRestSeat {
+  seat: number;
+  x: number;
+  z: number;
+  /** 유령에게만 받은 관전 선택 표시의 색 */
+  ring?: string;
+}
 export class UnsupportedRendererError extends Error {}
 
 export type RendererStatusEvent = { t: "lost" } | { t: "restored" } | { t: "recreated" };
@@ -87,6 +94,7 @@ export interface WorldRenderer {
   setView(target: { x: number; z: number }, offsetY: number, rig?: import("./camera").CameraRig): void;
   setTableView?(view: import("./camera").TableCamera | null, offsetY: number): void;
   setTableScene?(on: boolean): void;
+  setNightRest?(seats: readonly NightRestSeat[], hideSeat: number | undefined): void;
   /** 전환 시간이 없으면 바로 적용한다. 초기 진입, 저감 모션, 정지 장면에서 사용한다. */
   setLighting(phase: LightingPhase, seconds?: number): void;
   /** 긴장 단계 0·1·2 (결정 0049): 1 = 무대 점광원이 초점 위로 선두 세기, 2 = 그에 더해 실내 emissive 절반. 시험 가짜 렌더러 호환을 위해 optional (08-10) */

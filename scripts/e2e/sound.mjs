@@ -2,7 +2,7 @@
 // flows.mjs 가 이미 3천 줄이라 흐름 본문은 이 파일에 둔다. flows.mjs 의 도우미는 `makeSoundFlows(helpers)` 로 받는다(avatar.mjs·politics.mjs 와 같은 모양 — 서로 import 하지 않는다).
 // helpers: { recorder, attempt, startHost, openGame, closeGame, nightScenario } (sound-script 는 startHost, sound-night-parity·sound-result 는 openGame·closeGame 을 쓴다)
 // 판정 문턱은 lib.mjs 의 순수 검사 함수(soundRenderChecks, SOUND_RENDER_LIMITS)에만 있고 여기서는 낮추지 않는다 (T-12-22).
-import { chooseRole, chooseVerdict, dropSockets, leaveLobby, openTestSheet, reconnectInit, SetupError, setBotVote, setBots, settle, skipTo, sleep, startGame } from "./browser.mjs";
+import { chooseRole, chooseVerdict, dropSockets, leaveLobby, openTestSheet, reconnectInit, SetupError, setBotVote, setBots, settle, showPeopleTarget, skipTo, sleep, startGame } from "./browser.mjs";
 import { SOUND_RENDER_LIMITS, SOUND_SCRIPT_STEPS, soundButtonChecks, soundEmoteLeakChecks, soundNightParityChecks, soundRenderChecks, soundResultChecks, soundResultSkipChecks, soundSequenceChecks, soundVerdictTimingChecks } from "./lib.mjs";
 
 /** [전부 계산] 모든 렌더가 끝나기를 기다리는 상한(ms) */
@@ -508,12 +508,12 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
         // 밤 진입 장면 전환 막이 걷히고 이름표 버튼이 그려진 뒤에 누른다(막 위에서는 눌림이 가로막힌다)
         await hp.waitForFunction(() => !document.querySelector("[data-curtain]"), null, { timeout: 8000 });
         // 15-08: 밤 고르기는 맵 이름표가 아니라 아래 패널의 얼굴 목록 칸([data-face])이다(네 역할 같음) — 패널 안이라 화면 밖 이름표 사정과 무관하다
-        await hp.waitForSelector(`[data-face="${victim.seat}"]`, { timeout: 8000 });
+        await hp.waitForSelector("[data-face-list]", { timeout: 8000 });
         await settle(hp);
-        await hp.locator(`[data-face="${victim.seat}"]`).click({ timeout: 4000 });
+        await (await showPeopleTarget(hp, `[data-face="${victim.seat}"]`)).click({ timeout: 4000 });
         await hp.waitForSelector(`[data-face="${victim.seat}"][aria-pressed="true"]`, { timeout: 3000 });
       });
-      rec(`${sc}/night`, "NP1", "방장이 밤에 이름표를 눌러 피해자를 고른다(밤 UI 조작)", picked.ok, picked.detail);
+      rec(`${sc}/night`, "NP1", "방장이 밤에 얼굴 카드를 눌러 피해자를 고른다", picked.ok, picked.detail);
       for (const g of guests) await g.page.touchscreen.tap(Math.round(ctx.size.w / 2), Math.round(ctx.size.h / 3)).catch(() => {});
       // 15-08: 밤 마피아 화면은 시민 편과 같은 얼굴 목록 하나다 — 마피아 밤 채팅 패널이 없어져 동작 칸([data-emote-button])도 없다. 시민 편 손님 로그에 emote.* 가 없음은 그대로 판정된다
       const nightEmoteBtn = await hp.evaluate(() => document.querySelectorAll("[data-emote-button]").length);

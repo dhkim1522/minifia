@@ -208,6 +208,7 @@ export function WorldStage(props: WorldStageProps) {
         const { pick, canSend, exiting } = live.current.props;
         return pick?.hit === "body" && canSend && !pick.disabled && !exiting ? pick.seats : undefined;
       },
+      nightRing: (seat) => live.current.props.tagProps?.(seat)?.ring,
       stageRect: () => {
         const ins = live.current.props.stageInsets;
         const h = host.clientHeight || window.innerHeight;
@@ -357,15 +358,18 @@ export function WorldStage(props: WorldStageProps) {
   const here = new Set(view.players.map((p) => p.seat));
   const scene = props.scene;
   const shown = (seat: number): boolean => scene === undefined || scene.seats[seat]?.show === true;
+  const nightTable = scene?.nightTable !== undefined;
+  const nightSpectator = nightTable && scene?.seats[mySeat]?.ghost === true;
   // 보이지 않는 좌석은 이름표도 만들지 않는다(T-08-30)
-  const roster = [...view.players, ...leaving.filter((p) => !here.has(p.seat))].filter((p) => shown(p.seat));
+  const roster = [...view.players, ...leaving.filter((p) => !here.has(p.seat))]
+    .filter((p) => shown(p.seat) && (!nightTable || nightSpectator));
   const canKick = view.me.isHost && props.canSend && props.onKick !== undefined;
   const pick = props.pick;
 
   const stateClass = exiting ? "is-exiting" : mapStatus.status === "ready" ? "is-open" : mapStatus.status === "lost" || mapStatus.status === "recreating" ? "is-redrawing" : "";
 
   return (
-    <div ref={rootRef} className={stateClass ? `mf-world ${stateClass}` : "mf-world"} data-world-stage data-table-camera={scene?.table?.mode} aria-hidden={props.decorative || undefined}>
+    <div ref={rootRef} className={stateClass ? `mf-world ${stateClass}` : "mf-world"} data-world-stage data-table-night={nightTable ? "" : undefined} data-table-camera={scene?.table?.mode ?? (nightTable ? "eye" : undefined)} aria-hidden={props.decorative || undefined}>
       <div ref={hostRef} className="mf-world__canvas" role="img" aria-label={scene?.table ? "재즈 바 테이블" : SCENE_LABEL} />
       <div
         className="mf-world__input"
@@ -375,7 +379,7 @@ export function WorldStage(props: WorldStageProps) {
           if (typing) downWhileTyping.current.add(e.pointerId);
           else downWhileTyping.current.delete(e.pointerId);
           tracker.down(e.pointerId, e.clientX, e.clientY, Date.now());
-          if (!typing && live.current.props.scene?.table?.mode === "eye" && tableDrag.current === null) {
+          if (!typing && !live.current.props.scene?.nightTable && live.current.props.scene?.table?.mode === "eye" && tableDrag.current === null) {
             tableDrag.current = { id: e.pointerId, x: e.clientX, y: e.clientY, lastX: e.clientX, active: false };
             e.currentTarget.setPointerCapture?.(e.pointerId);
           }

@@ -24,6 +24,7 @@ import {
   figureSrc,
   journalArt,
   outfitCardSrc,
+  participantPortraitSrc,
   preloadEntryAssets,
   preloadDuskAssets,
   preloadRoleAssets,
@@ -337,6 +338,12 @@ describe("outfitCardSrc (10-07)", () => {
   it("/outfits/outfit-{id}.png?v={ASSET_VERSION} 모양이다", () => {
     expect(outfitCardSrc("coat")).toBe(`/outfits/outfit-coat.png?v=${ASSET_VERSION}`);
     expect(outfitCardSrc("noir")).toBe(`/outfits/outfit-noir.png?v=${ASSET_VERSION}`);
+  });
+
+  it("참가자 상반신은 공개 동물과 의상 그림을 쓰고 동물이 없는 좌석의 인물도 표시한다", () => {
+    expect(participantPortraitSrc(2, "rabbit", "hood")).toBe(outfitCardSrc("hood", "rabbit"));
+    expect(participantPortraitSrc(2, "rabbit")).toBe(animalFigureSrc("rabbit").src);
+    expect(participantPortraitSrc(2)).toBe(figureSrc(2).src);
   });
 
   it("동물 12종의 아홉 의상에 같은 동물의 실제 렌더 파일이 있다", () => {

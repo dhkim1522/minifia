@@ -6,6 +6,7 @@ import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { Button } from "../components/Button";
 import { GameDock } from "../components/GameDock";
 import type { PeopleAction } from "../components/GameDock";
+import type { TableControlsProps } from "../components/TableControls";
 import { PhaseEvent } from "../components/PhaseEvent";
 import { RoomChatDock } from "../components/v2/RoomChatDock";
 import type { RoomChatBinding, RoomChatDockProps } from "../components/v2/RoomChatDock";
@@ -60,7 +61,7 @@ export interface GamePanelProps {
   notice?: ReactNode;
   tableControls?: ReactNode;
   tableFirstBallot?: boolean;
-  dock?: { chatStore: ChatStore; peopleAction?: PeopleAction; peopleCount: number };
+  dock?: { chatStore: ChatStore; peopleAction?: PeopleAction; roster: TableControlsProps };
   answerPresentation?: ReactNode;
   /** 전날 결과가 잠깐 보이는 동안에는 밤 선택을 같은 자리에 겹쳐 놓지 않는다. */
   pauseNightEvent?: boolean;
@@ -122,20 +123,41 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
   const nightFaces = night && meAlive && (!playtest || myRole === "mafia" || myRole === "police" || myRole === "doctor");
   const chatChannelOk = !night || view.me.chat === "ghost";
   // 후보: 산 사람 전원(나 포함). 좌석 오름차순. 후보가 없으면 목록을 그리지 않는다(E1 #1).
-  const faces = !nightFaces ? [] : view.players
+  const nightPlayers = !nightFaces ? [] : view.players
     .filter((p) => isAlive(p) && (!playtest || (myRole !== "police" && myRole !== "mafia") || p.seat !== view.me.seat && !view.me.allies?.includes(p.seat)))
-    .sort((a, b) => a.seat - b.seat)
-    .map((p) => ({ seat: p.seat, name: p.nickname, img: faceSrc(p.seat, p.animal), color: playerColor(p.seat, p.animal) }));
+    .sort((a, b) => a.seat - b.seat);
   // 마피아의 합의 수단(결정 0074): 서버가 산 마피아 본인에게만 보낸 집계를 칸 안 작은 배지로 그린다. 다른 역할 view 에는 값이 없고 읽지도 않는다.
   const tally = new Map<number, number>();
   if (nightFaces && myRole === "mafia") for (const t of view.me.nightTally ?? []) if (t.n >= 1) tally.set(t.seat, t.n);
   const pickFace = (seat: number): void => {
-    if (!canSend) return;
+    if (!canSend || seat === nightPick) return;
     if (send({ t: "pick", target: seat }) === false) return; // 소켓이 닫혀 못 보냈으면 눌림도 바꾸지 않는다
     onNightPickSent?.(seat);
     chooseNightPick(seat);
     onCallUsed?.();
   };
+  const nightTitle = myRole === "police" ? "조사할 사람" : myRole === "doctor" ? "보호할 사람" : myRole === "mafia" ? "암살할 사람" : "밤 대상";
+  const nightAction: PeopleAction | undefined = dock && !introActive && !pauseNightEvent && nightPlayers.length > 0 ? {
+    kind: "night",
+    title: nightTitle,
+    roster: {
+      players: nightPlayers,
+      pick: {
+        seats: new Set(nightPlayers.map((player) => player.seat)),
+        ...(nightPick !== undefined ? { mine: nightPick } : {}),
+        ...(!canSend || willOpen || noteOpen ? { disabled: true } : {}),
+        label: (name) => `${name} 고르기`,
+        group: nightTitle,
+        onPick: pickFace,
+      },
+      night: {
+        tally,
+        ...(myRole === "mafia" && view.me.nightSure !== undefined ? { sure: view.me.nightSure } : {}),
+        ...(call?.faces !== undefined ? { callSeats: call.faces } : {}),
+      },
+      onChoose: pickFace,
+    },
+  } : undefined;
 
   // 밤 산 사람은 입력줄이 없어 아래 행동 줄의 [쪽지]·[유언] 이 대신한다(UI-SPEC 237행). 마피아 [쪽지], 그 밖 [유언] — 역할을 읽는 곳은 이 줄뿐이다.
   // 채팅 입력줄이 있는 화면(낮·아침)은 깃펜, 산 사람 + 지도 단계에만(유령·로비·역할 확인에는 없다, UI-SPEC 281·286행)
@@ -219,7 +241,7 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
   ) : null;
   const chatTools = showChat && (penOn || (discussion && suspect !== undefined) || (canReact && binding.onEmote !== undefined && ((playtest && discussion) || (binding.emotes?.length ?? 0) > 0)));
   const channel = view.me.chat ?? null;
-  const peopleAction = dock?.peopleAction;
+  const peopleAction = nightAction ?? dock?.peopleAction;
   const waitingToNominate = view.phase === "nomination" && dock !== undefined && peopleAction?.kind !== "vote";
   const peek = waitingToNominate && showChat && channel !== null
     ? [...binding.messages].reverse().find((message) => message.kind === "player" && message.ch === channel)
@@ -251,10 +273,10 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
         <PhaseEvent kind="first-ballot" title="첫날 지목" interactive={meAlive && firstBallot.result === undefined} className="mf-event-choice">
           <PlaytestBallot view={view} ballot={firstBallot} canVote={meAlive && canSend} send={send} />
         </PhaseEvent>
-      ) : !pauseNightEvent && faces.length > 0 ? (
+      ) : !dock && !pauseNightEvent && nightPlayers.length > 0 ? (
         <PhaseEvent kind="night-action" title={hostLineOf(view)} className="mf-event-choice">
           <FaceList
-            faces={faces}
+            faces={nightPlayers.map((p) => ({ seat: p.seat, name: p.nickname, img: faceSrc(p.seat, p.animal), color: playerColor(p.seat, p.animal) }))}
             {...(nightPick !== undefined ? { value: nightPick } : {})}
             onPick={pickFace}
             label="밤 대상"
@@ -290,19 +312,20 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
             scope={`${view.round ?? 1}:${view.day?.n ?? 0}:${view.phase}:${peopleAction?.title ?? ""}`}
             initialPane={peopleAction ? "people" : discussion ? "chat" : "closed"}
             preserveWriting={view.phase === "nomination" || firstBallotAtTable}
-            keepLooking={view.phase === "nomination" || firstBallotAtTable}
+            keepLooking={view.phase === "nomination" || firstBallotAtTable || (night && nightPlayers.length > 0)}
             keepToolsOpen={willOpen || noteOpen}
             paused={introActive}
             inputRef={inputRef}
-            {...dock}
-            {...(peopleAction && firstBallotAtTable ? {
-              peopleAction: { ...peopleAction, content: <div data-first-ballot="">{peopleAction.content}{firstBallotCount}</div> },
-            } : {})}
+            chatStore={dock.chatStore}
+            {...(peopleAction ? { peopleAction: firstBallotAtTable ? {
+              ...peopleAction,
+              footer: <div className="mf-game-dock__ballot-footer">{peopleAction.footer}{firstBallotCount}</div>,
+            } : peopleAction } : {})}
             channel={channel}
             mySeat={view.me.seat}
             latest={peek}
             chat={showChat ? roomChat("chat") : null}
-            people={tableControls}
+            people={dock.roster}
             tools={chatTools ? roomChat("tools") : showChat ? null : roleTools}
           />
         ) : showChat ? roomChat() : roleTools}

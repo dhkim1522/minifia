@@ -150,6 +150,17 @@ const BAR_NIGHT: PhaseTune = {
   emissive: { room: 0.88, vote: 0.55 },
   glow: { room: 0.88, vote: 0.37 },
 };
+const BAR_TABLE_NIGHT: PhaseTune = {
+  ...BAR_NIGHT,
+  hemi: 0.27 * Math.PI,
+  moon: 0.43 * Math.PI,
+  sky: ["#829bc6", "#2a344c", "#1f273a"],
+  exposure: 1.28,
+  stage: 1.92,
+  pendant: PENDANT_TALK * 0.49,
+  emissive: { room: 0.64, vote: 0.38 },
+  glow: { room: 0.64, vote: 0.28 },
+};
 export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   point: { stage: { x: number; y: number; z: number; distance: number }; pendantA: { x: number; y: number; z: number; distance: number }; self: { x: number; y: number; z: number; distance: number }; decay: number };
   tension: { lead: number; halfRoom: number };
@@ -931,13 +942,14 @@ export function buildBarScene(budget: Budget, { compact = false, omitCenterSeats
 
   let exposure = T.talk.exposure;
   let current = budget;
-  const lighting = phaseLighting(T, WINDOW_LIGHT_ACCENTS);
+  const lighting = phaseLighting(compact ? { ...T, night: BAR_TABLE_NIGHT } : T, WINDOW_LIGHT_ACCENTS);
   let tensionLevel: 0 | 1 | 2 = 0;
   let tensionFocus: { x: number; z: number } | null = null;
   // 핀 조명(결정 0066-6): applyLook 이 정한 단계·긴장 값 위에 얹는다. 기본 값은 applyLook 이 매번 채운다
   let pinState: { x: number; z: number; strength: number } | null = null;
   let pinDim = 1;
   let stagePhase = false;
+  let nightPhase = false;
   let centerTable = false;
   const base = { stage: 0, x: T.point.stage.x, z: T.point.stage.z, room: 0, vote: 0 };
 
@@ -945,7 +957,8 @@ export function buildBarScene(budget: Budget, { compact = false, omitCenterSeats
   const applyPin = (): void => {
     if (pinState === null) {
       stage.intensity = base.stage;
-      stage.position.set(base.x, stagePhase ? T.point.stage.y : stageY, base.z);
+      const height = stagePhase ? T.point.stage.y : nightPhase && centerTable ? 1.15 : stageY;
+      stage.position.set(base.x, height, base.z);
       matEmRoom.color.setScalar(base.room);
       matEmVote.color.setScalar(base.vote);
       return;
@@ -1010,6 +1023,7 @@ export function buildBarScene(budget: Budget, { compact = false, omitCenterSeats
   };
   const setLighting = (next: LightingPhase, seconds = 0): void => {
     stagePhase = next === "trial";
+    nightPhase = compact && next === "night";
     syncCenter();
     lighting.set(next, seconds);
     applyLook();

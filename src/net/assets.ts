@@ -93,6 +93,11 @@ export function outfitCardSrc(id: OutfitId, animal?: AnimalId): string {
   return `/outfits/outfit-${id}.png?v=${ASSET_VERSION}`;
 }
 
+/** 참가자 카드는 같은 3D 모델의 공개 의상 그림에서 상반신을 보여 준다. */
+export function participantPortraitSrc(seat: number, animal?: AnimalId, outfit: OutfitId = "coat"): string {
+  return animal === undefined ? figureSrc(seat).src : outfitCardSrc(outfit, animal);
+}
+
 // 직업 그림은 150px 로 표시한다. @2x 파일은 1x, @4x 파일은 2x. 역할을 보낼 수 있는 화면에서만 쓴다.
 export function roleArtSrc(role: RoleId, animal?: AnimalId): { src: string; srcSet: string } {
   if (animal !== undefined) return animalRoleArtSrc(animal, role);

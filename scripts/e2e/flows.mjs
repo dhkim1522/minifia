@@ -74,7 +74,9 @@ import {
   waitForPhaseStart,
   waitWorldReady,
   readNightFaces,
+  readPeoplePages,
   readSideColumn,
+  showPeopleTarget,
 } from "./browser.mjs";
 import {
   JOIN_FIT_MIN_H,
@@ -146,7 +148,7 @@ import { makeKeywordFlows } from "./keyword.mjs";
 import { SHORT_PHONE_H, readBenchView, readRematchState, readResultHidden, readRestSheet, readResultStage, rematchChecks, resultHiddenChecks, resultSkipChecks, resultStageChecks } from "./result.mjs";
 import { makePoliticsFlows } from "./politics.mjs";
 import { makeSoundFlows } from "./sound.mjs";
-import { makeFirstBallotDockFlow, makeTableDockFlow } from "./tableDock.mjs";
+import { makeFirstBallotDockFlow, makeNightDockFlow, makeTableDockFlow } from "./tableDock.mjs";
 import { makeHostFlows } from "./host.mjs";
 import { CHAT_OPEN_STAGE_MIN, ghostViewChecks, liveGhostChecks, makePolishFlows, readLiveGhost } from "./polish.mjs";
 
@@ -2355,21 +2357,6 @@ async function basicOffFlow(ctx) {
 /** 8명판 투표 화면 시험용 손님 닉네임 일곱(모두 4자 — UI-SPEC "이름표 버튼 8개 … (4자 이름, 폰 6종)") */
 const BASIC_VOTE_GUESTS = ["가나다라", "마바사아", "자차카타", "파하거너", "더러머버", "서어저처", "커터퍼허"];
 
-/** 이름표가 모여 멈출 때까지 기다렸다 읽는다: 투표 15초 안에 걸어 모이므로(U-2) 버튼 사각형이 두 번 연속 같아질 때까지(최대 maxMs) 0.4초 간격으로 본다. */
-async function readGameStable(page, maxMs = 11000) {
-  const key = (g) => JSON.stringify(g.picks.map((b) => [b.seat, Math.round(b.rect.left), Math.round(b.rect.top)]));
-  let prev = null;
-  let g = await readGame(page);
-  for (const t0 = performance.now(); performance.now() - t0 < maxMs; ) {
-    const k = key(g);
-    if (k === prev) return g;
-    prev = k;
-    await sleep(400);
-    g = await readGame(page);
-  }
-  return g;
-}
-
 /**
  * basic-vote (FLOW-01, U-8 → 22-13): 8명(방장 + 사람 손님 7, 모두 4자 이름) 지목 화면의 기하. 22페이즈 D-12 로 지목이 순차 차례가 되어 동시 투표 8인 화면은 뜻이 없다 —
  * politics-pin 은 핀 조명만 보므로 "내 차례 이름표 7개 44×44·무가림(pickButtonChecks)"을 이 흐름이 잰다: 손님 일곱은 자기 차례에 방장을 가리키고(기다리는 시간을 줄인다), 방장은 자기 차례에 이름표를 읽은 뒤 첫 손님을 가리킨다.
@@ -2397,9 +2384,11 @@ async function basicVoteFlow(ctx) {
     rec(sc, "BV0", "방장 차례가 온다(8명 순차 지목)", mine.ok, mine.detail);
     if (mine.ok) {
       await settle(hp);
-      const g = await readGameStable(hp, 4000);
-      rec(sc, "BV1", "내 차례 이름표 버튼이 나를 뺀 산 사람 7개다", g.picks.length === 7 && !g.picks.some((b) => b.seat === hostSeat), `버튼 ${g.picks.length}개`);
-      recMany(rec, sc, pickButtonChecks(g.picks), " (8명판, 내 차례)");
+      const pages = await readPeoplePages(hp, readGame);
+      const g = pages[0];
+      const picks = pages.flatMap((p) => p.picks);
+      rec(sc, "BV1", "내 차례에는 자신을 뺀 산 사람 7명을 고를 수 있다", picks.length === 7 && new Set(picks.map(b => b.seat)).size === 7 && !picks.some((b) => b.seat === hostSeat), `버튼 ${picks.length}개`);
+      for (const [i, p] of pages.entries()) recMany(rec, sc, pickButtonChecks(p.picks), ` (8명판, 내 차례, ${i + 1}쪽)`);
       rec(sc, "BV4", "헤더 제목이 '지목'이다", g.title === "지목", `제목 '${g.title}'`);
       rec(sc, "BV5", "순차 차례 블록([data-turn-block])이 있다", g.turn !== null, `turn ${g.turn === null ? "없음" : "있음"}`);
       rec(sc, "BV6", "득표 배지(data-count)가 어느 이름표에도 없다", g.tags.every((t) => t.count === null), `배지 ${g.tags.filter((t) => t.count !== null).length}개`);
@@ -2445,8 +2434,10 @@ function readNight(page) {
     const note = q("[data-note-button]");
     const sureHead = q(".mv-head[data-sure]");
     const police = q(".mf-police-card");
+    const dockTargets = q('[data-dock-pane="people"] [data-night-targets]');
     return {
       phase: root.getAttribute("data-phase") ?? "",
+      tableNight: !!q("[data-table-night]"),
       vw: window.innerWidth,
       vh: window.innerHeight,
       nightDark: root.getAttribute("data-night-dark"),
@@ -2459,9 +2450,21 @@ function readNight(page) {
       myTag: mb ? { x: mb.left, y: mb.top, w: mb.width, h: mb.height } : null,
       stage: header && panel ? { left: 0, top: header.getBoundingClientRect().bottom, right: window.innerWidth, bottom: panel.getBoundingClientRect().top } : null,
       panel: box(panel),
-      faceCard: box(q('[data-phase-event="night-action"] .mf-phase-event__card')),
+      dockTargets: !!dockTargets,
+      faceCard: box(dockTargets ?? q('[data-phase-event="night-action"] .mf-phase-event__card')),
       faceList: !!q("[data-face-list]"),
-      faces: qa("[data-face]").map((b) => ({ seat: Number(b.getAttribute("data-face")), pressed: b.getAttribute("aria-pressed") === "true", cell: box(b), name: textBox(q(".mv-face__name", b)), lineH: (() => { const el = q(".mv-face__name", b); if (!el) return null; const cs = getComputedStyle(el); const lh = parseFloat(cs.lineHeight); return Number.isFinite(lh) ? lh : parseFloat(cs.fontSize) * 1.3; })() })),
+      faces: qa("[data-face]").map((b) => {
+        const name = q(".mv-face__name, .mf-table-controls__name", b);
+        const style = name ? getComputedStyle(name) : null;
+        const line = style ? parseFloat(style.lineHeight) : Number.NaN;
+        return {
+          seat: Number(b.getAttribute("data-face")),
+          pressed: b.getAttribute("aria-pressed") === "true",
+          cell: box(b),
+          name: textBox(name),
+          lineH: Number.isFinite(line) ? line : style ? parseFloat(style.fontSize) * 1.3 : null,
+        };
+      }),
       willButton: !!q("[data-will-button]"),
       noteButton: note ? { disabled: note.getAttribute("aria-disabled") === "true" } : null,
       willSheet: q("[data-will-sheet]")?.getAttribute("data-will-sheet") ?? null,
@@ -2648,8 +2651,7 @@ async function openNight(ctx, flowId, opts) {
   await armSeenWatch(hp);
   await skipTo(hp, ht, "night");
   const g = await untilGame(hp, (x) => x.phase === "night", 9000, "밤 도착");
-  // '처형 없음'을 먼저 보여 준 다음 밤 선택이 같은 중앙 영역에 들어온다.
-  await hp.locator('[data-phase-event="night-action"] [data-face-list]').waitFor({ state: "visible", timeout: 8000 });
+  await hp.locator("[data-face-list]").waitFor({ state: "visible", timeout: 8000 });
   await settle(hp);
   return { game, g };
 }
@@ -2670,16 +2672,16 @@ async function nightAssassin(ctx) {
     rec(sc, "NA1", "내 직업이 마피아이고 동료가 있다(6명판)", view.me.role === "mafia" && allies === 1, `직업 ${view.me.role}, 동료 ${allies}`);
     // 15-08: 밤 마피아도 시민·경찰·의사와 같은 얼굴 목록(나 포함 산 사람 전원)으로 고른다 — 채팅 입력·이름표 선택 버튼·다가가기 걷기·후보 효과는 없다
     const n0 = await readNightWithTools(hp);
-    rec(sc, "NA2", "밤 마피아 중앙 카드에 얼굴 목록이 있고 채팅 입력은 없다", n0?.faceList === true && !!n0.faceCard && g.hasInput === false, `얼굴 목록 ${n0?.faceList}, 입력 ${g.hasInput}`);
+    rec(sc, "NA2", "밤 마피아 선택 영역에 얼굴 목록이 있고 채팅 입력은 없다", n0?.faceList === true && !!n0.faceCard && (!n0.tableNight || n0.dockTargets) && g.hasInput === false, `얼굴 목록 ${n0?.faceList}, 입력 ${g.hasInput}`);
     rec(sc, "NA3", `이름표 선택 버튼은 없고 얼굴 칸은 나 포함 산 사람 ${alive}개`, g.picks.length === 0 && n0?.faces?.length === alive, `버튼 ${g.picks.length}개, 칸 ${n0?.faces?.length}개`);
     rec(sc, "NA4", "확정 전에는 [쪽지] 가 있고 비활성(aria-disabled)이다", n0?.noteButton?.disabled === true, `쪽지 버튼 ${JSON.stringify(n0?.noteButton)}`);
-    rec(sc, "NA5", "밤 마피아 화면에는 어둠·맥박이 없다(시민 편만)", n0?.nightDark === null && n0?.tensionPulse === 0, `어둠 ${n0?.nightDark}, 맥박 ${n0?.tensionPulse}`);
+    rec(sc, "NA5", "밤 마피아 화면에는 개인용 어둠·맥박 효과가 없다", n0?.nightDark === null && n0?.tensionPulse === 0, `어둠 ${n0?.nightDark}, 맥박 ${n0?.tensionPulse}`);
     await gameGH(ctx, id, "night-mafia", host);
     const aim0 = (await readAim(hp)).filter((t) => t.aim !== null || t.mark);
     rec(sc, "NA3b", "맵 이름표에 선택 효과(data-night-pick)·표식이 하나도 없다", aim0.length === 0, `선택 효과 이름표 ${aim0.length}개`);
 
     // 고르기: 봇 마피아가 고르는 가장 낮은 seat 의 산 비마피아(나·동료 제외)를 얼굴 목록에서 누른다 → 눌림 표시, 내 캐릭터는 걷지 않고, 봇 마피아와 일치해 확정된다
-    const faceSeats = (await readNightFaces(hp)).faceSeats;
+    const faceSeats = n0.faces.map(card => card.seat);
     const target = faceSeats.filter((seat) => seat !== game.hostSeat && !(view.me.allies ?? []).includes(seat)).sort((x, y) => x - y)[0];
     const posBefore = await sampleWorld(hp, game.hostSeat).catch(() => null);
     const movesBefore = ht.sentMoveAt.length;
@@ -2694,9 +2696,9 @@ async function nightAssassin(ctx) {
       await hp.waitForFunction((seat) => document.querySelector(`[data-face="${seat}"] .mv-face__count[aria-label="확정"]`) !== null, target, { timeout: 9000 });
     });
     rec(sc, "NA8", "봇 마피아가 같은 대상을 고르면 대상 얼굴 칸 안에 '확정' 표시(check)가 붙는다", sure.ok, sure.detail || "9초 안에 확정 표시가 나타나지 않음");
+    const sureLabel = await hp.evaluate((seat) => document.querySelector(`[data-face="${seat}"] .mv-face__count[aria-label]`)?.getAttribute("aria-label") ?? null, target);
     await openTableDockPane(hp, "tools");
     const nSure = await readNight(hp);
-    const sureLabel = await hp.evaluate((seat) => document.querySelector(`[data-face="${seat}"] .mv-face__count[aria-label]`)?.getAttribute("aria-label") ?? null, target);
     rec(sc, "NA9", "확정 표시의 접근성 이름이 '확정' 이다", sureLabel === "확정", `이름 ${sureLabel}`);
     rec(sc, "NA10", "확정 뒤 [쪽지] 가 활성이다", nSure?.noteButton?.disabled === false, `쪽지 버튼 ${JSON.stringify(nSure?.noteButton)}`);
     rec(sc, "NA11", "서버 확정(me.nightSure)이 대상과 같다", ht.last().me.nightSure === target, `nightSure ${ht.last().me.nightSure}`);
@@ -2762,17 +2764,27 @@ function assertStillNight(ht) {
 
 /** 밤 선택 장면의 치수를 읽고 도구 탭을 열어 역할 전용 조작도 확인한다. */
 async function readNightWithTools(page) {
-  const scene = await readNight(page);
+  const scene = await readNightRoster(page);
   if (!scene || !await openTableDockPane(page, "tools")) return scene;
   const tools = await readNight(page);
   await page.locator("[data-dock-handle]").click();
+  if (scene.dockTargets) await openTableDockPane(page, "people");
   return { ...scene, willButton: tools?.willButton, noteButton: tools?.noteButton };
+}
+
+/** 두 페이지에서 후보를 읽고 원래 페이지로 돌아간다. */
+async function readNightRoster(page) {
+  const pages = await readPeoplePages(page, readNight);
+  const scene = pages[0];
+  return scene && { ...scene, faces: pages.flatMap(p => p?.faces ?? []) };
 }
 
 /** 시민 편(시민·경찰·의사) 밤 DOM(L10): 어둠·맥박, 내 이름표 하나, 직업 칩과 채팅 패널 0, 도구 탭에 유언. */
 function sideChecks(rec, sc, who, n, g) {
-  rec(sc, "L1", `${who}: 밤 어둠(data-night-dark)과 맥박(data-tension-pulse)이 있다`, n.nightDark === "true" && n.tensionPulse === 1, `어둠 ${n.nightDark}, 맥박 ${n.tensionPulse}`);
-  rec(sc, "L2", `${who}: 이름표가 내 것 하나뿐이다`, n.tagCount === 1 && g.tags.length === 1 && g.tags[0].me === true, `이름표 ${n.tagCount}개, 내 것 ${g.tags.filter((t) => t.me).length}개`);
+  const effects = n.tableNight ? n.nightDark === null && n.tensionPulse === 0 : n.nightDark === "true" && n.tensionPulse === 1;
+  const labels = n.tableNight ? n.tagCount === 0 && g.tags.length === 0 : n.tagCount === 1 && g.tags.length === 1 && g.tags[0].me === true;
+  rec(sc, "L1", `${who}: ${n.tableNight ? "공통 밤 무대에 개인용 어둠·맥박 효과가 없다" : "밤 어둠과 맥박이 있다"}`, effects, `어둠 ${n.nightDark}, 맥박 ${n.tensionPulse}`);
+  rec(sc, "L2", `${who}: ${n.tableNight ? "공통 밤 무대에 이름표가 없다" : "이름표가 내 것 하나뿐이다"}`, labels, `이름표 ${n.tagCount}개, 내 것 ${g.tags.filter((t) => t.me).length}개`);
   rec(sc, "L3", `${who}: 직업 칩(data-role-chip)이 0개다`, n.roleChips === 0, `칩 ${n.roleChips}개`);
   rec(sc, "L4", `${who}: 채팅 패널이 0개다`, n.chatPanels === 0, `채팅 패널 ${n.chatPanels}개`);
   rec(sc, "L5", `${who}: 도구 탭에서 [유언]을 열 수 있다`, n.willButton === true, `깃펜 ${n.willButton}`);
@@ -2785,9 +2797,10 @@ function faceListChecks(rec, sc, who, n, expectN) {
   const bad = n.faces.filter((f) => !faceNameFits({ cell: f.cell, name: f.name }));
   rec(sc, "FL2", `${who}: 8자 이름이 칸 안에 들어간다(faceNameFits)`, n.faces.length > 0 && bad.length === 0, `칸 밖 또는 측정 없음 ${bad.map((f) => f.seat).join(",") || "없음"}`);
   const card = n.faceCard;
-  const inside = card && card.left >= 0 && card.right <= n.vw && card.top >= n.stage?.top && card.bottom <= n.stage?.bottom;
+  const bottom = n.dockTargets ? n.panel?.bottom : n.stage?.bottom;
+  const inside = card && card.left >= 0 && card.right <= n.vw && card.top >= n.stage?.top && card.bottom <= bottom;
   const facesFit = card && n.faces.every(({ cell }) => cell && cell.top >= card.top && cell.bottom <= card.bottom && cell.left >= card.left && cell.right <= card.right);
-  rec(sc, "FL3", `${who}: 얼굴과 이름이 헤더·하단 도구 사이의 중앙 카드 안에 들어간다`, !!(inside && facesFit), `카드 ${JSON.stringify(card)}, 무대 ${JSON.stringify(n.stage)}`);
+  rec(sc, "FL3", `${who}: 얼굴과 이름이 밤 선택 영역 안에 들어간다`, !!(inside && facesFit), `카드 ${JSON.stringify(card)}, 무대 ${JSON.stringify(n.stage)}`);
 }
 
 /** 이름이 줄바꿈된 얼굴 행 수(이름 상자 높이가 한 줄 높이의 1.5배를 넘는 칸이 있는 행) */
@@ -2805,6 +2818,10 @@ function recTagInStage(rec, sc, id, who, n) {
  * 8자 이름이 줄바꿈되어 스테이지가 188 아래(약 152)로 줄어든 가장 짧은 폰. 그 밖은 전부 판정이고 문턱은 그대로다.
  */
 function recTagInStageFaces(rec, sc, id, who, n) {
+  if (n.tableNight) {
+    rec(sc, id, `${who}: 공통 밤 무대에 이름표가 표시되지 않는다`, n.myTag === null && n.tagCount === 0);
+    return;
+  }
   const ok = tagInStage({ tag: n.myTag, stage: n.stage });
   const stageH = n.stage ? n.stage.bottom - n.stage.top : Number.NaN;
   if (!ok && wrappedRowsOf(n) > 0 && stageH < 188) {
@@ -2817,7 +2834,9 @@ function recTagInStageFaces(rec, sc, id, who, n) {
 
 /** 얼굴 칸을 눌러 눌림(aria-pressed)이 될 때까지 기다린다 */
 async function tapFace(page, seat) {
-  await page.locator(`[data-face="${seat}"]`).click({ timeout: 4000 });
+  if (await page.locator('[data-dock-tab="people"]:enabled').count() > 0) await openTableDockPane(page, "people");
+  const target = await showPeopleTarget(page, `[data-face="${seat}"]`);
+  await target.click({ timeout: 4000 });
   await page.waitForSelector(`[data-face="${seat}"][aria-pressed="true"]`, { timeout: 3000 });
 }
 
@@ -2886,7 +2905,7 @@ async function nightMismatch(ctx) {
     });
     rec(sc, "MM1", "봇 마피아가 먼저 대상을 고른다(me.nightTally)", botPick.ok, botPick.detail);
     const botSeat = (ht.last().me.nightTally ?? []).find((t) => t.n >= 1)?.seat;
-    const faceSeats = (await readNightFaces(hp)).faceSeats;
+    const faceSeats = (await readNightRoster(hp)).faces.map(card => card.seat);
     const other = faceSeats.filter((x) => x !== game.hostSeat && !(ht.last().me.allies ?? []).includes(x)).sort((a, b) => a - b).find((x) => x !== botSeat);
     if (botSeat === undefined || other === undefined) throw new SetupError("봇 선택 또는 다른 대상을 찾지 못함");
     const tap = await attempt(async () => {
@@ -3022,11 +3041,14 @@ async function nightVictim(ctx, shared) {
     // 첫날 부결은 정답 공개(처형 없음 안내 포함)를 거친다. 실제 밤 진입 직전에 관찰을 시작한다.
     await ht.waitFor((v) => v.phase === "answerReveal", 15_000, "찬반 부결 뒤 첫날 정답 공개");
     await armSeenWatch(hp);
-    await ht.waitFor((v) => v.phase === "night", 12_000, "첫날 정답 공개 뒤 밤(서버 타이머)");
+    await armAnnounceWatch(hp);
+    await armLetterWatch(hp);
+    const nightView = await ht.waitFor((v) => v.phase === "night", 12_000, "첫날 정답 공개 뒤 밤(서버 타이머)");
     const g = await untilGame(hp, (x) => x.phase === "night", 9000, "밤 도착");
     const nightEntry = await readSeen(hp);
     rec(sc, "VC1", "첫날 정답 공개에서 밤으로 이어질 때 무대를 덮지 않는다", nightEntry.curtain === 0 && nightEntry.curtainGone === 0, `막 나타남 ${nightEntry.curtain}회, 사라짐 ${nightEntry.curtainGone}회`);
     await settle(hp);
+    await hp.locator("[data-face-list]").waitFor({ timeout: 8000 });
     const n = await readNightWithTools(hp);
     rec(sc, "VC2", "내 직업이 시민이다", ht.last().me.role === "citizen", `직업 ${ht.last().me.role}`);
     shared.dark.citizen = n.nightDark;
@@ -3036,12 +3058,15 @@ async function nightVictim(ctx, shared) {
     rec(sc, "VC5", "시민 밤 화면에는 얼굴 목록이 있고 쪽지 버튼은 없다(쪽지는 마피아 전용)", n.faceList === true && n.noteButton === null, `얼굴 목록 ${n.faceList}, 쪽지 ${JSON.stringify(n.noteButton)}`);
     await gameGH(ctx, id, "night-citizen", host);
     // 봇 마피아가 알람으로 방장(가장 낮은 seat)을 고른다. 밤 30초가 자연스럽게 끝나기를 기다린다
-    await armAnnounceWatch(hp);
-    await armLetterWatch(hp);
-    await ht.waitFor((v) => v.phase === "morning", 40_000, "밤 뒤 아침(서버 타이머)");
+    const morningView = await ht.waitFor((v) => v.phase === "morning", 40_000, "밤 뒤 아침(서버 타이머)");
+    const eliminated = morningView.day?.morning?.eliminated;
+    rec(sc, "VC13", "서버 상태에서 밤에 살아 있던 방장이 아침에 암살된다",
+      aliveOf(nightView).includes(hostSeat) && eliminated === hostSeat && !aliveOf(morningView).includes(hostSeat),
+      `방장 좌석 ${hostSeat}, 피해 좌석 ${eliminated ?? "없음"}`);
     // 맥박 큐 시각 기록(window.__mfTension, ?e2e=1·개발 빌드만): 밤 30초 동안 2~4개(09-06 tension.ts)
     const cues = await hp.evaluate(() => window.__mfTension ?? null);
-    rec(sc, "VC11", "시민 밤에 맥박 큐가 2~4개 기록된다(window.__mfTension)", Array.isArray(cues) && cues.length >= 2 && cues.length <= 4, `큐 ${Array.isArray(cues) ? cues.length : cues}개`);
+    const cueCount = Array.isArray(cues) ? cues.length : 0;
+    rec(sc, "VC11", n.tableNight ? "공통 밤 무대는 개인용 맥박 큐를 기록하지 않는다" : "시민 밤에 맥박 큐가 2~4개 기록된다", n.tableNight ? cueCount === 0 : cueCount >= 2 && cueCount <= 4, `큐 ${cueCount}개`);
     const { log, morning: victimAnn } = await waitMorningAnnounce(hp, 6000, /^암살당했습니다$/);
     rec(sc, "VC6", "피해자 본인 화면 알림이 '암살당했습니다' 이다", !!victimAnn, `알림 ${log.filter((a) => a.text).map((a) => a.text).join(" → ") || "없음"}`);
     if (victimAnn) recMany(rec, sc, announceChecks(victimAnn), " (피해자)");
@@ -3084,7 +3109,7 @@ async function nightFlow(ctx) {
   await nightScenario(ctx, () => nightVictim(ctx, shared));
   const rec = recorder(ctx);
   const d = shared.dark;
-  rec("night/dom", "L6", "시민·경찰·의사 페이지의 data-night-dark 값이 같다", d.citizen === "true" && d.police === d.citizen && d.doctor === d.citizen, `시민 ${d.citizen}, 경찰 ${d.police}, 의사 ${d.doctor}`);
+  rec("night/dom", "L6", "시민·경찰·의사 페이지의 data-night-dark 값이 같다", Object.keys(d).length === 3 && d.police === d.citizen && d.doctor === d.citizen, `시민 ${d.citizen}, 경찰 ${d.police}, 의사 ${d.doctor}`);
 }
 
 // ---- night-sizes: 폰 크기 6종에서 밤마다 내 이름표가 스테이지 안에 완전히 들어오고 마피아 이름표 버튼이 44×44 이상이다 (NIGHT-07, NIGHT-09, L10) ----
@@ -3131,7 +3156,7 @@ async function nightSizesFlow(ctx) {
     const sc = `${id}/mafia`;
     const { game, g } = await openNight(ctx, id, { guests: 0, bots: 5, role: "mafia" });
     try {
-      const n = await readNight(game.hp);
+      const n = await readNightRoster(game.hp);
       // 15-08: 마피아도 시민·경찰·의사와 같은 아래 패널 얼굴 목록(나 포함 산 사람 전원)으로 고른다 — 맵 이름표 선택 버튼·후보 효과(cand)·밤 채팅 패널은 없다
       rec(sc, "SZ1", "마피아: 이름표 선택 버튼([data-pick])이 없고 얼굴 목록 칸만 있다", g.picks.length === 0 && n.faces.length > 0, `버튼 ${g.picks.length}개, 칸 ${n.faces.length}개`);
       faceListChecks(rec, sc, "마피아", n, aliveOf(game.ht.last()).length);
@@ -3353,6 +3378,8 @@ async function resultRevealFlow(ctx) {
       await waitChatLine(g.page, REVEAL_TEXTS.ghost);
     });
     rec(`${id}/setup`, "RT-G", "손님(유령)이 유령 채팅 한 줄을 보냄", ghostSent.ok, ghostSent.detail);
+    rec(`${id}/setup`, "RT-G-P", "유령은 밤 참가자 선택 권한과 마피아 집계를 받지 않는다",
+      await g.page.locator("[data-night-targets], [data-face-list]").count() === 0 && g.tracker.last().me.nightTally === undefined);
     // 15페이즈(15-08): 산 마피아의 밤 채팅 화면이 없다(서버 채널은 유지). 사람이 보낼 수단이 없는 것이 계약이다.
     const mafiaInput = await hp.locator("[data-chat-input]").count();
     rec(`${id}/setup`, "RT-M", "방장(마피아)에게 밤 채팅 입력칸이 없음(15-08 밤 화면 통일)", mafiaInput === 0, `입력칸 ${mafiaInput}개`);
@@ -3864,12 +3891,12 @@ async function pcFlow(ctx) {
   const reported = { w: 1033, h: 1221, label: "1033x1221" };
   await page.setViewportSize({ width: reported.w, height: reported.h });
   await skipTo(page, tracker, "night");
-  const nightCard = page.locator('[data-phase-event="night-action"] .mf-phase-event__card');
+  const nightCard = page.locator('[data-dock-pane="people"] [data-night-targets], [data-phase-event="night-action"] .mf-phase-event__card');
   await nightCard.waitFor({ timeout: 8000 });
   await settle(page);
   const nightCtx = { ...ctx, size: reported };
-  await checkRoomWidth(nightCtx, "pc/night", page, [".mf-game__header", ".mf-game__panel"], ["[data-table-dock]", '[data-phase-event="night-action"] .mf-phase-event__card']);
-  const faceSeats = (await readNightFaces(page)).faceSeats;
+  await checkRoomWidth(nightCtx, "pc/night", page, [".mf-game__header", ".mf-game__panel"], ["[data-table-dock]", '[data-dock-pane="people"], [data-phase-event="night-action"] .mf-phase-event__card']);
+  const faceSeats = (await readNightRoster(page)).faces.map(card => card.seat);
   const patient = faceSeats.find((seat) => seat !== mySeat);
   recorder(nightCtx)("pc/night", "PC-DOCTOR", "의사에게 다섯 후보가 모두 보임", tracker.last().me.role === "doctor" && faceSeats.length === 5);
   if (patient !== undefined) {
@@ -4017,6 +4044,7 @@ const { emceeBandFlow, emceeToolsFlow, emceeLeakFlow, emceeSoundFlow } = makeHos
 const { polishRevealFlow } = makePolishFlows({ recorder, attempt, openGame, closeGame });
 const tableDockFlow = makeTableDockFlow({ recorder, openGame, closeGame, writeSheet, gameGH, checkRoomWidth });
 const firstBallotDockFlow = makeFirstBallotDockFlow({ recorder, startHost, openGuest, checkRoomWidth });
+const nightDockFlow = makeNightDockFlow({ recorder, openGame, closeGame, checkRoomWidth });
 
 export const FLOWS = [
   // lobby·world 는 LOBBY_SIZES 6개 크기로 돈다: 기본 크기 4개에 더해 390x844·402x874 (run.mjs 의 extraSizes)
@@ -4057,6 +4085,9 @@ export const FLOWS = [
   { id: "table-dock", run: tableDockFlow },
   { id: "table-dock-pc", run: tableDockFlow, size: { w: 1280, h: 800, label: "1280x800", mobile: false } },
   { id: "first-ballot-dock", run: firstBallotDockFlow, size: GAME_SIZE },
+  { id: "first-ballot-dock-pc", run: firstBallotDockFlow, size: { w: 1280, h: 800, label: "1280x800", mobile: false } },
+  { id: "night-dock", run: nightDockFlow },
+  { id: "night-dock-pc", run: nightDockFlow, size: { w: 1280, h: 800, label: "1280x800", mobile: false } },
   // 13페이즈 기본판(결정 0072): basic-off = 봇 판 한 판 전체(로비 → 낮 → 밤 → 결과)에서 꺼진 장치 DOM·프레임·단계 순서·결과 탭 0건, basic-vote = 8명 투표 화면(이름표 버튼 7개 44×44·무가림, 묶음 G·H). 폰 6종은 basic-vote 만
   { id: "basic-off", run: basicOffFlow, size: GAME_SIZE },
   { id: "basic-vote", run: basicVoteFlow, extraSizes: LOBBY_EXTRA_SIZES },

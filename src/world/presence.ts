@@ -4,7 +4,7 @@
 // 위치는 서버가 새로 보내지 않는다 — 런타임이 클라이언트 월드 저장소가 마지막으로 받은 구간(WorldStore.lastSegOf)에서 세운다.
 // 읽는 것은 공개 정보(players·alive·day.points·day.candidate)와 본인 유령 여부(spectate·내 alive)뿐이다.
 import { isAlive } from "../../shared/game/alive";
-import { STAGE_SPOT, UNIT } from "../../shared/game/map";
+import { BAR_SEATS_FX, barChairAssignment, STAGE_SPOT, UNIT } from "../../shared/game/map";
 import type { MapId, PhaseId, RoomView } from "../../shared/protocol";
 import { GHOST_FADE_END_MS, GHOST_RISE_MS, pointsTally } from "../game/dayView";
 import { pointSeatsOf, revealPoints, showdownStageOf } from "../game/showdownView";
@@ -54,6 +54,8 @@ export interface SceneLook {
   camera: CameraMode;
   /** 재즈 바 착석 화면과 공개 채팅에서 발생한 짧은 시선 신호. */
   table?: { mode: "eye" | "wide"; centerTable?: boolean; focus?: number; focusAt?: number; voice?: { seat: number; at: number } };
+  /** 밤에 그리는 공개 좌석 배치. 실제 이동 구간과 별개다. */
+  nightTable?: Readonly<Record<number, NightTableChair>>;
   lighting: LightingStage;
   tension: 0 | 1 | 2;
   focusSeat?: number;
@@ -67,6 +69,24 @@ export interface SceneLook {
    * 보이는 3장 자르기는 캐릭터 핸들 리그가 한다 — 여기는 전체 목록이다
    */
   notes?: Readonly<Record<number, readonly number[]>>;
+}
+
+export interface NightTableChair {
+  x: number;
+  z: number;
+  slot: number;
+}
+
+function nightTableOf(view: RoomView): SceneLook["nightTable"] {
+  if (view.map !== "bar" || view.phase !== "night") return undefined;
+  const chairs = barChairAssignment(view.players.filter((p) => p.sat !== true).map((p) => p.seat));
+  const table: Record<number, NightTableChair> = {};
+  for (const [seat, slot] of Object.entries(chairs)) {
+    if (slot === undefined || BAR_SEATS_FX[slot] === undefined) continue;
+    const [x, z] = BAR_SEATS_FX[slot];
+    table[Number(seat)] = { x: x / UNIT, z: z / UNIT, slot };
+  }
+  return table;
 }
 
 /** 이 viewer 가 유령인지: 서버가 탈락한 본인 view 에만 싣는 spectate 가 있거나, 내 좌석이 탈락으로 내려온 경우 */
@@ -159,6 +179,7 @@ export function lightingOf(phase: PhaseId): LightingStage {
 export function lightingFor(view: RoomView): LightingStage {
   if (view.map === "bar" && view.phase === "verdict" && view.day?.candidate !== undefined) return "trial";
   if (view.phase !== "night") return lightingOf(view.phase);
+  if (view.map === "bar") return "night";
   if (isGhostViewer(view)) return "nightGhost";
   return view.me.role === "mafia" ? "night" : "nightCitizen";
 }
@@ -173,7 +194,19 @@ export function tensionOf(_view: RoomView): Tension {
 /** 위 계산을 한 장면으로 묶는다. stageH = 이 단계의 스테이지 사각형 높이(px), mine = 내 낙관적 지목 대상(서버 응답 전) */
 export function sceneLook(view: RoomView, opts: { stageH: number; fading?: ReadonlyMap<number, number>; now?: number; mine?: number; verdictZoom?: number }): SceneLook {
   const tension = tensionOf(view);
-  const seats = visibleSeats(view, opts.fading, opts.now);
+  const nightTable = nightTableOf(view);
+  const seats = visibleSeats(view, nightTable === undefined ? opts.fading : undefined, opts.now);
+  if (nightTable !== undefined) {
+    // 생존자의 휴식 자세는 공개 참가자 명단만으로 그린다.
+    for (const p of view.players) if (isAlive(p) && nightTable[p.seat]) seats[p.seat] = { show: true, ghost: false };
+    return {
+      camera: cameraModeOf(view, opts.stageH),
+      nightTable,
+      lighting: "night",
+      tension: 0,
+      seats,
+    };
+  }
   const pointing = pointingOf(view, opts.mine);
   const chalk = view.day?.chalk;
   const notes: Record<number, readonly number[]> = {};

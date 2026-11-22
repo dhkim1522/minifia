@@ -535,6 +535,33 @@ describe("sceneLook — 시민·경찰·의사의 밤 장면 값이 같다 (NIGH
   });
 });
 
+describe("재즈 바 밤의 공개 좌석", () => {
+  it("진영과 실험방 여부, 본인 선택이 서로 달라도 산 사람의 밤 장면은 같다", () => {
+    const night = { ...viewOf("night", { dead: [2], mySeat: 1 }), map: "bar" as const };
+    const options = { stageH: 400, mine: 4, fading: new Map([[2, 4000]]) };
+    const citizen = sceneLook(asRole(night, "citizen"), options);
+    for (const role of ["mafia", "police", "doctor"] as const) {
+      const view = asRole({ ...night, playtest: true, me: { ...night.me, pick: 3 } }, role);
+      expect(sceneLook(view, options)).toEqual(citizen);
+    }
+    expect(citizen.lighting).toBe("night");
+    expect(citizen.seats[2]).toBeUndefined();
+    expect(citizen.nightTable?.[2]).toBeDefined(); // 탈락 후에도 원래 자리는 비워 둔다.
+    expect(citizen.nightTable?.[0]).toEqual({ x: 0, z: 2.04, slot: 0 });
+    expect(sceneLook({ ...night, phase: "morning" }, options).nightTable).toBeUndefined();
+    expect(sceneLook({ ...night, map: "plaza" }, options).nightTable).toBeUndefined();
+  });
+
+  it("유령은 살아 있는 사람의 같은 배치와 기존 유령 좌석을 함께 본다", () => {
+    const night = { ...viewOf("night", { dead: [2], mySeat: 0 }), map: "bar" as const };
+    const ghost = { ...night, me: { ...night.me, seat: 2 }, spectate: { seats: [] } };
+    const aliveScene = sceneLook(night, { stageH: 400 });
+    const ghostScene = sceneLook(ghost, { stageH: 400 });
+    expect(ghostScene.nightTable).toEqual(aliveScene.nightTable);
+    expect(ghostScene.seats).toEqual({ ...aliveScene.seats, 2: { show: true, ghost: true } });
+  });
+});
+
 // 관전에서만 반투명 탈락자를 그리며 직업 의상은 쓰지 않는다.
 describe("탈락자 장면 표는 직업과 무관하다 (결정 0083-2, L13)", () => {
   const JOBS_BY_SEAT: RoleId[] = ["mafia", "police", "doctor", "citizen", "citizen"];

@@ -728,6 +728,31 @@ export async function openTableDockPane(page, name) {
   return true;
 }
 
+/** 현재 또는 반대 페이지에서 대상 버튼을 찾는다. 페이지가 없는 기존 화면도 같은 선택자를 쓴다. */
+export async function showPeopleTarget(page, selector) {
+  const target = page.locator(selector).first();
+  if (await target.count() > 0) return target;
+  const turn = page.locator('[data-people-next][aria-disabled="false"], [data-people-prev][aria-disabled="false"]').first();
+  if (await turn.count() > 0) await turn.click({ timeout: 3000 });
+  await target.waitFor({ timeout: 3000 });
+  return target;
+}
+
+/** 참가자 판을 첫 페이지부터 읽고 시작 페이지로 돌려놓는다. */
+export async function readPeoplePages(page, readPage) {
+  const prev = page.locator('[data-people-prev][aria-disabled="false"]');
+  const next = page.locator('[data-people-next][aria-disabled="false"]');
+  const restoreSecond = await prev.count() > 0;
+  if (restoreSecond) await prev.click({ timeout: 3000 });
+  const pages = [await readPage(page)];
+  if (await next.count() > 0) {
+    await next.click({ timeout: 3000 });
+    pages.push(await readPage(page));
+    if (!restoreSecond) await prev.click({ timeout: 3000 });
+  }
+  return pages;
+}
+
 /**
  * 채팅 입력칸에 글을 쓰고 [보내기] 를 누른다(07-13). 값은 fill 로 한 번에 넣는다 — 한글 조합 이벤트는 만들지 않는다(실제 IME 는 07-19 몫).
  * 보내기 버튼이 활성(aria-disabled "false")이 될 때까지 기다린 뒤 누르므로, 글자가 React 상태에 닿기 전에 누르는 일이 없다.
@@ -1577,7 +1602,7 @@ export async function readGame(page) {
       willReveals: qa("[data-will-reveal]").map((el) => (el.textContent ?? "").trim()),
       chatLockedCount: qa("[data-chat-locked]").length,
       verdictBtns: qa("[data-verdict]").map((b) => ({ v: b.getAttribute("data-verdict"), pressed: b.getAttribute("aria-pressed") === "true", disabled: b.disabled === true, rect: rect(b) })),
-      picks: qa("[data-pick]").map((b) => ({ seat: Number(b.getAttribute("data-pick")), rect: rect(b), pressed: b.getAttribute("aria-pressed") === "true", label: b.getAttribute("aria-label") ?? "" })),
+      picks: qa("[data-pick]:not([data-face])").map((b) => ({ seat: Number(b.getAttribute("data-pick")), rect: rect(b), pressed: b.getAttribute("aria-pressed") === "true", label: b.getAttribute("aria-label") ?? "" })),
       tags: qa(".mf-world__tag").map((el) => {
         const head = q(".mv-head", el);
         return {
@@ -1606,7 +1631,7 @@ export async function readGame(page) {
 
 /** 지목(밤 선택 포함) 이름표 버튼을 눌러 내 버튼이 aria-pressed 가 될 때까지 기다린다. */
 export async function tapPick(page, seat) {
-  const btn = page.locator(`[data-pick="${seat}"]`);
+  const btn = await showPeopleTarget(page, `[data-pick="${seat}"]`);
   await btn.click({ timeout: 4000 });
   await page.waitForSelector(`[data-pick="${seat}"][aria-pressed="true"]`, { timeout: 3000 });
 }
@@ -1617,7 +1642,7 @@ export async function tapPick(page, seat) {
 export async function tapTurnPick(page, seat) {
   const inNomination = await page.locator('[data-game-stage][data-phase="nomination"], main[data-phase="nomination"]').count() > 0;
   const dock = inNomination && await openTableDockPane(page, "people");
-  const btn = page.locator(`[data-pick="${seat}"]`);
+  const btn = await showPeopleTarget(page, `[data-pick="${seat}"]`);
   await btn.click({ timeout: 4000 });
   const pressed = `[data-table-seat="${seat}"][aria-pressed="true"], [data-seat="${seat}"] .mv-head[data-mine]`;
   await page.waitForSelector(dock ? `${pressed}, [data-table-dock][data-dock-open="closed"]` : pressed, { timeout: 3000, state: "attached" });

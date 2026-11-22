@@ -15,6 +15,8 @@ export interface WorldTestHooks {
   sample(seat: number, t?: number): { x: number; z: number } | null;
   /** 마지막 프레임에 화면에 그린 seat 위치(내 예측·구간 섞기 포함)와 그 프레임의 Date.now(). 없는 자리는 null (결정 0059) */
   shown(seat: number): { x: number; z: number; at: number } | null;
+  /** 공개 좌석으로 그리는 밤 휴식 장면의 목록이다. 월드 이동 구간이나 선택 정보는 없다. */
+  nightSeats(): ReadonlyArray<{ seat: number; x: number; z: number }>;
   seats(): number[];
   /** 목적지 링의 목표 지점(없으면 null) */
   ring(): { x: number; z: number } | null;
@@ -72,6 +74,7 @@ export interface ResultHookState {
 export interface HookRuntime {
   sample(seat: number, t?: number): { x: number; z: number } | null;
   shown(seat: number): { x: number; z: number; at: number } | null;
+  nightSeats?(): ReadonlyArray<{ seat: number; x: number; z: number }>;
   ring(): { x: number; z: number } | null;
   status(): MapStatusState;
   interactiveMs(): number | null;
@@ -116,6 +119,7 @@ export function installWorldTestHooks(runtime: HookRuntime, store: WorldStore): 
   const hooks: WorldTestHooks = {
     sample: (seat, t) => runtime.sample(seat, t),
     shown: (seat) => runtime.shown(seat),
+    nightSeats: () => runtime.nightSeats?.() ?? [],
     seats: () => store.seats(),
     ring: () => runtime.ring(),
     status: () => runtime.status().status,

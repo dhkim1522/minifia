@@ -54,7 +54,7 @@ export function addSeatedRoomShell(root: Object3D, closeFront: boolean): void {
 export function createSeatedBarArt(bar: BarScene): {
   table: Group;
   blockers: Object3D[];
-  setConversationLighting(on: boolean): void;
+  setConversationLighting(on: boolean, night?: boolean): void;
   applyBudget(fullProps: boolean): void;
 } {
   const { root, meshes } = bar;
@@ -100,11 +100,11 @@ export function createSeatedBarArt(bar: BarScene): {
   return {
     table,
     blockers,
-    setConversationLighting(on) {
+    setConversationLighting(on, night = false) {
       // 광원 수를 바꾸면 다음 프레임에 Three.js가 새 조명 셰이더를 컴파일한다.
       key.intensity = on ? keyIntensity : 0;
-      rim.intensity = on ? rimIntensity : 0;
-      root.environmentIntensity = on ? 0.47 : 0.24;
+      rim.intensity = on ? rimIntensity : night ? 1.03 : 0;
+      root.environmentIntensity = on ? 0.47 : night ? 0.17 : 0.24;
     },
     applyBudget(fullProps) {
       room.getObjectByName("seated-cabinet-glass")!.visible = fullProps;

@@ -6,6 +6,7 @@ import type { MapId } from "../../shared/protocol";
 import { DEFAULT_CAMERA, DEFAULT_TARGET } from "./camera";
 import type { CameraRig, TableCamera } from "./camera";
 import { createSeatedBarArt } from "./barAssets/seated-bar";
+import { createNightRest } from "./barAssets/night-rest";
 import { buildBarScene } from "./maps/bar";
 import { buildPlazaScene } from "./maps/plaza";
 import type { MapScene } from "./maps/types";
@@ -87,6 +88,7 @@ async function build(opts: Opts): Promise<WorldRenderer> {
   if ("woodReady" in bar) await bar.woodReady;
   const scene = bar.root;
   const seatedArt = compact ? createSeatedBarArt(bar) : null;
+  let nightRest: ReturnType<typeof createNightRest> | null = null;
   if (seatedArt) {
     bar.setCenterTable?.(true);
     seatedArt.applyBudget(budget.props === "full");
@@ -195,7 +197,14 @@ async function build(opts: Opts): Promise<WorldRenderer> {
       if (!seatedArt || seatedArt.table.visible === on) return;
       seatedArt.table.visible = on;
       bar.setCenterTable?.(on);
-      seatedArt.setConversationLighting(on && (lightingPhase === "talk" || lightingPhase === "vote"));
+      seatedArt.setConversationLighting(on && (lightingPhase === "talk" || lightingPhase === "vote"), on && lightingPhase === "night");
+      gl.shadowMap.needsUpdate = true;
+    },
+    setNightRest(places, hideSeat): void {
+      if (!seatedArt) return;
+      if (nightRest === null && places.length > 0) nightRest = createNightRest(scene);
+      if (!nightRest) return;
+      nightRest.set(places, hideSeat);
       gl.shadowMap.needsUpdate = true;
     },
     setZoom(z: number): void {
@@ -217,7 +226,7 @@ async function build(opts: Opts): Promise<WorldRenderer> {
     setLighting(phase: LightingPhase, seconds = 0): void {
       lightingPhase = phase;
       bar.setLighting(phase, seconds);
-      seatedArt?.setConversationLighting(seatedArt.table.visible && (phase === "talk" || phase === "vote"));
+      seatedArt?.setConversationLighting(seatedArt.table.visible && (phase === "talk" || phase === "vote"), seatedArt.table.visible && phase === "night");
       gl.toneMappingExposure = bar.exposure;
       gl.shadowMap.needsUpdate = true; // 조명 단계가 바뀌면 그림자를 다시 굽는다
     },
@@ -332,6 +341,7 @@ async function build(opts: Opts): Promise<WorldRenderer> {
       // 캐릭터 자원은 만든 쪽(handle.dispose)이 정리한다. 여기서는 장면에서 떼기만 한다.
       for (const c of seats.values()) characters.remove(c.root);
       seats.clear();
+      nightRest?.dispose();
       bar.dispose();
       releaseGl(gl);
       canvas.remove();
