@@ -1574,7 +1574,7 @@ export function makePoliticsFlows(h) {
         for (const [k, x] of hs.entries()) {
           const e = first[k].x;
           if (x.seat === hostEntry.seat) {
-            rec(s2, "SD3a", "방장(유령) 화면은 직업 칩이 기존대로 보이고 떠 있는 버튼이 없다", e.roleChips >= 1 && e.floats === 0, `직업 칩 ${e.roleChips}개 · 떠 있는 버튼 ${e.floats}개`);
+            rec(s2, "SD3a", "방장(유령) 화면에는 직업 칩과 떠 있는 버튼이 없다", e.roleChips === 0 && e.floats === 0, `직업 칩 ${e.roleChips}개 · 떠 있는 버튼 ${e.floats}개`);
           } else {
             rec(s2, "SD3b", `산 사람 화면 DOM 에 [data-role-chip] 이 0건이다 (${x.who}, L21·L23)`, e.roleChips === 0, `직업 칩 ${e.roleChips}개`);
           }
@@ -1698,7 +1698,7 @@ export function makePoliticsFlows(h) {
           recLines(rec, s5, showdownChecks(sdInput(g, e, "point", dead ? {} : { buttons: g.picks.map((b) => ({ seat: b.seat, rect: b.rect })) })), ` (${x.who}${dead ? ", 유령" : ""})`);
           rec(s5, "SD7a", `알약이 '지목'·'모두 동시에'·초 이고 지목 단계 표식이다 (${x.who})`, e.step === "point" && e.mode === "point" && e.parts?.[0] === "지목" && e.parts?.[1] === "모두 동시에", `단계 ${e.step} · 모드 ${e.mode} · 조각 ${JSON.stringify(e.parts)}`);
           if (dead) {
-            rec(s5, "SD7b", "방장(유령) 화면에는 지목 버튼과 떠 있는 버튼이 없고 직업 칩이 있다", g.picks.length === 0 && e.floats === 0 && e.roleChips >= 1, `지목 버튼 ${g.picks.length}개 · 떠 있는 버튼 ${e.floats}개 · 직업 칩 ${e.roleChips}개`);
+            rec(s5, "SD7b", "방장(유령) 화면에는 지목 버튼, 떠 있는 버튼, 직업 칩이 없다", g.picks.length === 0 && e.floats === 0 && e.roleChips === 0, `지목 버튼 ${g.picks.length}개 · 떠 있는 버튼 ${e.floats}개 · 직업 칩 ${e.roleChips}개`);
           } else {
             const others = order.filter((sx) => sx !== x.seat);
             rec(s5, "SD7c", `산 화면에는 지목 버튼이 나를 뺀 두 사람이고 묶음 이름이 '지목' 이다 (${x.who})`, g.picks.map((b) => b.seat).sort((a, b) => a - b).join(",") === others.join(",") && e.group?.label === "지목", `버튼 ${g.picks.map((b) => b.seat).join(",")} · 묶음 "${e.group?.label}"`);
@@ -1786,7 +1786,7 @@ export function makePoliticsFlows(h) {
           rec(s6, "SD10a", `시간 초과 차례의 알약 색: 남은 5초 이하는 진홍(urgent), 6초 이상은 아니다 (${hs[k].who})`, secs.some((v) => v <= 4) && secs.some((v) => v >= 6) && lowOk && highOk, `초 기록 ${secs.join(",")} · 색 ${secs.map((v) => `${v}:${[...bySec.get(v)].join("+")}`).join(" ")}`);
           rec(s6, "SD10b", `시간 초과 차례에는 인용 카드가 한 번도 뜨지 않는다 (${hs[k].who})`, t2.length >= 1 && t2.filter((e) => e.sec !== "" && secOf(e.sec) !== null && secOf(e.sec) <= 7).every((e) => e.quote === ""), `차례 기록 ${t2.length}개 · 카드가 보인 기록 ${t2.filter((e) => e.quote !== "" && secOf(e.sec) !== null && secOf(e.sec) <= 7).length}`);
           const allSd = log.filter((e) => e.phase === "showdown");
-          if (hs[k].seat === hostEntry.seat) rec(s6, "SD3d", "방장(유령) 화면은 마지막 3인 내내 직업 칩이 있고 지목 버튼·떠 있는 버튼이 없다", allSd.length >= 1 && allSd.filter((e) => e.step !== "").every((e) => e.roleChips >= 1 && e.picks === 0 && e.floats === 0), `기록 ${allSd.length}개 · 직업 칩 없는 기록 ${allSd.filter((e) => e.roleChips < 1).length} · 지목 버튼 있는 기록 ${allSd.filter((e) => e.picks > 0).length} · 떠 있는 버튼 기록 ${allSd.filter((e) => e.floats > 0).length}`);
+          if (hs[k].seat === hostEntry.seat) rec(s6, "SD3d", "방장(유령) 화면은 마지막 3인 내내 직업 칩과 지목 버튼·떠 있는 버튼이 없다", allSd.length >= 1 && allSd.filter((e) => e.step !== "").every((e) => e.roleChips === 0 && e.picks === 0 && e.floats === 0), `기록 ${allSd.length}개 · 직업 칩 있는 기록 ${allSd.filter((e) => e.roleChips > 0).length} · 지목 버튼 있는 기록 ${allSd.filter((e) => e.picks > 0).length} · 떠 있는 버튼 기록 ${allSd.filter((e) => e.floats > 0).length}`);
           else rec(s6, "SD3e", `산 사람 화면 DOM 에 마지막 3인 내내 [data-role-chip] 이 0건이다 (${hs[k].who}, L21·L23)`, allSd.length >= 1 && allSd.every((e) => e.roleChips === 0), `기록 ${allSd.length}개 · 직업 칩 있는 기록 ${allSd.filter((e) => e.roleChips > 0).length}`);
           const pointTimes = log.filter((e) => e.step === "point");
           const ps = [...new Set(pointTimes.map((e) => secOf(e.sec)).filter((v) => v !== null))];

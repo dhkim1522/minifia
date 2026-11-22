@@ -14,6 +14,7 @@ import {
   FIGURE_IDS,
   ASSET_VERSION,
   ENTRY_ART_VERSION,
+  PARTICIPANT_PORTRAIT_VERSION,
   backdropUrl,
   duskPreloadList,
   entryPreloadList,
@@ -341,8 +342,15 @@ describe("outfitCardSrc (10-07)", () => {
   });
 
   it("참가자 상반신은 공개 동물과 의상 그림을 쓰고 동물이 없는 좌석의 인물도 표시한다", () => {
-    expect(participantPortraitSrc(2, "rabbit", "hood")).toBe(outfitCardSrc("hood", "rabbit"));
-    expect(participantPortraitSrc(2, "rabbit")).toBe(animalFigureSrc("rabbit").src);
+    const portraits = new Set(Object.keys(import.meta.glob("/public/characters/animals/*/participant-*.webp")));
+    for (const animal of ANIMAL_IDS) {
+      for (const outfit of OUTFIT_IDS) {
+        const path = `/characters/animals/${animal}/participant-${outfit}.webp`;
+        expect(participantPortraitSrc(2, animal, outfit)).toBe(`${path}?v=${PARTICIPANT_PORTRAIT_VERSION}`);
+        expect(portraits.has(`/public${path}`), path).toBe(true);
+      }
+    }
+    expect(participantPortraitSrc(2, "rabbit")).toBe(participantPortraitSrc(2, "rabbit", "coat"));
     expect(participantPortraitSrc(2)).toBe(figureSrc(2).src);
   });
 

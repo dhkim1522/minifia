@@ -501,20 +501,9 @@ describe("L23: 배지는 직업 칩(data-role-chip)과 섞이지 않는다", () 
     expect(container.querySelector("[data-claim]")?.hasAttribute("data-claim-changed")).toBe(true);
   });
 
-  it("유령 viewer: 탈락자 이름표에는 배지가 없고 산 사람 이름표에는 배지 + 직업 칩이 서로 다른 요소로 있다", () => {
-    // 서버는 탈락자 줄에 badge 를 싣지 않지만, 실려 와도 화면이 그리지 않는다
-    mount(makeView({ dead: [0, 1], mySeat: 0, badges: { 1: "police", 2: "mafia" } }));
-    const dead = stackOf(1);
-    expect(dead.querySelector("[data-claim]")).toBeNull();
-    const alive = stackOf(2);
-    expect(alive.querySelectorAll("[data-claim]")).toHaveLength(1);
-    expect(alive.querySelectorAll("[data-role-chip]")).toHaveLength(1);
-    const chip = alive.querySelector("[data-role-chip]")!;
-    const badge = alive.querySelector("[data-claim]")!;
-    expect(chip).not.toBe(badge);
-    expect(chip.classList.contains("mv-rolechip")).toBe(true);
-    expect(badge.classList.contains("mv-claim")).toBe(true);
-    expect(badge.hasAttribute("data-role-chip")).toBe(false);
+  it("유령 viewer: 공개 직업 주장도 머리 위에 따로 표시하지 않는다", () => {
+    const { container } = mount(makeView({ dead: [0, 1], mySeat: 0, badges: { 1: "police", 2: "mafia" } }));
+    expect(container.querySelectorAll(".mf-world__tag, [data-claim], [data-role-chip]")).toHaveLength(0);
   });
 });
 

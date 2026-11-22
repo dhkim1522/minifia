@@ -32,12 +32,12 @@ export const dayDivider = (n: number): string => `${n}일차`;
 
 export const READY_TEXT = {
   /** 손님 알약 라벨(꺼짐 / 켜짐) */
-  ready: "준비",
+  ready: "다음 판 준비",
   readyOn: "준비됨",
   /** 켜진 손님 알약의 접근성 이름 */
   readyOnLabel: "준비됨, 눌러서 취소",
   /** 방장 알약 윗줄 */
-  start: "시작",
+  start: "다음 판 시작",
   /** 방장 알약 접근성 이름 */
   startLabel: (n: number): string => `다음 판 시작, ${n}명 준비`,
   /** 이름표 체크의 접근성 이름(결과 화면) */
@@ -51,4 +51,6 @@ export const READY_TEXT = {
   needPlayers: (min: number): string => `${min}명부터 시작해요`,
   /** 쉬는 사람 화면 [나가기] */
   leave: "나가기",
+  /** 결과 화면에서 방을 나가 첫 화면으로 가는 버튼 */
+  home: "메인으로",
 } as const;

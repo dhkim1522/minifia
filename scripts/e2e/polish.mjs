@@ -736,25 +736,28 @@ export function liveGhostChecks(m, { deadSeats } = {}) {
 }
 
 /**
- * C3 판정(유령 화면). m = readLiveGhost 의 값(유령 페이지에서) — seats: [{ seat, chips, ghostTags }], ghosts(__mfGhosts 훅 사본).
- * ctx = { jobs, seats? } — 탈락 좌석 전원(기본: jobs 의 키)이 직업 칩 1개·`.mv-tag.is-ghost` 1개이고 유령 훅 seats 에 있으며 ready 여야 한다. 모습은 직업과 무관해 직업별 기대가 없다(직업은 칩으로만 보인다).
- * 산 좌석이 유령 훅 seats 에 있으면(사람이 유령으로 그려짐) 실패.
+ * C3 판정(유령 화면). 이름표 없이 반투명 탈락자와 실제 역할 의상을 표시한다.
+ * jobs는 관전자에게 공개된 모든 역할, seats는 탈락 좌석이다.
  */
 export function ghostViewChecks(m, { jobs = {}, seats } = {}) {
-  const label = "유령 화면: 탈락 좌석 전원이 직업 칩 1개와 유령 이름표·반투명 캐릭터를 갖는다";
+  const label = "유령 화면: 이름표 없이 실제 직업 의상과 반투명 탈락자를 표시한다";
   const list = seats ?? Object.keys(jobs).map(Number);
   const ok = m !== null && typeof m === "object" && Array.isArray(m.seats) && isGhostsHook(m.ghosts) && list.length > 0;
   if (!ok) return [noMeasure("C3", label, "유령 화면 읽기·유령 훅")];
   const bad = [];
+  if (m.tags !== 0 || m.roleChips !== 0 || m.ghostSeats !== 0) bad.push(`이름표 ${m.tags}개 · 직업 칩 ${m.roleChips}개 · 유령 표식 ${m.ghostSeats}개`);
   for (const seat of list) {
     const r = m.seats.find((x) => x && x.seat === seat);
     if (!r) {
       bad.push(`좌석 ${seat} 측정값 없음(읽기 없음)`);
       continue;
     }
-    if (r.chips !== 1) bad.push(`좌석 ${seat} 직업 칩 ${r.chips}개 (기대 1)`);
-    if (r.ghostTags !== 1) bad.push(`좌석 ${seat} 유령 이름표 ${r.ghostTags}개 (기대 1)`);
     if (!m.ghosts.seats.includes(seat)) bad.push(`좌석 ${seat} 가 유령 훅 seats 에 없음(사람 모습으로 남음)`);
+  }
+  for (const [seat, job] of Object.entries(jobs)) {
+    const expected = job === "citizen" ? "coat" : job;
+    const costume = m.seats.find((row) => row?.seat === Number(seat))?.costume;
+    if (costume !== expected) bad.push(`좌석 ${seat} 의상 ${costume ?? "없음"} (기대 ${expected})`);
   }
   for (const seat of m.ghosts.seats) if (!list.includes(seat)) bad.push(`산 좌석 ${seat} 이 유령 그림으로 그려짐`);
   if (!m.ghosts.ready) bad.push("유령 그림을 불러오지 못함(ready 거짓)");
@@ -763,7 +766,7 @@ export function ghostViewChecks(m, { jobs = {}, seats } = {}) {
 
 /**
  * 산 사람/유령 화면 유령 읽기(테스트 훅이 켜진 문맥에서만 값이 있다): 좌석마다 window.__mfWorld.shown(seat) 와 그 좌석 이름표의 `.mv-tag.is-ghost`·직업 칩 수,
- * 페이지 전체 [data-role-chip]·[data-ghost-seat] 수, window.__mfGhosts 사본(없으면 null). 닉네임·글자는 읽지 않는다(T-18.1-19).
+ * 전체 이름표·직업 칩·탈락 표시 수와 화면에 적용된 의상, window.__mfGhosts 사본을 읽는다.
  */
 export function readLiveGhost(page, seats) {
   return page.evaluate((list) => {
@@ -777,12 +780,14 @@ export function readLiveGhost(page, seats) {
         return {
           seat,
           shown: sh ? { x: sh.x, z: sh.z } : null,
+          costume: w?.costumeOf?.(seat) ?? null,
           tags: tag ? 1 : 0,
           ghostTags: tag ? tag.querySelectorAll(".mv-tag.is-ghost").length : 0,
           chips: tag ? tag.querySelectorAll("[data-role-chip]").length : 0,
         };
       }),
       ghosts: window.__mfGhosts === undefined ? null : { seats: [...window.__mfGhosts.seats], ready: window.__mfGhosts.ready },
+      tags: document.querySelectorAll(".mf-world__tag").length,
       roleChips: document.querySelectorAll("[data-role-chip]").length,
       ghostSeats: document.querySelectorAll("[data-ghost-seat]").length,
     };

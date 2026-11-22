@@ -83,6 +83,15 @@
 .mf-result__pill { flex: none; display: flex; align-items: center; justify-content: stretch; width: 100%; }
 .mf-result__pill > * { flex: 1 1 auto; }
 
+.mf-result__actions { display: flex; align-items: center; gap: var(--space-xs); }
+.mf-result__actions .mf-result__home { padding-inline: var(--space-sm); }
+.mf-result__actions .mv-ready { padding-inline: 4px; }
+.mf-result__actions .mv-ready.is-guest:not(.is-on) {
+  border-color: var(--noir-action-line);
+  background: var(--noir-action);
+  color: var(--noir-accent);
+}
+
 /* ---- 쉬는 사람 화면 BenchView(11-12, UI-SPEC D-3) ----
    결과 화면과 같은 틀: 캔버스 한 장이 방 본문을 채우고 아래 패널이 그 위에 얹힌다. 읽을 글은 한 줄(24px)과 [나가기] 하나뿐이다. 새 색 없음 */
 .mf-bench { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; isolation: isolate; background: var(--night-950); }

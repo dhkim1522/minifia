@@ -2162,12 +2162,29 @@ describe("좌석별 의상 (D-6, L33)", () => {
   });
 });
 
-// ---------- 관전에서는 원래 동물과 공개 의상을 반투명하게 그린다 ----------
+// ---------- 탈락자 관전의 반투명 동물과 실제 직업 의상 ----------
 describe("탈락자 동물 유령", () => {
   const ALIVE = { 0: {}, 1: {}, 2: {}, 3: {} };
   const handleOf = (s: Setup, seat: number): FakeHandle => s.world.renderers[0]!.chars.get(seat) as FakeHandle;
   const openGhost = (seats: Parameters<typeof sceneOf>[0], over: Partial<WorldStageProps> = {}, players: PublicPlayer[] = FOUR) =>
     open({ view: makeView(players), scene: sceneOf(seats), ...over }, { players, ents: FOUR_ENTS() });
+
+  it("관전 의상과 행동 고리가 실제 모델에 적용되고 일반 장면으로 돌아오면 걷힌다", async () => {
+    const scene = sceneOf({ ...ALIVE, 1: { costume: "doctor" }, 3: { ghost: true, costume: "police" } }, { spectator: true });
+    const s = await openGhost(ALIVE, { scene, tagProps: (seat) => seat === 1 ? { ring: "mafia" } : {} });
+    expect(tagOf(s.utils, 1)).toBeNull();
+    expect(handleOf(s, 1).applyOutfit).toHaveBeenLastCalledWith("doctor");
+    expect(handleOf(s, 3).applyOutfit).toHaveBeenLastCalledWith("police");
+    expect(handleOf(s, 3).setGhost).toHaveBeenCalledWith(true, { opacity: 0, tint: 1, animalForm: true });
+    expect(handleOf(s, 1).setRing).toHaveBeenLastCalledWith("#c8102e");
+    expect(window.__mfWorld?.costumeOf(3)).toBe("police");
+
+    s.rerender({ scene: sceneOf(ALIVE), tagProps: () => ({}) });
+    frames(50);
+    expect(handleOf(s, 1).setRing).toHaveBeenLastCalledWith(null);
+    expect(handleOf(s, 3).setGhost).toHaveBeenLastCalledWith(false);
+    expect(window.__mfWorld?.costumeOf(3)).toBeNull();
+  });
 
   it("ghost 좌석은 공개 의상 그대로 동물 유령을 한 번 켜고 이름표에 data-ghost를 붙인다", async () => {
     const s = await openGhost({ ...ALIVE, 3: { ghost: true } });

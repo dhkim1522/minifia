@@ -8,8 +8,7 @@
 //   표가 렌더 한가운데에서 바뀌어야 진입 순간 한 프레임도 사라졌다 돌아오지 않으므로 이 상태는 렌더 중에 view 차이로 정하고(React 의 "이전 값 기억" 방식), 타이머는 정리만 맡는다.
 //   서버가 보낸 유령 위치가 아니라 처형 이벤트 하나로 화면이 그리는 일회성 연출이다.
 // 유령이 되는 순간(08-17): 직전 view 의 내가 산 사람이었고 지금 view 의 내가 탈락이면 채팅에 유령 시작 줄('유령 채팅 · 산 사람에게 안 보여요', ghost 아이콘)을 한 번 만들고
-//   (직전 줄이 같은 안내면 만들지 않는다 — 07페이즈 DayScene 규칙 그대로) 화면에 `ghostEnter` 신호(번호)를 준다. 화면은 번호가 바뀔 때만 안내·직업 칩 등장을 다시 보인다.
-//   재접속 첫 스냅샷·epoch 직후는 직전 view 가 없어 줄도 신호도 없다. 이전 채팅 기록은 건드리지 않는다.
+//   직전 줄이 같은 안내면 만들지 않는다. 재접속 첫 스냅샷·epoch 직후는 직전 view 가 없어 줄을 만들지 않는다.
 // 밤·아침(08-18 임시 틀 → 09-18 교체): 낮 → 밤에 산 마피아의 마피아 채널 시작 줄(DayScene 규칙을 옮김). 밤·아침 결과 알림(문장·아이콘·시각)은 dayEvents 가 정하고 이 훅은 시계로 띄울 뿐이다.
 // 암살당한 본인(09-20, NIGHT-11): 같은 연결에서 밤(산 사람) → 아침(탈락)이 되는 렌더에서 `killFx` 신호를 세운다(재접속·의사가 살린 사람·남의 화면에는 없다). 화면(GameMap)이 시간표를 쥔다.
 // 재접속·새로 고침으로 들어온 첫 스냅샷(직전 view 없음)과 연결 번호(epoch)가 바뀐 첫 스냅샷은 이펙트 없이 정상 상태로 둔다(6페이즈 첫 스냅샷 규칙).
@@ -41,8 +40,6 @@ export interface DayFx {
   deny: { seat: number; nonce: number } | undefined;
   /** 처형 떠오름 연출 중인 좌석 → 연출 시작 시각(ms, Date.now 기준). 연출이 끝나면 비워진다. sceneLook 의 fading 으로 그대로 넘긴다 */
   fading: ReadonlyMap<number, number>;
-  /** 내가 산 사람에서 유령이 될 때마다 늘어나는 번호(0 에서 시작). 화면은 번호가 바뀔 때만 유령 안내·직업 칩 등장을 보인다 */
-  ghostEnter: number;
   /**
    * 암살당한 본인의 아침 연출 신호(NIGHT-11, 09-20): 같은 연결에서 밤(산 사람) → 아침(탈락)으로 올 때만 nonce 가 늘고 at(Date.now)이 정해진다.
    * 재접속·연결 번호가 바뀐 첫 스냅샷, 의사가 살린 사람, 다른 사람 화면에서는 생기지 않는다. 없으면 null.
@@ -67,7 +64,6 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
   const [announce, setAnnounce] = useState<AnnounceShow | null>(null);
   const [deny, setDeny] = useState<{ seat: number; nonce: number } | undefined>(undefined);
   const [fading, setFading] = useState<ReadonlyMap<number, number>>(NO_FADING);
-  const [ghostEnter, setGhostEnter] = useState(0);
   const [killFx, setKillFx] = useState<{ nonce: number; at: number } | null>(null);
   const [policeResult, setPoliceResult] = useState<DayFx["policeResult"]>(null);
   const [seen, setSeen] = useState<{ view: RoomView | null; epoch: number }>({ view, epoch });
@@ -75,7 +71,6 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
     // 렌더 중 상태 갱신: 새 view 가 처형 단계로 들어오면 처형된 좌석을 같은 렌더에서 표에 붙잡는다(첫 스냅샷·epoch 직후는 이벤트가 없다)
     const reset = seen.epoch !== epoch;
     setSeen({ view, epoch });
-    if (!reset && seen.view !== null && view !== null && meDead(view) && !meDead(seen.view)) setGhostEnter((n) => n + 1);
     // 암살당한 본인(공개 정보 alive 변화로 화면이 판정, 별도 메시지 없음): 밤 → 아침 view 를 받은 같은 렌더에서 신호를 세운다 — 막이 같은 렌더의 holdUntil 을 읽어야 한다(밤 판정이 끝난 뒤, A3)
     if (!reset && seen.view !== null && view !== null && seen.view.phase === "night" && view.phase === "morning" && meDead(view) && !meDead(seen.view)) {
       setKillFx((k) => ({ nonce: (k?.nonce ?? 0) + 1, at: Date.now() }));
@@ -209,5 +204,5 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
 
   // 정답 글은 다음 단계가 도착하는 즉시 가린다. 연결 지연으로 연출 종료 타이머가 늦어질 수 있다.
   const currentAnnounce = announce?.label === DAY_COPY.answerLabel && view?.phase !== "answerReveal" ? null : announce;
-  return { announce: currentAnnounce, deny, fading, ghostEnter, killFx, policeResult };
+  return { announce: currentAnnounce, deny, fading, killFx, policeResult };
 }

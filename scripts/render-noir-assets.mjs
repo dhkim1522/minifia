@@ -2,7 +2,8 @@
 // npm run dev 실행 후 node scripts/render-noir-assets.mjs http://127.0.0.1:5173
 // 얼굴과 전신만 다시 만들 때는 --seat-portraits-only.
 // 역할 카드만 다시 만들 때는 --role-portraits-only.
-// 동물 얼굴·전신·역할·옷장 그림만 다시 만들 때는 --animal-portraits-only.
+// 동물 얼굴·전신·역할·옷장·참가자 그림만 다시 만들 때는 --animal-portraits-only.
+// 참가자 카드의 상반신만 다시 만들 때는 --participant-portraits-only.
 // 개선된 3D 에셋의 초상·맵·홈·초대 그림을 한 번에 갱신할 때는 --3d-art-refresh.
 // 재즈 바 카드와 배경만 다시 만들 때는 --bar-art-only.
 // 채팅과 기록의 정사각형 초상화만 다시 만들 때는 --faces-only.
@@ -21,6 +22,7 @@ if (!["localhost", "127.0.0.1"].includes(origin.hostname)) throw new Error("에�
 
 const backdropsOnly = process.argv.includes("--backdrops-only");
 const refreshArt = !backdropsOnly && process.argv.includes("--3d-art-refresh");
+const PARTICIPANT_SIZE = 224;
 const browser = await chromium.launch({ executablePath: findChrome(process.platform, process.env, existsSync), headless: true });
 let renderEntry = false;
 
@@ -28,12 +30,32 @@ let renderEntry = false;
 async function savePng(data, path, width, height) {
   const input = Buffer.from(data.split(",")[1], "base64");
   const png = await sharp(input).resize(width, height, { fit: "fill" }).png({ palette: true, quality: 95 }).toBuffer();
-  const destination = root(path);
+  await saveBytes(root(path), png);
+}
+
+async function saveBytes(destination, bytes) {
   const previous = await readFile(destination).catch(error => {
     if (error.code === "ENOENT") return null;
     throw error;
   });
-  if (!previous?.equals(png)) await writeFile(destination, png);
+  if (!previous?.equals(bytes)) await writeFile(destination, bytes);
+}
+
+async function saveParticipantPortrait(data, path) {
+  const input = Buffer.from(data.split(",")[1], "base64");
+  const image = sharp(input).resize(PARTICIPANT_SIZE, PARTICIPANT_SIZE).ensureAlpha();
+  const pixels = await image.clone().raw().toBuffer();
+  const size = PARTICIPANT_SIZE;
+  let foreground = 0;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      if (pixels[(y * size + x) * 4 + 3] <= 12) continue;
+      foreground++;
+      if (x < 4 || x >= size - 4 || y < 4 || y >= size - 4) throw new Error(`상반신 그림이 가장자리에 닿았습니다: ${path}`);
+    }
+  }
+  if (foreground < size ** 2 * 0.08) throw new Error(`상반신 렌더가 비었습니다: ${path}`);
+  await saveBytes(root(path), await image.webp({ quality: 90, alphaQuality: 100 }).toBuffer());
 }
 
 try {
@@ -61,11 +83,61 @@ try {
     rim.position.set(3, 4, -3);
     studio.add(key, rim);
 
-    window.noirPortrait = ({ seat, outfit, colors, head, animal, ratio }) => {
+    const participantStudio = new THREE.Scene();
+    const portraitKey = new THREE.DirectionalLight("#ffe5c8", 2.05);
+    portraitKey.position.set(-3, 5, 6);
+    const portraitRim = new THREE.DirectionalLight("#a9c1e1", 0.80);
+    portraitRim.position.set(3, 4, -3);
+    participantStudio.add(new THREE.HemisphereLight("#fff1df", "#807582", 2.15), portraitKey, portraitRim);
+
+    function participantFrame(subject) {
+      const neck = subject.getObjectByName("neck");
+      const bounds = new THREE.Box3().setFromObject(neck, true);
+      const neckAt = neck.getWorldPosition(new THREE.Vector3());
+      const chest = Math.min(neckAt.y - 0.33 * model.CHAR_SCALE, bounds.min.y - 0.035 * model.CHAR_SCALE);
+      const vertex = new THREE.Vector3();
+      subject.traverseVisible(node => {
+        if (!node.isMesh) return;
+        const position = node.geometry.getAttribute("position");
+        for (let i = 0; i < position.count; i++) {
+          vertex.fromBufferAttribute(position, i).applyMatrix4(node.matrixWorld);
+          if (vertex.y >= chest) bounds.expandByPoint(vertex);
+        }
+      });
+
+      const span = Math.max((bounds.max.x - bounds.min.x) / 0.86, (bounds.max.y - chest) / 0.88);
+      const half = span / 2;
+      const center = new THREE.Vector3((bounds.min.x + bounds.max.x) / 2, chest + span * 0.445, 0);
+      const camera = new THREE.OrthographicCamera(-half, half, half, -half, 0.1, 20);
+      camera.position.copy(center).add(new THREE.Vector3(0, 0, 5.8));
+      camera.lookAt(center);
+      return { camera, clip: new THREE.Plane(new THREE.Vector3(0, 1, 0), -chest) };
+    }
+
+    window.noirPortrait = ({ seat, outfit, colors, head, animal, ratio, participant }) => {
       const character = model.createCharacter(model.figForSeat(seat), outfit, colors, animal);
       const subject = character.root;
       // 실제 램프의 발밑 그림자와 선택 표시가 투명 PNG의 알파에 들어가지 않게 한다.
       for (const part of subject.children) if (part.isMesh) part.visible = false;
+      if (participant) {
+        const profile = animal === "crocodile" || animal === "parrot" || animal === "elephant";
+        subject.rotation.y = profile ? -0.28 : 0;
+        participantStudio.add(subject);
+        subject.updateMatrixWorld(true);
+        const { camera, clip } = participantFrame(subject);
+        renderer.clippingPlanes = [clip];
+        renderer.toneMappingExposure = 1.08;
+        renderer.setSize(512, 512, false);
+        try {
+          renderer.render(participantStudio, camera);
+          return renderer.domElement.toDataURL();
+        } finally {
+          renderer.clippingPlanes = [];
+          renderer.toneMappingExposure = 1.14;
+          participantStudio.remove(subject);
+          character.dispose();
+        }
+      }
       subject.rotation.y = head ? (animal === "crocodile" || animal === "parrot" ? -0.42 : -0.07) : -0.16;
       studio.add(subject);
       const boundBy = head ? subject.getObjectByName("neck") : subject;
@@ -157,7 +229,21 @@ try {
           writes.push(savePng(image, `${dir}/${form}-lg.png`, 288, 384));
         }
         await Promise.all(writes);
+        await renderParticipantPortrait(dir, animal, outfit);
       }
+    }
+  }
+
+  async function renderParticipantPortrait(dir, animal, outfit) {
+    const image = await portrait({ seat: 0, outfit, animal, participant: true });
+    await saveParticipantPortrait(image, `${dir}/participant-${outfit}.webp`);
+  }
+
+  async function renderParticipantPortraits() {
+    for (const animal of animals) {
+      const dir = `public/characters/animals/${animal}`;
+      await mkdir(root(dir), { recursive: true });
+      for (const outfit of outfits) await renderParticipantPortrait(dir, animal, outfit);
     }
   }
 
@@ -193,6 +279,8 @@ try {
     await renderRolePortraits();
   } else if (process.argv.includes("--animal-portraits-only")) {
     await renderAnimalPortraits();
+  } else if (process.argv.includes("--participant-portraits-only")) {
+    await renderParticipantPortraits();
   } else if (process.argv.includes("--outfit-portraits-only")) {
     await renderOutfitPortraits();
   } else {

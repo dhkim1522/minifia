@@ -1,5 +1,4 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
-import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { installMemoryStorage } from "../helpers/memoryStorage";
@@ -9,7 +8,7 @@ import type { SceneLook } from "../../src/world/presence";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 
 // 08-17: 유령 화면(GHOST-01·02). RoomScreen 을 거쳐 GameMap 을 그리고 WorldStage 는 진짜를 쓴다 —
-// 이름표(data-role-chip·data-ghost-seat)는 WorldStage 가 그리는 DOM 이라서다. 런타임(three)만 가짜로 바꿔 장면 표(setScene)와 탭(tap)을 읽는다.
+// 떠 있는 이름표의 DOM과 장면 표(setScene), 탭(tap)을 함께 읽는다. 런타임(three)만 가짜로 바꾼다.
 const connectionMock = vi.hoisted(() => ({ current: null as unknown }));
 vi.mock("../../src/net/useRoomConnection", () => ({
   useRoomConnection: () => connectionMock.current,
@@ -147,27 +146,19 @@ describe("유령 화면 — 서버가 보낸 관전 정보로 그려진다 (GHOS
   // 산 4 · 죽은 1(나 = 4)
   const ghost = () => makeView({ mySeat: 4, dead: [4] });
 
-  it("탈락한 내 view(+spectate): 루트에 data-ghost-view 하나, 모든 이름표에 직업 칩(직업 이름 aria-label)", () => {
+  it("탈락한 내 view(+spectate): 관전 모드, 머리 위 이름표와 직업 칩 없음", () => {
     const { container } = mount(ghost());
     expect(container.querySelectorAll('[data-ghost-view="true"]').length).toBe(1);
     expect(container.querySelector("main")?.getAttribute("data-ghost-view")).toBe("true");
-    expect(chips(container).length).toBe(5);
-    const bySeat = (seat: number) => container.querySelector(`[data-seat="${seat}"] [data-role-chip]`);
-    expect(bySeat(0)?.getAttribute("aria-label")).toBe("마피아");
-    expect(bySeat(1)?.getAttribute("aria-label")).toBe("경찰");
-    expect(bySeat(2)?.getAttribute("aria-label")).toBe("의사");
-    expect(bySeat(3)?.getAttribute("aria-label")).toBe("시민");
-    expect(bySeat(4)?.getAttribute("data-role-chip")).toBe("citizen");
+    expect(chips(container)).toHaveLength(0);
+    expect(container.querySelectorAll(".mf-world__tag")).toHaveLength(0);
   });
 
-  it("죽은 좌석(나)의 이름표에 data-ghost-seat 와 반투명(data-ghost), 산 좌석에는 없다", () => {
+  it("장면 표에서만 죽은 좌석을 반투명으로 지정하고 머리 위에는 표식을 붙이지 않는다", () => {
     const { container } = mount(ghost());
-    expect(container.querySelector('[data-seat="4"]')?.hasAttribute("data-ghost-seat")).toBe(true);
-    expect(container.querySelector('[data-seat="4"] .mv-head')?.getAttribute("data-ghost")).toBe("true");
-    for (const seat of [0, 1, 2, 3]) {
-      expect(container.querySelector(`[data-seat="${seat}"]`)?.hasAttribute("data-ghost-seat")).toBe(false);
-      expect(container.querySelector(`[data-seat="${seat}"] .mv-head`)?.hasAttribute("data-ghost")).toBe(false);
-    }
+    expect(container.querySelectorAll("[data-ghost-seat]")).toHaveLength(0);
+    expect(lastScene().seats[4]?.ghost).toBe(true);
+    for (const seat of [0, 1, 2, 3]) expect(lastScene().seats[seat]?.ghost).toBe(false);
   });
 
   it("같은 판의 생존자 화면에는 관전 UI와 탈락 좌석 이름표가 없다", () => {
@@ -230,54 +221,36 @@ describe("유령이 되는 순간 (UI Considerations E6 #20·#22)", () => {
     expect(sysLines(m.container).map((l) => l.text)).toEqual([GHOST_LINE]);
   });
 
-  it("유령이 된 순간에도 헤더 안내 줄 '모두의 직업이 보여요' 를 다시 띄우지 않는다(14-02: 띠가 유령 줄을 말한다), 직업 칩 등장 연출은 그대로", () => {
+  it("유령이 된 순간에도 헤더 안내 줄을 다시 띄우지 않고 이름표를 즉시 걷는다", () => {
     const m = mount(alive("discussion"));
     act(() => void vi.advanceTimersByTime(3000));
     expect(hintEl(m.container)).toBeNull();
     m.show(dead("discussion"));
     expect(hintEl(m.container)).toBeNull();
     expect(m.container.textContent).not.toContain("모두의 직업이 보여요");
-    expect(m.container.querySelector("[data-ghost-enter]")).not.toBeNull();
-    act(() => void vi.advanceTimersByTime(2600));
-    expect(hintEl(m.container)).toBeNull();
-    expect(m.container.querySelector("[data-ghost-enter]")).toBeNull();
+    expect(m.container.querySelectorAll(".mf-world__tag")).toHaveLength(0);
+    expect(lastScene().seats[1]?.costume).toBe("police");
   });
 
-  it("직업 칩 등장: 유령이 된 순간에만 루트에 data-ghost-enter, 2.5초 뒤 사라진다. CSS 는 dur-med 등장 + 모션 줄이기면 none", () => {
-    const m = mount(alive("discussion"));
-    expect(m.container.querySelector("[data-ghost-enter]")).toBeNull();
-    m.show(dead("discussion"));
-    expect(m.container.querySelector("main")?.getAttribute("data-ghost-enter")).toBe("true");
-    expect(chips(m.container)).toHaveLength(5);
-    act(() => void vi.advanceTimersByTime(2600));
-    expect(m.container.querySelector("[data-ghost-enter]")).toBeNull();
-    const css = readFileSync("src/styles/game.css", "utf8");
-    expect(css).toMatch(/\[data-ghost-enter\][^{]*\.mv-rolechip\s*\{[^}]*animation:[^}]*var\(--dur-med\)/);
-    expect(css).toMatch(/prefers-reduced-motion: reduce\)\s*\{[^}]*\[data-ghost-enter\][^}]*animation: none/);
-  });
-
-  it("재접속·새로 고침의 첫 스냅샷이 유령이면 시스템 줄도 등장 연출도 없이 칩·반투명·유령 채널만 있다", () => {
+  it("재접속·새로 고침의 첫 스냅샷이 유령이면 역할 의상, 반투명 캐릭터와 유령 채널이 바로 보인다", () => {
     const m = mount(dead("discussion"));
     expect(sysLines(m.container)).toEqual([]);
-    expect(m.container.querySelector("[data-ghost-enter]")).toBeNull();
-    expect(chips(m.container)).toHaveLength(5);
+    expect(chips(m.container)).toHaveLength(0);
     expect(m.container.querySelector("main")?.getAttribute("data-ghost-view")).toBe("true");
-    expect(m.container.querySelector('[data-seat="4"]')?.hasAttribute("data-ghost-seat")).toBe(true);
+    expect(lastScene().seats[4]).toEqual({ show: true, ghost: true, costume: "coat" });
     expect(input(m.container)?.getAttribute("placeholder")).toBe("유령끼리만 보여요");
     // epoch 가 바뀐 재접속 첫 스냅샷도 같다
     m.show(alive("discussion"), { epoch: 2 });
     m.show(dead("discussion"), { epoch: 3 });
-    expect(m.container.querySelector("[data-ghost-enter]")).toBeNull();
     expect(sysLines(m.container)).toEqual([]);
   });
 
-  it("살아 있는 사람 화면은 어느 단계 변화에서도 유령 줄·등장 속성이 생기지 않는다", () => {
+  it("살아 있는 사람 화면은 어느 단계 변화에서도 유령 줄을 띄우지 않는다", () => {
     const m = mount(makeView({ phase: "discussion", mySeat: 0 }));
     m.show(makeView({ phase: "discussion", mySeat: 0, dead: [4] }));
     m.show(makeView({ phase: "nomination", mySeat: 0, dead: [4] }));
     expect(sysLines(m.container).map((l) => l.text)).not.toContain(GHOST_LINE);
     expect(sysLines(m.container).filter((l) => l.icon === ICON_GHOST)).toEqual([]);
-    expect(m.container.querySelector("[data-ghost-enter]")).toBeNull();
   });
 });
 
@@ -356,7 +329,6 @@ describe("산 사람 화면에는 유령의 흔적이 없다 (결정 0021, T-08-
     for (const phase of ALL) {
       const { container } = mount(living(phase));
       expect(container.querySelectorAll("[data-ghost-view]"), phase).toHaveLength(0);
-      expect(container.querySelectorAll("[data-ghost-enter]"), phase).toHaveLength(0);
       expect(container.querySelectorAll("[data-role-chip]"), phase).toHaveLength(0);
       expect(container.querySelectorAll("[data-ghost-seat]"), phase).toHaveLength(0);
       expect(container.querySelectorAll(".mv-head[data-ghost]"), phase).toHaveLength(0);
@@ -441,19 +413,21 @@ describe("유령은 산 사람과 상호작용하지 않는다 (REQUIREMENTS Out
   });
 });
 
-// ---- 18.1-17: 장면 표에 직업이 비치지 않는다 (결정 0083-2, L13) ----
-describe("유령 시점 — 장면 표에 의상 값이 실리지 않는다 (L13)", () => {
+describe("관전 전용 장면의 실제 직업 의상", () => {
   const outfitSeats = (scene: SceneLook) => Object.entries(scene.seats).filter(([, s]) => "outfit" in s || "costume" in s);
 
-  it("유령 view: 탈락 좌석 4 는 ghost 이고 의상 값이 없다", () => {
+  it("유령 view: 시민 탈락자는 기본 코트, 생존자들은 각각 실제 의상을 입는다", () => {
     mount(makeView({ mySeat: 4, dead: [4] }));
     expect(lastScene().seats[4]?.ghost).toBe(true);
-    expect(outfitSeats(lastScene())).toEqual([]);
+    expect(outfitSeats(lastScene()).map(([seat, look]) => [seat, look.costume])).toEqual([
+      ["0", "mafia"], ["1", "police"], ["2", "doctor"], ["3", "coat"], ["4", "coat"],
+    ]);
   });
 
-  it("마피아였던 탈락자와 시민이었던 탈락자의 장면 표 항목이 같다", () => {
+  it("마피아였던 탈락자와 시민이었던 탈락자는 서로 다른 직업 의상을 입는다", () => {
     mount(makeView({ mySeat: 4, dead: [0, 4] }));
-    expect(JSON.stringify(lastScene().seats[0])).toBe(JSON.stringify(lastScene().seats[4]));
+    expect(lastScene().seats[0]).toEqual({ show: true, ghost: true, costume: "mafia" });
+    expect(lastScene().seats[4]).toEqual({ show: true, ghost: true, costume: "coat" });
   });
 
   it("같은 판의 산 사람 view: 장면 표 어디에도 의상 키가 없고 DOM 에 [data-ghost-outfit] 도 없다", () => {

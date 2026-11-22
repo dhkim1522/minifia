@@ -370,6 +370,7 @@ E2E 판정(`scripts/e2e/lib.mjs`): `sideColumnChecks` (SC1~SC6, 폰 6종) — �
 
 - 로컬 개발 서버 실행 후 `node scripts/render-noir-assets.mjs http://127.0.0.1:5173`으로 실제 Three.js 모델에서 모든 배경, 560×320 맵 카드, 전신·얼굴·역할·의상과 공유 그림을 만든다. `npm run backdrops -- http://127.0.0.1:5173`은 게임·입장 배경 WebP 7종을 만들고 용량 상한을 검사한다.
 - 사람 역할 카드 그림만 갱신할 때는 `node scripts/render-noir-assets.mjs http://127.0.0.1:5173 --role-portraits-only`를 쓴다.
+- 참가자 카드의 상반신 그림만 갱신할 때는 `node scripts/render-noir-assets.mjs http://127.0.0.1:5173 --participant-portraits-only`를 쓴다.
 - `npm run check:character`로 8명 × 의상 9종의 메시·삼각형·높이·지오메트리 소유 예산과 동작 시간을 검사한다. 게임 장면의 8인 합계를 WebGL 없이 확인한다(결정 0068-9·0094).
 - 포즈 스트립(10페이즈): 개발 서버에서 `?e2e=1&pose-strip=1`, 사진은 `node scripts/pose-strip-shot.mjs --url http://localhost:5173 --out <폴더>`. 개발 빌드와 `?e2e=1` 에서만 켜진다.
 - `npm run tokens`(`scripts/gen-tokens.mjs`): `design/tokens.json` → `src/styles/tokens.css`. 테스트가 둘의 일치를 확인한다.

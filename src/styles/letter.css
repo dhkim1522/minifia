@@ -1,7 +1,8 @@
 /* 유언 편지(09.1-11, 결정 0063-3·0063-4, UI-SPEC C-1~C-5, 시안 design/v2.0/mockups-b/WillCenter.dc.html envelope).
    색 지역 변수는 이 부품 안(.mf-letter)에서만 선언한다 — 전역 토큰이 아니다(장면 소품 색, 8페이즈 "아침 밝은 색면 금지"의 예외는 편지지 하나).
    시간(지연·길이)은 부품이 T0 기준으로 계산해 --lw-* 로 준다. 글자 크기·줄 높이·가운데 줄 위치도 부품이 잰 값이다.
-   기본값은 390×844 에서의 자리다. 치수는 4 배수(안쪽 28/24·좌우 바깥 32·인장 우16/하8). */
+   390×844 기준 좌우 32px, 작은 화면에서는 본문 폭을 확보한다. */
+.mf-letter, .mf-letter-measure { --lw-side: clamp(16px, 50vw - 140px, 32px); }
 .mf-letter {
   --letter-paper: #f3efe4;
   --letter-rule: rgba(70, 90, 130, 0.22);
@@ -15,8 +16,7 @@
   --letter-wax-hi-2: #f0909b;
   --letter-wax-hi-3: #ffd0d6;
   position: absolute;
-  left: 32px;
-  right: 32px;
+  inset-inline: var(--lw-side);
   top: var(--lw-top, 196px);
   height: var(--lw-h, auto);
   z-index: calc(var(--z-overlay) + 1);
@@ -53,10 +53,10 @@
   background-color: var(--letter-paper);
   /* 줄 쳐진 선: 줄 높이마다 1px. 위치는 글 덩어리 윗변(--lw-pos)에 맞춘다 */
   background-image:
-    linear-gradient(to bottom, transparent calc(var(--lw-line, 26px) - 1px), var(--letter-rule) calc(var(--lw-line, 26px) - 1px)),
+    linear-gradient(to bottom, transparent calc(var(--lw-line, 30px) - 1px), var(--letter-rule) calc(var(--lw-line, 30px) - 1px)),
     var(--stationery-will-paper, none);
   background-repeat: repeat-y, no-repeat;
-  background-size: 100% var(--lw-line, 26px), 100% 100%;
+  background-size: 100% var(--lw-line, 30px), 100% 100%;
   background-position: 0 var(--lw-pos, 0px), center;
   color: var(--letter-ink);
 }
@@ -88,13 +88,13 @@
   white-space: nowrap;
   font-family: var(--font-hand);
   font-weight: 400;
-  font-size: var(--lw-font, 18px);
-  line-height: var(--lw-line, 26px);
+  font-size: var(--lw-font, 24px);
+  line-height: var(--lw-line, 30px);
   color: var(--letter-ink);
   word-break: keep-all;
   overflow-wrap: anywhere;
-  /* 왼쪽에서 오른쪽으로 열리는 쓰기. 단계 수 = 그 줄 글자 수 */
-  animation: mf-letter-write var(--lw-ms, 1200ms) steps(var(--lw-steps)) var(--lw-delay, 800ms) both;
+  /* 시작 전에는 글을 가리고, 쓰기가 끝나면 마지막 글자까지 기본 상태로 보인다. */
+  animation: mf-letter-write var(--lw-ms, 1200ms) steps(var(--lw-steps)) var(--lw-delay, 800ms) backwards;
 }
 /* 필기 글꼴을 1초 안에 못 받으면 시스템 고딕으로 진행한다. */
 .mf-letter.is-fallback .mf-letter__line,
@@ -142,8 +142,7 @@
 /* 보이지 않는 측정 틀: 편지지와 같은 좌우(32)·안쪽 폭(24)에서 글 줄을 나눠 본다. 화면에 그리지 않고 입력도 받지 않는다 */
 .mf-letter-measure {
   position: absolute;
-  left: 32px;
-  right: 32px;
+  inset-inline: var(--lw-side);
   top: 0;
   z-index: -1;
   box-sizing: border-box;
@@ -162,8 +161,8 @@
   font-weight: 400;
 }
 .mf-letter-measure.is-fallback .mf-letter-measure__text { font-family: var(--font-ui); font-weight: 700; }
-/* 알림의 좌우 여백은 space-md. 측정 상자는 이미 좌우 32px씩 들어와 그만큼을 뺀다. */
-.mf-letter-measure__announce { position: absolute; inset-inline: calc(var(--space-md) - 32px); top: 0; display: flex; justify-content: center; }
+/* 알림의 좌우 여백은 space-md. 측정 상자가 들어간 만큼을 뺀다. */
+.mf-letter-measure__announce { position: absolute; inset-inline: calc(var(--space-md) - var(--lw-side)); top: 0; display: flex; justify-content: center; }
 
 @keyframes mf-letter-rise {
   from { opacity: 0; transform: translateY(60px) rotate(-3deg) scale(0.92); }

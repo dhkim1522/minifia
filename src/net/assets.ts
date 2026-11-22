@@ -33,6 +33,7 @@ export const ASSET_VERSION = "noir-13";
 /** 입장 배경은 캐릭터·맵 그림과 별도로 갱신한다. */
 export const ENTRY_ART_VERSION = "home-table-3";
 export const STATIONERY_VERSION = "stationery-1";
+export const PARTICIPANT_PORTRAIT_VERSION = "bust-1";
 
 type StationeryAsset = "paper" | "will-paper" | "seal" | "role-front" | "role-back" | "note" | `journal-${JournalRole}`;
 
@@ -93,9 +94,10 @@ export function outfitCardSrc(id: OutfitId, animal?: AnimalId): string {
   return `/outfits/outfit-${id}.png?v=${ASSET_VERSION}`;
 }
 
-/** 참가자 카드는 같은 3D 모델의 공개 의상 그림에서 상반신을 보여 준다. */
+/** 참가자 카드 전용 상반신은 실제 모델과 공개 의상으로 렌더한다. */
 export function participantPortraitSrc(seat: number, animal?: AnimalId, outfit: OutfitId = "coat"): string {
-  return animal === undefined ? figureSrc(seat).src : outfitCardSrc(outfit, animal);
+  if (animal === undefined) return figureSrc(seat).src;
+  return `/characters/animals/${animal}/participant-${outfit}.webp?v=${PARTICIPANT_PORTRAIT_VERSION}`;
 }
 
 // 직업 그림은 150px 로 표시한다. @2x 파일은 1x, @4x 파일은 2x. 역할을 보낼 수 있는 화면에서만 쓴다.

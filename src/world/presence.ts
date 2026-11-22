@@ -2,7 +2,7 @@
 // 순수: three·DOM 이 없고 입력은 서버 view 와 화면 연출 시각뿐이다. 결정 0002 — 화면은 받은 것만 그린다.
 // 탈락자는 유령 시점에서만 반투명 캐릭터로 보인다. 공개 처형 중에는 퇴장 연출을 마칠 때까지 그린다.
 // 위치는 서버가 새로 보내지 않는다 — 런타임이 클라이언트 월드 저장소가 마지막으로 받은 구간(WorldStore.lastSegOf)에서 세운다.
-// 읽는 것은 공개 정보(players·alive·day.points·day.candidate)와 본인 유령 여부(spectate·내 alive)뿐이다.
+// 실제 직업 의상은 자신의 탈락이 확인된 관전자에게 보낸 spectate에서만 가져온다.
 import { isAlive } from "../../shared/game/alive";
 import { BAR_SEATS_FX, barChairAssignment, STAGE_SPOT, UNIT } from "../../shared/game/map";
 import type { MapId, PhaseId, RoomView } from "../../shared/protocol";
@@ -12,6 +12,7 @@ import { suspectStacks } from "../game/suspectView";
 import { ZOOM_IN_MS } from "../game/verdictMoment";
 import { GATHER_CENTER, ZOOM_MIN_STAGE_H } from "./camera";
 import type { OutfitId } from "./characterData";
+import { jobOutfit } from "./jobOutfit";
 import { pinOf, type PinDesc } from "./pinPlan";
 
 /** 렌더러가 읽는 조명 단계(UI-SPEC 단계 조명). 렌더러의 LightingPhase 확장은 08-10 이 한다 */
@@ -37,8 +38,7 @@ export interface SeatLook {
   /** 처형 연출 시작 시각(ms). 생존자의 장면에서는 연출 종료 후 좌석을 거둔다. */
   fadeAt?: number;
   /**
-   * 고른 look 위에 그리는 직업 의상. GameMap은 산 마피아의 본인 좌석에만, 결과 화면은 공개된 생존자에만 넣는다.
-   * 공개 좌석 표(visibleSeats)와 탈락 좌석에는 이 키가 없다.
+   * 고른 look 위에 그리는 직업 의상. 판 중에는 본인 또는 탈락자가 서버에서 받은 관전 표에만 적용한다.
    */
   costume?: OutfitId;
   /** 11페이즈 결과 화면 전용: 진 팀을 어둡게 한다(연결 끊김 어둠과 별개로 센다) */
@@ -52,6 +52,8 @@ export interface SeatLook {
 
 export interface SceneLook {
   camera: CameraMode;
+  /** 탈락 관전의 이름표는 생략하고 직업을 의상으로 보여 준다. */
+  spectator?: true;
   /** 재즈 바 착석 화면과 공개 채팅에서 발생한 짧은 시선 신호. */
   table?: { mode: "eye" | "wide"; centerTable?: boolean; focus?: number; focusAt?: number; voice?: { seat: number; at: number } };
   /** 밤에 그리는 공개 좌석 배치. 실제 이동 구간과 별개다. */
@@ -89,9 +91,8 @@ function nightTableOf(view: RoomView): SceneLook["nightTable"] {
   return table;
 }
 
-/** 이 viewer 가 유령인지: 서버가 탈락한 본인 view 에만 싣는 spectate 가 있거나, 내 좌석이 탈락으로 내려온 경우 */
+/** 이 viewer 가 유령인지: 내 좌석이 탈락으로 내려온 경우. */
 function isGhostViewer(view: RoomView): boolean {
-  if (view.spectate !== undefined) return true;
   const me = view.players.find((p) => p.seat === view.me.seat);
   return me !== undefined && !isAlive(me);
 }
@@ -179,9 +180,14 @@ export function lightingOf(phase: PhaseId): LightingStage {
 export function lightingFor(view: RoomView): LightingStage {
   if (view.map === "bar" && view.phase === "verdict" && view.day?.candidate !== undefined) return "trial";
   if (view.phase !== "night") return lightingOf(view.phase);
+  if (spectatorOf(view) !== undefined) return "nightGhost";
   if (view.map === "bar") return "night";
   if (isGhostViewer(view)) return "nightGhost";
   return view.me.role === "mafia" ? "night" : "nightCitizen";
+}
+
+function spectatorOf(view: RoomView): RoomView["spectate"] {
+  return isGhostViewer(view) ? view.spectate : undefined;
 }
 
 /**
@@ -194,7 +200,8 @@ export function tensionOf(_view: RoomView): Tension {
 /** 위 계산을 한 장면으로 묶는다. stageH = 이 단계의 스테이지 사각형 높이(px), mine = 내 낙관적 지목 대상(서버 응답 전) */
 export function sceneLook(view: RoomView, opts: { stageH: number; fading?: ReadonlyMap<number, number>; now?: number; mine?: number; verdictZoom?: number }): SceneLook {
   const tension = tensionOf(view);
-  const nightTable = nightTableOf(view);
+  const spectator = spectatorOf(view);
+  const nightTable = spectator === undefined ? nightTableOf(view) : undefined;
   const seats = visibleSeats(view, nightTable === undefined ? opts.fading : undefined, opts.now);
   if (nightTable !== undefined) {
     // 생존자의 휴식 자세는 공개 참가자 명단만으로 그린다.
@@ -206,6 +213,10 @@ export function sceneLook(view: RoomView, opts: { stageH: number; fading?: Reado
       tension: 0,
       seats,
     };
+  }
+  for (const { seat, job } of spectator?.seats ?? []) {
+    const look = seats[seat];
+    if (look) look.costume = jobOutfit(job);
   }
   const pointing = pointingOf(view, opts.mine);
   const chalk = view.day?.chalk;
@@ -220,6 +231,7 @@ export function sceneLook(view: RoomView, opts: { stageH: number; fading?: Reado
   }
   return {
     camera: cameraModeOf(view, opts.stageH, opts.verdictZoom !== undefined ? { verdictZoom: opts.verdictZoom } : {}),
+    ...(spectator === undefined ? {} : { spectator: true }),
     lighting: lightingFor(view),
     tension: tension.level,
     ...(tension.focus !== undefined ? { focusSeat: tension.focus } : {}),

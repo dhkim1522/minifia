@@ -478,10 +478,10 @@ describe("처형 화면 (DAY-06, 22-12)", () => {
     expect(willCard(m.container)?.querySelector("b")).toBeNull();
   });
 
-  it("중앙 유언은 조작 영역을 가리지 않고 인용문은 네 줄로 제한한다", () => {
+  it("중앙 유언은 조작 영역을 가리지 않고 유언 본문을 줄 수로 자르지 않는다", () => {
     const css = readFileSync("src/styles/v2.css", "utf8");
     const will = css.split("\n").find((l) => l.startsWith(".mv-quote--will")) ?? "";
-    expect(will).toMatch(/-webkit-line-clamp:\s*4/);
+    expect(will).toMatch(/line-clamp:\s*none/);
     const event = readFileSync("src/styles/phase-event.css", "utf8");
     expect(event).toMatch(/\.mf-phase-event \{[^}]*pointer-events:\s*none/);
     expect(event).toMatch(/inset-block-end:[^;]*--mf-panel-h/);

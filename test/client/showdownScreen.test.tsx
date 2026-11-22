@@ -494,10 +494,10 @@ describe("마지막 3인 — 직업 단어·직업 칩 분리 (L23, T-09.1.1-43)
     expect(sheet(mount(makeShowdown({ i: 0, mySeat: 0 })).container)).not.toBeNull();
   });
 
-  it("유령 viewer: 동시 지목 버튼이 없고(이름표를 누를 수 없다) 직업 칩은 기존대로 있다, 칩 시트는 없다", () => {
+  it("유령 viewer: 동시 지목 버튼, 머리 위 이름표·직업 칩과 한마디 시트가 없다", () => {
     const { container } = mount(ghostView({ i: 3, mySeat: 1 }));
     expect(picks(container).length).toBe(0);
-    expect(container.querySelectorAll("[data-role-chip]").length).toBeGreaterThan(0);
+    expect(container.querySelectorAll(".mf-world__tag, [data-role-chip]")).toHaveLength(0);
     expect(sheet(container)).toBeNull();
   });
 });

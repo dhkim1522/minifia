@@ -81,8 +81,6 @@ import "../styles/phase-story.css";
 import "../styles/sheet.css";
 import "../styles/testtools.css";
 
-/** 단계가 시작되고 안내 한 줄이 보이는 시간(결정 0051-5: 안내는 한 번, 그리고 사라진다) */
-const HINT_MS = 2500;
 /** 서버가 단계 어긋난 행동을 거절했을 때 위 알림(UI-SPEC Copywriting Contract, 7페이즈 "지금은 보낼 수 없어요" 문구 계열) */
 const REJECT_TEXT = "지금은 고를 수 없어요";
 /** 지목이 단계 어긋남이 아닌 이유로 거절됐을 때 위 알림 */
@@ -155,8 +153,6 @@ interface GameMapProps {
   announce?: DayFx["announce"];
   /** 처형 떠오름 연출 중인 좌석 → 시작 시각(useDayFx). 처형된 사람이 연출이 끝날 때까지 표에 남는다 */
   fading?: DayFx["fading"];
-  /** 내가 유령이 된 순간마다 늘어나는 번호(useDayFx). 번호가 바뀔 때만 안내 한 줄과 직업 칩 등장을 다시 보인다 — 처음 마운트 때의 값은 지난 일이다 */
-  ghostEnter?: DayFx["ghostEnter"];
   /** 암살당한 본인의 아침 연출 신호(useDayFx). 번호가 바뀔 때만 번쩍임·베기·놀란 표정을 한 번 재생하고 막을 2.8초까지 붙잡는다 — 처음 마운트 때의 값은 지난 일이다 */
   killFx?: DayFx["killFx"];
   /** 경찰 조사 결과 카드 신호(useDayFx). 값이 있는 0~2.4초 동안만 카드를 그린다 — 경찰 본인 화면에서만 값이 생긴다 */
@@ -217,7 +213,7 @@ function TurnBlock({ view, offset, line, compact, reducedMotion }: { view: RoomV
 // 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내 + 시간 링 + [역할 카드]), [테스트], 결과 알림, 아래 패널을 얹는다.
 // 낮 시작·낮 토론·찬반·지목·유언·처형이 이 화면 하나를 같은 장면 키로 그려 단계가 바뀌어도 맵이 다시 만들어지지 않는다.
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)·알림 글자는 React 텍스트 노드로만 그린다.
-export function GameMap({ view, store, chat, send, canSend: connected = true, offset = 0, roleCard, headerAction, opening, introAt, ending, tod = true, panelless, camera, testButton, announce = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onLeave, bottomExtra = 0, timeless = false }: GameMapProps) {
+export function GameMap({ view, store, chat, send, canSend: connected = true, offset = 0, roleCard, headerAction, opening, introAt, ending, tod = true, panelless, camera, testButton, announce = null, deny, fading, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onLeave, bottomExtra = 0, timeless = false }: GameMapProps) {
   const introActive = introAt !== undefined;
   const canSend = connected && !introActive;
   const toast = useTopToast();
@@ -276,31 +272,20 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
   const pendingTurn = usePendingServerTime(turnDeadline, offset);
   const showdownStage = showdownStageOf(view);
 
-  // 유령이 된 순간(같은 단계 안이어도): 직업 칩 등장 연출을 2.5초 켠다(14-02: 헤더 안내 줄은 다시 띄우지 않는다 — 띠가 유령 줄을 말한다). 처음 마운트 때의 번호는 지난 일이라 연출하지 않는다.
-  const seenGhostEnter = useRef(ghostEnter);
-  const enterTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const [entering, setEntering] = useState(false);
-  useEffect(() => {
-    if (ghostEnter === seenGhostEnter.current) return;
-    seenGhostEnter.current = ghostEnter;
-    setEntering(true);
-    clearTimeout(enterTimer.current);
-    // 타이머는 이 효과의 정리가 아니라 언마운트 때만 푼다(개발 모드 이중 실행이 첫 실행의 타이머를 지워 연출이 켜진 채 남지 않게)
-    enterTimer.current = setTimeout(() => {
-      setEntering(false);
-    }, HINT_MS);
-  }, [ghostEnter]);
-  useEffect(() => () => clearTimeout(enterTimer.current), []);
-
   // 암살당한 본인: 번호가 바뀐 뒤 0.7초에 내 캐릭터가 놀란 표정을 짓는다(모션 줄이기면 표정 연출도 없이 바로 유령 상태). 처음 마운트 때의 번호는 지난 일이라 하지 않는다.
-  // 번쩍임·베기는 KillFx 가, 막 붙잡기는 SceneCurtain(holdUntil)이 맡는다. 타이머는 언마운트 때만 푼다(ghostEnter 와 같은 이유).
+  // 번쩍임·베기는 KillFx 가, 막 붙잡기는 SceneCurtain(holdUntil)이 맡는다. 타이머는 언마운트 때만 푼다.
   const reducedMotion = useReducedMotion();
   // 유언 편지: 편지가 화면에 보이는 동안(letterLive) 아침 알림은 편지가 대신 쥔다. 편지가 걷히면 알림도 함께 걷힌다(알림 시간은 편지보다 짧다)
   const [letterLive, setLetterLive] = useState(false);
   const letterInputTop = (): number | null => {
     const root = rootRef.current;
-    const input = inputRef.current;
-    return root !== null && input !== null ? input.getBoundingClientRect().top - root.getBoundingClientRect().top : null;
+    if (root === null) return null;
+    const room = root.getBoundingClientRect();
+    const input = inputRef.current?.getBoundingClientRect();
+    const dock = panelRef.current?.getBoundingClientRect();
+    // 채팅을 접어 둔 때도 편지와 안내가 참가자 탭 위에 들어가게 한다.
+    const floor = input?.height ? input.top : dock?.height ? dock.top : room.bottom;
+    return floor - room.top;
   };
   const morningLetter = view.phase === "morning" ? letter : null;
   const morningPolice = view.phase === "morning" ? policeResult : null;
@@ -594,16 +579,6 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
     };
   }, [nominating, nighting, mine, spectate, verdicting, defending, view, canPick, pickSeats, runoff, runoffVoting, showdownPointing, showdownStage, tableBallot]);
 
-  // 유령 화면의 이름표: 모든 이름표 위에 그 사람의 직업 칩(spectate.seats 의 job), 죽은 좌석은 반투명. 산 사람 view 에는 spectate 가 없어 이 겹침이 없다.
-  const roleTagProps = useMemo<WorldTagProps | undefined>(() => {
-    if (spectate === undefined) return baseTagProps;
-    const jobs = new Map(spectate.seats.map((s) => [s.seat, s.job] as const));
-    const deadSeats = new Set(view.players.filter((p) => !isAlive(p)).map((p) => p.seat));
-    return (seat) => {
-      const job = jobs.get(seat);
-      return { ...(baseTagProps?.(seat) ?? {}), ...(job !== undefined ? { role: job } : {}), ...(deadSeats.has(seat) ? { ghost: true } : {}) };
-    };
-  }, [spectate, baseTagProps, view.players]);
   // 유언·쪽지 시트(WILL-01·NIGHT-12): 상태와 저장 흐름은 useWill 이 쥔다. 실패 알림은 위 알림 한 문구다.
   const will = useWill({ view, send, canSend, offset, rejected: rejects, onFail: () => show(SEND_FAIL_TEXT), busyRef: willBusy });
   // 유언 단계의 처형자 시트는 아래 패널을 대신한다(22-11 P22-6): 패널이 가려지고 시트가 패널 자리(키보드 위 또는 화면 아래)에 앉는다.
@@ -659,15 +634,15 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
   const { pops: claimPops, notices: claimNotices } = badgeFx;
   const claimTagProps = useMemo<WorldTagProps | undefined>(() => {
     const anyClaim = view.players.some((p) => p.badge !== undefined);
-    if (!anyClaim && badge.shown === badge.server) return roleTagProps;
+    if (!anyClaim && badge.shown === badge.server) return baseTagProps;
     return (seat) => {
-      const base = roleTagProps?.(seat) ?? {};
+      const base = baseTagProps?.(seat) ?? {};
       const look = claimLook(view, seat, seat === view.me.seat ? badge.shown : undefined);
       if (look === null) return base;
       const pop = claimPops.get(seat);
       return { claim: look.claim, claimSwapped: look.swapped, ...(pop !== undefined ? { claimPop: pop } : {}), ...(claimNotices.has(seat) ? { claimNotice: true } : {}), ...base };
     };
-  }, [roleTagProps, view, badge.shown, badge.server, claimPops, claimNotices]);
+  }, [baseTagProps, view, badge.shown, badge.server, claimPops, claimNotices]);
 
   // 귓속말 모드: 대상 이름표가 깜빡이는 버튼이 된다(모션 줄이기는 CSS 가 gray-100 2px 고정 테두리). 모드가 아니면 위 함수 그대로(이름표에 넘기는 속성이 없다)
   // 빛남 대상(14-04): 열린 시트·키보드·귓속말 모드·이미 썼음이면 켜지 않는다. 한 화면에는 한 종류(tool 하나 / 이름표 무리 / 얼굴 칸 무리)만 나온다.
@@ -842,7 +817,7 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
   }, [view, stageH, fading, mine, verdictZoom, camera, meAlive, inOpening, tableCameraOn, tableOn, tableBallot, centerTable, cameraFocus, cameraFocusAt, tableVoice]);
 
   return (
-    <main ref={rootRef} className={inOpening ? "mf-root mf-pregame mf-pregame--seated" : "mf-root mf-game"} data-game-stage={inOpening || inEnding ? undefined : ""} data-phase={view.phase} data-night-dark={nightDark ? "true" : undefined} data-ghost-view={ghost ? "true" : undefined} data-ghost-enter={ghost && entering ? "true" : undefined} data-kb-open={kbLifted ? "true" : undefined} data-suspect-mode={inOpening || inEnding ? undefined : suspect.mode ? "on" : "off"} data-suspects={suspectsMirror}>
+    <main ref={rootRef} className={inOpening ? "mf-root mf-pregame mf-pregame--seated" : "mf-root mf-game"} data-game-stage={inOpening || inEnding ? undefined : ""} data-phase={view.phase} data-night-dark={nightDark ? "true" : undefined} data-ghost-view={ghost ? "true" : undefined} data-kb-open={kbLifted ? "true" : undefined} data-suspect-mode={inOpening || inEnding ? undefined : suspect.mode ? "on" : "off"} data-suspects={suspectsMirror}>
       {introAt !== undefined ? <PhaseIntro key={introAt} view={view} startsAt={introAt} offset={offset} summary={nightIntroSummary} /> : null}
       {!inOpening && !inEnding ? <>
       {/* DOM 순서 = Tab 순서: 헤더 조작 → 맵 이름표 → 아래 패널 입력 */}

@@ -394,6 +394,17 @@ describe("나가기 (D-11)", () => {
     expect(r.onExit).toHaveBeenCalledWith("left");
   });
 
+  it("결과 하단 [메인으로]도 방을 나가기 전에 확인을 받는다", () => {
+    const r = renderRoom(makeView({ me: 1 }));
+    fireEvent.click(screen.getByRole("button", { name: "메인으로" }));
+    expect(r.send).not.toHaveBeenCalledWith({ t: "leave" });
+    const dialog = r.container.querySelector("dialog")!;
+    expect(text(dialog.querySelector("h2"))).toBe("방에서 나갈까요?");
+    fireEvent.click(confirmButton(dialog));
+    expect(r.send).toHaveBeenCalledWith({ t: "leave" });
+    expect(r.onExit).toHaveBeenCalledWith("left");
+  });
+
   it("[취소] 는 아무것도 보내지 않는다", () => {
     const r = renderRoom(makeView());
     const dialog = openLeave(r.container);
@@ -989,8 +1000,10 @@ describe("시상식 없는 결과 (18.1-16, 0083-7)", () => {
     advance(999);
     expect(dress(r.container)).toBeNull();
     expect(r.container.querySelector("[data-side-column]")).toBeNull();
+    expect(screen.queryByRole("button", { name: "메인으로" })).toBeNull();
     advance(1);
     expect(dress(r.container)).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "메인으로" })).not.toBeNull();
     expect(r.container.querySelectorAll("[data-room-chat] [data-room-tool=dress]")).toHaveLength(1);
   });
 
@@ -1047,12 +1060,12 @@ describe("다시 하기 알약 (11-12)", () => {
     return v;
   };
 
-  it("입력 위 공용 도구 줄 오른쪽에 알약 하나가 있다 — 손님은 '준비' 토글", () => {
+  it("입력 위 공용 도구 줄 오른쪽에 알약 하나가 있다 — 손님은 '다음 판 준비' 토글", () => {
     const r = renderRoom(makeView({ me: 1, ready: [0] }));
     const pill = pillOf(r.container)!;
     expect(pill).not.toBeNull();
     expect(pill.closest(".mf-room-chat__advance")).not.toBeNull();
-    expect(pill.textContent).toBe("준비");
+    expect(pill.textContent).toBe("다음 판 준비");
     expect(pill.getAttribute("data-ready")).toBe("false");
     expect(r.container.querySelectorAll("[data-ready-pill]")).toHaveLength(1);
   });
@@ -1067,11 +1080,11 @@ describe("다시 하기 알약 (11-12)", () => {
     expect(pillOf(r.container)!.getAttribute("aria-label")).toBe("준비됨, 눌러서 취소");
   });
 
-  it("방장은 '시작' 과 'n / m' 두 줄 — n 은 준비한 연결된 사람, m 은 연결된 사람", () => {
+  it("방장은 '다음 판 시작' 과 'n / m' 두 줄 — n 은 준비한 연결된 사람, m 은 연결된 사람", () => {
     const r = renderRoom(makeView({ count: 5, me: 0, ready: [0, 1, 2], offline: [4] }));
     const pill = pillOf(r.container)!;
     expect(pill.getAttribute("data-ready-count")).toBe("3/4");
-    expect(text(pill)).toBe("시작3 / 4");
+    expect(text(pill)).toBe("다음 판 시작3 / 4");
     expect(pill.getAttribute("aria-label")).toBe("다음 판 시작, 3명 준비");
     expect(pill.getAttribute("data-dim")).toBe("true"); // 3 < 4
   });

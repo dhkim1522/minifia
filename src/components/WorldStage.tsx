@@ -208,7 +208,7 @@ export function WorldStage(props: WorldStageProps) {
         const { pick, canSend, exiting } = live.current.props;
         return pick?.hit === "body" && canSend && !pick.disabled && !exiting ? pick.seats : undefined;
       },
-      nightRing: (seat) => live.current.props.tagProps?.(seat)?.ring,
+      spectatorRing: (seat) => live.current.props.tagProps?.(seat)?.ring,
       stageRect: () => {
         const ins = live.current.props.stageInsets;
         const h = host.clientHeight || window.innerHeight;
@@ -359,10 +359,9 @@ export function WorldStage(props: WorldStageProps) {
   const scene = props.scene;
   const shown = (seat: number): boolean => scene === undefined || scene.seats[seat]?.show === true;
   const nightTable = scene?.nightTable !== undefined;
-  const nightSpectator = nightTable && scene?.seats[mySeat]?.ghost === true;
   // 보이지 않는 좌석은 이름표도 만들지 않는다(T-08-30)
-  const roster = [...view.players, ...leaving.filter((p) => !here.has(p.seat))]
-    .filter((p) => shown(p.seat) && (!nightTable || nightSpectator));
+  const roster = scene?.spectator || nightTable ? [] : [...view.players, ...leaving.filter((p) => !here.has(p.seat))]
+    .filter((p) => shown(p.seat));
   const canKick = view.me.isHost && props.canSend && props.onKick !== undefined;
   const pick = props.pick;
 

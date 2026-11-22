@@ -412,13 +412,17 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   }, [dressOpen]);
   const finished = mark >= tl.finalAtMs;
 
-  const isHost = view.me.isHost;
-
-  const readyPill = <ReadyPill host={rematch.isHost} on={rematch.mine} n={rematch.ready} m={rematch.total} dim={rematch.isHost && !rematch.canStart} inactive={!pillActive || !canSend} onPress={rematch.press} />;
+  const readyPill = <ReadyPill host={rematch.isHost} on={rematch.mine} n={rematch.ready} m={rematch.total} dim={rematch.isHost && !rematch.canStart} inactive={!pillActive || !canSend || rematch.pending} onPress={rematch.press} />;
 
   const title = RESULT_TEXT.title[state.title];
   const stageNotice = useCallback((message: string) => show(message), [show]);
   const stageLeave = useCallback(() => setLeaveOpen(true), []);
+  const resultActions = (
+    <div className="mf-result__actions">
+      {finished ? <button type="button" className="mf-room-tool mf-result__home" aria-label={READY_TEXT.home} disabled={!canSend} onClick={stageLeave}>{READY_TEXT.home}</button> : null}
+      {readyPill}
+    </div>
+  );
   const stageProps = useMemo<WorldStageProps>(() => ({
     view: dress.stageView, store, send, canSend, offset,
     ...(stageInsets ? { stageInsets } : {}), scene, canWalk: false, tagProps, onCostumes,
@@ -468,7 +472,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
             binding={{ ...binding, channel: "all", sendDisabled: binding.sendDisabled === true || !chatOpen, emotes: [] }}
             kbOpen={kbOpen}
             inputRef={inputRef}
-            advance={readyPill}
+            advance={resultActions}
             actions={finished ? (
               <button ref={dressBtnRef} type="button" className="mf-room-tool" data-float="dress" data-room-tool="dress" aria-label={DRESS_TEXT.open} hidden={kbOpen} inert={dressOpen} disabled={!canSend} onClick={() => openDress()}>
                 <V2Icon name="hanger" size={22} />

@@ -20,7 +20,8 @@ export function PlayerPortrait({ seat, animal, className, label, variant, look }
   const [failedSrc, setFailedSrc] = useState<string>();
   const [failedFace, setFailedFace] = useState<string>();
   const src = failedSrc === participant ? face : participant;
-  const classes = ["mf-player-portrait", src !== face && "is-participant", className].filter(Boolean).join(" ");
+  const participantClass = animal === undefined ? "is-participant-figure" : "is-participant-bust";
+  const classes = ["mf-player-portrait", src !== face && participantClass, className].filter(Boolean).join(" ");
   if (failedFace === src) {
     return <span className={`${classes} is-fallback`} style={{ backgroundColor: playerColor(seat, animal) }} role={label ? "img" : undefined} aria-label={label} aria-hidden={label ? undefined : true} />;
   }

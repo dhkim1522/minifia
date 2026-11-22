@@ -17,13 +17,14 @@ vi.mock("../../src/net/useRoomConnection", () => ({
   useRoomConnection: () => connectionMock.current,
 }));
 
-const rt = vi.hoisted(() => ({ scenes: [] as unknown[], created: 0, taps: 0 }));
+const rt = vi.hoisted(() => ({ scenes: [] as unknown[], created: 0, taps: 0, spectatorRing: undefined as ((seat: number) => string | undefined) | undefined }));
 vi.mock("../../src/world/runtime", async (importOriginal) => {
   const real = await importOriginal<typeof import("../../src/world/runtime")>();
   return {
     ...real,
-    createWorldRuntime: () => {
+    createWorldRuntime: (deps: Parameters<typeof real.createWorldRuntime>[0]) => {
       rt.created += 1;
+      rt.spectatorRing = deps.spectatorRing;
       return {
         start: () => Promise.resolve(),
         syncPlayers: () => {},
@@ -165,13 +166,13 @@ const mount = (view: RoomView, over: Partial<RoomConnection> = {}) => {
 
 const lastScene = (): SceneLook => rt.scenes[rt.scenes.length - 1] as SceneLook;
 const pickSeats = (c: ParentNode): number[] => [...c.querySelectorAll<HTMLElement>("[data-pick]")].map((b) => Number(b.dataset.pick));
-const ringOf = (c: ParentNode, seat: number): string | null => c.querySelector(`[data-seat="${seat}"]`)?.getAttribute("data-ring-kind") ?? null;
 const ringSeats = (c: ParentNode): number[] => [...c.querySelectorAll<HTMLElement>("[data-ring-kind]")].map((t) => Number(t.dataset.seat));
 
 beforeEach(() => {
   rt.scenes.length = 0;
   rt.created = 0;
   rt.taps = 0;
+  rt.spectatorRing = undefined;
   installMemoryStorage();
 });
 afterEach(() => {
@@ -468,17 +469,19 @@ describe("밤 임시 틀 — 유령이 보는 밤 행동 (GHOST-02, T-08-46)", (
 
   it("서버가 유령에게만 보낸 spectate.picks 만큼 대상 발밑에 고리: 한 좌석에 여럿이면 마피아 우선 하나", () => {
     const { container } = mount(ghostNight());
-    expect(ringOf(container, 2)).toBe("mafia");
-    expect(ringOf(container, 3)).toBe("police");
-    expect(ringSeats(container).sort()).toEqual([2, 3]);
+    expect(rt.spectatorRing?.(2)).toBe("mafia");
+    expect(rt.spectatorRing?.(3)).toBe("police");
+    expect(rt.spectatorRing?.(4)).toBeUndefined();
+    expect(ringSeats(container)).toEqual([]);
   });
 
-  it("유령 화면: 유령 채널 채팅 패널, 헤더 안내 줄 없음(띠 몫), 이름표 버튼 0개, 직업 칩", () => {
+  it("밤 관전: 유령 채팅과 직업 의상, 떠 있는 이름표·직업 칩 없음", () => {
     const { container } = mount(ghostNight());
     expect(chatChannel(container)).toBe("ghost");
     expect(hintText(container)).toBeNull();
     expect(pickSeats(container)).toEqual([]);
-    expect(container.querySelectorAll("[data-role-chip]").length).toBeGreaterThan(0);
+    expect(container.querySelectorAll("[data-role-chip], .mf-world__tag")).toHaveLength(0);
+    expect(lastScene().seats[1]?.costume).toBe("police");
     expect(container.querySelector(".mf-game__panel .mf-nightpanel")).toBeNull();
   });
 
@@ -591,13 +594,15 @@ describe("아침 알림 (MORN-03, UI-SPEC 아침)", () => {
     expect(saved[3]).toBe("gone");
   });
 
-  it("밤에 당한 본인(좌석 2): 아침에 유령 view 로 바뀌며 08-17 유령 시작 줄이 한 번 생기고 직업 칩이 보인다", () => {
+  it("밤에 당한 본인(좌석 2): 아침에 유령 시작 줄이 한 번 생기고 실제 직업 의상을 본다", () => {
     const m = mount(night(2));
     expect(sysLines(m.container)).not.toContain(GHOST_LINE);
     m.show(morning(2, 2, [2]));
     expect(sysLines(m.container).filter((t) => t === GHOST_LINE)).toHaveLength(1);
     expect(m.container.querySelector("main.mf-game")?.getAttribute("data-ghost-view")).toBe("true");
     expect(chatChannel(m.container)).toBe("ghost");
+    expect(m.container.querySelectorAll("[data-role-chip], .mf-world__tag")).toHaveLength(0);
+    expect(lastScene().seats[2]?.costume).toBe("doctor");
   });
 
   it("첫 스냅샷이 아침이면(재접속) 알림이 없다", () => {

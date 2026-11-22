@@ -602,58 +602,62 @@ test("liveGhostChecks: 죽은 좌석을 읽지 못했거나 훅이 없으면 측
 
 const viewGood = () => ({
   seats: [
-    { seat: 1, chips: 1, ghostTags: 1 },
-    { seat: 3, chips: 1, ghostTags: 1 },
-    { seat: 4, chips: 1, ghostTags: 1 },
+    { seat: 0, costume: "police" },
+    { seat: 1, costume: "mafia" },
+    { seat: 3, costume: "coat" },
+    { seat: 4, costume: "doctor" },
   ],
   ghosts: { seats: [1, 3, 4], ready: true },
+  tags: 0,
+  roleChips: 0,
+  ghostSeats: 0,
 });
-const viewJobs = { 1: "mafia", 3: "citizen", 4: "doctor" };
+const viewJobs = { 0: "police", 1: "mafia", 3: "citizen", 4: "doctor" };
+const deadViewSeats = [1, 3, 4];
+const ghostRows = (state = viewGood()) => ghostViewChecks(state, { jobs: viewJobs, seats: deadViewSeats });
 
-test("ghostViewChecks: 칩 1·is-ghost 1·훅 seats 포함·ready 면 C3 통과 — 직업과 무관하다", () => {
-  const rows = ghostViewChecks(viewGood(), { jobs: viewJobs });
+test("ghostViewChecks: 이름표 없이 직업 의상과 탈락자 반투명 몸이 있으면 C3 통과", () => {
+  const rows = ghostRows();
   assert.deepEqual(ids(rows), ["C3"]);
   assert.deepEqual(failing(rows), []);
-  assert.deepEqual(failing(ghostViewChecks(viewGood(), { jobs: { 1: "citizen", 3: "mafia", 4: "police" } })), []);
 });
 
 test("ghostViewChecks: 한 좌석이라도 훅 seats 에 없으면 실패, 산 좌석이 훅 seats 에 있어도 실패", () => {
   const a = viewGood();
   a.ghosts.seats = [1, 3];
-  const rows = ghostViewChecks(a, { jobs: viewJobs });
+  const rows = ghostRows(a);
   assert.deepEqual(failing(rows), ["C3"]);
   assert.match(rows[0].detail, /4/);
   const b = viewGood();
   b.ghosts.seats = [0, 1, 3, 4];
-  assert.deepEqual(failing(ghostViewChecks(b, { jobs: viewJobs })), ["C3"]);
+  assert.deepEqual(failing(ghostRows(b)), ["C3"]);
 });
 
 test("ghostViewChecks: ready 거짓이면 실패", () => {
   const a = viewGood();
   a.ghosts.ready = false;
-  assert.deepEqual(failing(ghostViewChecks(a, { jobs: viewJobs })), ["C3"]);
+  assert.deepEqual(failing(ghostRows(a)), ["C3"]);
 });
 
 test("ghostViewChecks: 직업을 몰라도(spectate 없음) seats 로 판정한다", () => {
-  const m = { seats: [{ seat: 2, chips: 1, ghostTags: 1 }], ghosts: { seats: [2], ready: true } };
+  const m = { ...viewGood(), seats: [{ seat: 2 }], ghosts: { seats: [2], ready: true } };
   assert.deepEqual(failing(ghostViewChecks(m, { jobs: {}, seats: [2] })), []);
 });
 
-test("ghostViewChecks: 칩이 0 이거나 is-ghost 이름표가 0 이면 실패", () => {
-  const a = viewGood();
-  a.seats[1].chips = 0;
-  assert.deepEqual(failing(ghostViewChecks(a, { jobs: viewJobs })), ["C3"]);
-  const b = viewGood();
-  b.seats[2].ghostTags = 0;
-  assert.deepEqual(failing(ghostViewChecks(b, { jobs: viewJobs })), ["C3"]);
+test("ghostViewChecks: 이름표나 직업 칩이 남거나 실제 의상이 빠지면 실패", () => {
+  assert.deepEqual(failing(ghostRows({ ...viewGood(), tags: 1 })), ["C3"]);
+  assert.deepEqual(failing(ghostRows({ ...viewGood(), roleChips: 1 })), ["C3"]);
+  const wrong = viewGood();
+  wrong.seats[1].costume = "coat";
+  assert.deepEqual(failing(ghostRows(wrong)), ["C3"]);
 });
 
 test("ghostViewChecks: 훅이 없거나(null) 좌석 읽기가 빠졌으면 측정값 없음·실패", () => {
-  assert.match(ghostViewChecks({ ...viewGood(), ghosts: null }, { jobs: viewJobs })[0].detail, /측정값 없음/);
+  assert.match(ghostRows({ ...viewGood(), ghosts: null })[0].detail, /측정값 없음/);
   const m = viewGood();
   m.seats = m.seats.slice(0, 2);
-  assert.equal(ghostViewChecks(m, { jobs: viewJobs })[0].ok, false);
-  assert.match(ghostViewChecks(null, { jobs: viewJobs })[0].detail, /측정값 없음/);
+  assert.equal(ghostRows(m)[0].ok, false);
+  assert.match(ghostRows(null)[0].detail, /측정값 없음/);
 });
 
 test("옛 의상 대조 이름은 내보내지 않는다", () => {

@@ -181,7 +181,7 @@ export interface WorldRuntimeDeps {
   players(): readonly { seat: number; nickname: string; connected: boolean; look?: string; animal?: AnimalId }[];
   reducedMotion(): boolean;
   suspectTargets?(): ReadonlySet<number> | undefined;
-  nightRing?(seat: number): RingKind | undefined;
+  spectatorRing?(seat: number): RingKind | undefined;
   /** 스테이지 사각형의 위·아래 끝(px, 캔버스 위 끝 기준) */
   stageRect(): { top: number; bottom: number };
   onStatus(s: MapStatusState): void;
@@ -277,6 +277,7 @@ export interface WorldRuntime {
   renderer(): WorldRenderer | null;
   /** seat 의 캐릭터 핸들(없으면 null). 06-14 성능 스파이크가 동작을 재생하는 데 쓴다 — 제품 로비는 부르지 않는다(로비에서 캐릭터는 혼자 동작하지 않는다) */
   characterOf(seat: number): PlayableCharacter | null;
+  costumeOf(seat: number): string | null;
   /** 지금 목적지 링의 목표 지점(없으면 null) */
   ring(): { x: number; z: number } | null;
   /** 마지막 프레임에 그린 seat 의 위치(예측·섞기 포함)와 그 프레임의 Date.now(). 없으면 null. sample 과 달리 서버 값이 아니다 */
@@ -694,6 +695,12 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   /** 연결 끊김 어둠과 결과 화면 어둠(scene dim)을 합쳐 한 번만 적용한다 */
   function refreshDim(a: Actor): void {
     applyDim(a, a.away || a.sceneDim);
+  }
+
+  function setActorRing(a: Actor, kind: string | null): void {
+    if (kind === a.ringKind) return;
+    a.ringKind = kind;
+    a.handle.setRing?.(ringColorOfAttr(kind));
   }
 
   /** 결과 화면 직업 의상·어둠 표가 바뀌었나(적용·해제·액터 제거) — 프레임 끝에서 한 번 알린다. 처음 표는 비어 있어 아무것도 입히지 않은 장면은 알리지 않는다 */
@@ -1121,18 +1128,16 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     nightRenderer = r;
     nightLook = scene;
     nightHideSeat = hideSeat;
-    const viewerGhost = scene?.seats[deps.mySeat()]?.ghost === true;
     const next: NightRestSeat[] = [];
     for (const [key, { x, z }] of Object.entries(scene?.nightTable ?? {})) {
       const seat = Number(key);
       const appearance = scene?.seats[seat];
       if (!appearance?.show || appearance.ghost) continue;
-      const ring = viewerGhost ? deps.nightRing?.(seat) : undefined;
-      next.push({ seat, x, z, ...(ring === undefined ? {} : { ring: RING_COLORS[ring] }) });
+      next.push({ seat, x, z });
     }
-    const seatsChanged = next.length !== nightRestSeats.length || next.some(({ seat, x, z, ring }, i) => {
+    const seatsChanged = next.length !== nightRestSeats.length || next.some(({ seat, x, z }, i) => {
       const before = nightRestSeats[i]!;
-      return seat !== before.seat || x !== before.x || z !== before.z || ring !== before.ring;
+      return seat !== before.seat || x !== before.x || z !== before.z;
     });
     if (viewChanged || seatsChanged) {
       nightRestSeats = next;
@@ -1289,8 +1294,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         if (!actors.has(a.seat)) continue; // 모션 줄이기면 바로 지워졌다
       }
       const wantGhost = seatLook?.ghost === true;
-      // 개인 화면이나 결과 연출의 직업 의상. 장면에서 지정한 동안만 입고 걷히면 고른 look 으로 돌아온다.
-      const wantCostume = wantGhost ? null : (seatLook?.costume ?? null);
+      // 장면이 허용한 직업 의상. 장면에서 지정한 동안만 입고 걷히면 고른 look 으로 돌아온다.
+      const wantCostume = wantGhost && !look?.spectator ? null : (seatLook?.costume ?? null);
       if (wantCostume !== a.costume) {
         if (wantCostume !== null) {
           a.handle.applyOutfit?.(wantCostume);
@@ -1301,13 +1306,16 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         }
         a.costume = wantCostume;
       }
+      if (look?.spectator) {
+        const ring = deps.spectatorRing?.(a.seat);
+        setActorRing(a, ring === undefined ? null : ringKindAttr(ring));
+      }
       const wantSceneDim = seatLook?.dim === true;
       if (wantSceneDim !== a.sceneDim) {
         a.sceneDim = wantSceneDim;
         refreshDim(a);
       }
-      // 탈락자는 동물과 공개 의상은 유지하고 몸을 반투명하게 띄운다.
-      // 밝기는 조명 단계와 연결 상태를 따른다.
+      // 탈락자는 입고 있는 의상 위에 반투명 효과를 적용한다. 밝기는 조명 단계와 연결 상태를 따른다.
       const ghostTint = ghostTintOf(night !== undefined ? "nightGhost" : lightNow) * (a.dim ? 0.6 : 1);
       const ghostFlipped = wantGhost !== a.ghost;
       if (wantGhost && !a.ghost) {
@@ -1694,10 +1702,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       boxes.push({ seat: a.seat, me: a.seat === mine, ghost: a.ghost, lead: tag.hasAttribute("data-lead"), turn: tag.hasAttribute("data-turn"), foot: feet.sy, x, bottom, w });
       // 발밑 고리: 이름표(WorldStage)가 data-ring-kind 로 알린 종류를 캐릭터에 옮긴다(바뀔 때만)
       const kind = look?.nightTable?.[a.seat] && !a.ghost ? null : tag.getAttribute("data-ring-kind");
-      if (kind !== a.ringKind) {
-        a.ringKind = kind;
-        a.handle.setRing?.(ringColorOfAttr(kind));
-      }
+      setActorRing(a, kind);
     }
     const bySeat = new Map(live.map((a) => [a.seat, a]));
     if (tableMode === "eye") {
@@ -1815,6 +1820,9 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     },
     syncPlayers,
     setScene(l) {
+      if (look?.spectator && !l?.spectator) {
+        for (const actor of actors.values()) setActorRing(actor, null);
+      }
       if (l?.nightTable && !look?.nightTable && !l.seats[deps.mySeat()]?.ghost) {
         clearAckTimer();
         clearRing();
@@ -1879,6 +1887,9 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     },
     characterOf(seat) {
       return actors.get(seat)?.handle ?? null;
+    },
+    costumeOf(seat) {
+      return actors.get(seat)?.costume ?? null;
     },
     ring() {
       return ring === null ? null : { ...ring.target };

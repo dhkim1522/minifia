@@ -10,13 +10,12 @@ afterEach(cleanup);
 const pill = (c: HTMLElement) => c.querySelector<HTMLButtonElement>("button[data-ready-pill]")!;
 
 describe("ReadyPill — 손님", () => {
-  it("꺼져 있으면 라벨 '준비', aria-pressed false, data-ready false", () => {
+  it("꺼져 있으면 라벨 '다음 판 준비', aria-pressed false, data-ready false", () => {
     const { container } = render(<ReadyPill host={false} on={false} onPress={() => {}} />);
-    expect(pill(container).textContent).toBe("준비");
+    expect(pill(container).textContent).toBe("다음 판 준비");
     expect(pill(container).getAttribute("aria-pressed")).toBe("false");
     expect(pill(container).getAttribute("data-ready")).toBe("false");
     expect(pill(container).hasAttribute("data-ready-count")).toBe(false);
-    expect(pill(container).querySelector("svg")).not.toBeNull(); // check 20
   });
 
   it("켜지면 '준비됨', aria-pressed true, 접근성 이름 '준비됨, 눌러서 취소'", () => {
@@ -25,6 +24,7 @@ describe("ReadyPill — 손님", () => {
     expect(pill(container).getAttribute("aria-pressed")).toBe("true");
     expect(pill(container).getAttribute("data-ready")).toBe("true");
     expect(pill(container).getAttribute("aria-label")).toBe("준비됨, 눌러서 취소");
+    expect(pill(container).querySelector("svg")).not.toBeNull();
   });
 
   it("누르면 onPress 한 번", () => {
@@ -44,10 +44,10 @@ describe("ReadyPill — 손님", () => {
 });
 
 describe("ReadyPill — 방장", () => {
-  it("두 줄: '시작' 과 'n / m', data-ready-count 'n/m', 접근성 이름 '다음 판 시작, n명 준비'", () => {
+  it("두 줄: '다음 판 시작' 과 'n / m', data-ready-count 'n/m', 접근성 이름 '다음 판 시작, n명 준비'", () => {
     const { container } = render(<ReadyPill host n={4} m={5} onPress={() => {}} />);
     const lines = Array.from(pill(container).querySelectorAll("span")).map((s) => s.textContent);
-    expect(lines).toEqual(["시작", "4 / 5"]);
+    expect(lines).toEqual(["다음 판 시작", "4 / 5"]);
     expect(pill(container).getAttribute("data-ready-count")).toBe("4/5");
     expect(pill(container).getAttribute("aria-label")).toBe("다음 판 시작, 4명 준비");
     expect(pill(container).hasAttribute("data-ready")).toBe(false);

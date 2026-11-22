@@ -4,8 +4,8 @@ import { READY_TEXT } from "../../game/resultText";
 import { V2Icon } from "./V2Icon";
 
 // 다시 하기 알약 (11-12, 결정 D-11·D-12, UI-SPEC D-1·G): 입력줄 오른쪽 끝 96×48 한 개. 순수 표시다 — 상태·잠금·시작 확인은 useReady 가 쥔다.
-// 손님 = check 20 + '준비' 14px 700. 켜지면 '준비됨'·눌린 상태(안쪽 테두리 2px gray-100)·aria-pressed true, 접근성 '준비됨, 눌러서 취소'.
-// 방장 = 두 줄(위 '시작', 아래 'n / m' 14px, 줄 높이 20 × 2 = 40 ≤ 48). n 이 최소 인원 미만이면 흐림(dim) — aria-disabled 이지만 탭은 토스트를 부르러 onPress 로 간다.
+// 손님 = '다음 판 준비'. 켜지면 체크와 '준비됨'·aria-pressed true, 접근성 '준비됨, 눌러서 취소'.
+// 방장 = '다음 판 시작'과 준비 인원. 인원이 부족하면 흐림(dim) — aria-disabled 이지만 탭은 토스트를 부르러 onPress 로 간다.
 // 승리 조명 전(inactive)은 흐림이고 눌러도 아무 일 없다. 사용자 문자열은 받지 않는다(숫자뿐).
 // 버튼은 mousedown 의 기본 동작을 막아 입력칸의 포커스(키보드)를 뺏지 않는다.
 
@@ -54,7 +54,7 @@ export function ReadyPill({ host, on, n = 0, m = 0, dim, inactive, onPress }: Re
   }
   return (
     <button {...common} data-ready={on ? "true" : "false"} aria-pressed={on ? "true" : "false"} {...(on ? { "aria-label": READY_TEXT.readyOnLabel } : {})}>
-      <V2Icon name="check" size={20} />
+      {on ? <V2Icon name="check" size={20} /> : null}
       <span className="mv-ready__label">{on ? READY_TEXT.readyOn : READY_TEXT.ready}</span>
     </button>
   );

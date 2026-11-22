@@ -1838,66 +1838,6 @@ export async function readGhosts(page) {
 }
 
 /**
- * 유령 이름표 글자 대비(UI-SPEC 남은 위험 5, A3): 유령 모양(.mv-tag.is-ghost) 이름표의 글자 칸을 화면 그림에서 잘라 글자색·면 중 밝은 쪽(p99)과 어두운 쪽(p1) 휘도로 대비를 잰다.
- * 이름표 불투명도(opacity)와 맵·면이 섞인 실제 렌더 값이다(09.1-09 부터 이름표는 불투명이라 판정에 쓴다). 돌려주는 값: [{ seat, opacity, ratio, hi, lo }].
- * 가리는 것(알림 막 등)이 있으면 글자도 같이 어두워지므로 부르는 쪽이 [data-announce] 가 걷힌 뒤에 부른다.
- */
-export async function readGhostTagContrast(page) {
-  const probes = await page.evaluate(() =>
-    [...document.querySelectorAll(".mv-tag.is-ghost")]
-      .map((tag) => {
-        const name = tag.querySelector(".mv-tag__name");
-        if (!name) return null;
-        // 14px 글자의 획은 DPR 1 에서 1px 남짓이라 가장자리 번짐 때문에 가장 밝은 픽셀도 글자색에 닿지 않는다(실제 글자색 gray-50 이 0.19 로 잰다).
-        // 글자 색·이름표 면은 그대로 두고 획만 굵게 해 글자 픽셀이 글자색에 닿게 한 뒤 잰다(measureEnd 에서 되돌린다)
-        name.style.webkitTextStroke = "1.4px currentColor";
-        const range = document.createRange();
-        range.selectNodeContents(name);
-        const r = range.getBoundingClientRect();
-        if (r.width <= 0 || r.height <= 0) return null;
-        return { seat: Number(tag.closest(".mf-world__tag")?.getAttribute("data-seat") ?? -1), opacity: Number(getComputedStyle(tag).opacity), rect: { left: r.left, top: r.top, width: r.width, height: r.height }, vw: window.innerWidth, vh: window.innerHeight };
-      })
-      .filter(Boolean),
-  );
-  const out = [];
-  for (const p of probes) {
-    const x = Math.max(0, Math.floor(p.rect.left));
-    const y = Math.max(0, Math.floor(p.rect.top));
-    const width = Math.min(p.vw - x, Math.ceil(p.rect.width));
-    const height = Math.min(p.vh - y, Math.ceil(p.rect.height));
-    if (width <= 0 || height <= 0) continue;
-    const png = await page.screenshot({ clip: { x, y, width, height }, scale: "css", type: "png" });
-    const lums = await page.evaluate(async (b64) => {
-      const bin = atob(b64);
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      const bmp = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
-      const canvas = document.createElement("canvas");
-      canvas.width = bmp.width;
-      canvas.height = bmp.height;
-      const g = canvas.getContext("2d");
-      g.drawImage(bmp, 0, 0);
-      const data = g.getImageData(0, 0, bmp.width, bmp.height).data;
-      const lin = (v) => {
-        const c = v / 255;
-        return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-      };
-      const out = [];
-      for (let i = 0; i < data.length; i += 4) out.push(0.2126 * lin(data[i]) + 0.7152 * lin(data[i + 1]) + 0.0722 * lin(data[i + 2]));
-      return out.sort((a, b) => a - b);
-    }, png.toString("base64"));
-    if (lums.length === 0) continue;
-    const lo = lums[Math.floor(lums.length * 0.01)];
-    const hi = lums[Math.min(lums.length - 1, Math.floor(lums.length * 0.99))];
-    out.push({ seat: p.seat, opacity: p.opacity, ratio: (hi + 0.05) / (lo + 0.05), hi, lo, rect: p.rect });
-  }
-  await page.evaluate(() => {
-    for (const n of document.querySelectorAll(".mv-tag.is-ghost .mv-tag__name")) n.style.webkitTextStroke = "";
-  });
-  return out;
-}
-
-/**
  * 결과 화면 [처음으로] 가 스크롤 없이 화면 안인지 재는 값 — resultFitChecks 가 받는 모양 (09-29, feedback-6).
  * readResult 와 달리 버튼을 스크롤해 보이게 하지 않는다. 버튼이 없으면 home: null.
  */

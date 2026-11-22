@@ -16,7 +16,6 @@ import {
   readAnnounceWatch,
   readGame,
   readGhosts,
-  readGhostTagContrast,
   setBotVote,
   skipOnce,
   skipTo,
@@ -57,7 +56,6 @@ import {
   screensOfWorld,
   readCallCount,
   readGuide,
-  readHostBand,
   readJoinFit,
   readHeaderContrast,
   resetAndLeave,
@@ -145,7 +143,7 @@ import {
 import { makeAvatarFlows } from "./avatar.mjs";
 import { makeDayFlows } from "./day.mjs";
 import { makeKeywordFlows } from "./keyword.mjs";
-import { SHORT_PHONE_H, readBenchView, readRematchState, readResultHidden, readRestSheet, readResultStage, rematchChecks, resultHiddenChecks, resultSkipChecks, resultStageChecks } from "./result.mjs";
+import { readBenchView, readRematchState, readResultHidden, readRestSheet, readResultStage, rematchChecks, resultHiddenChecks, resultSkipChecks, resultStageChecks } from "./result.mjs";
 import { makePoliticsFlows } from "./politics.mjs";
 import { makeSoundFlows } from "./sound.mjs";
 import { makeFirstBallotDockFlow, makeNightDockFlow, makeTableDockFlow } from "./tableDock.mjs";
@@ -1975,7 +1973,7 @@ async function liveGhostSettled(page, deadSeats, ms) {
 /** 탈락 좌석과 직업(서버가 유령에게 준 spectate 직업 목록) — 유령 화면 C3 의 기대 */
 function deadJobsOf(view) {
   const dead = view.players.filter((p) => p.alive === false).map((p) => p.seat);
-  return { dead, jobs: Object.fromEntries(dead.map((seat) => [seat, view.spectate?.seats?.find((x) => x.seat === seat)?.job])) };
+  return { dead, jobs: Object.fromEntries((view.spectate?.seats ?? []).map(({ seat, job }) => [seat, job])) };
 }
 
 /** 유령 페이지의 유령 화면 읽기를 ghostViewChecks 로 판정한다(통과할 때까지 ms 동안 250ms 마다 다시 읽는다) */
@@ -1983,7 +1981,7 @@ async function ghostViewSettled(page, view, ms) {
   const { dead, jobs } = deadJobsOf(view);
   const start = performance.now();
   for (;;) {
-    const m = await readLiveGhost(page, dead).catch(() => null);
+    const m = await readLiveGhost(page, view.players.map((p) => p.seat)).catch(() => null);
     const rows = ghostViewChecks(m, { jobs, seats: dead });
     if (rows.every((r) => r.ok) || performance.now() - start > ms) return { rows, dead };
     await sleep(250);
@@ -2027,7 +2025,7 @@ async function ghostFlow(ctx) {
     const { host, hp, ht, hostSeat, guests } = game;
     await executeHost(game);
 
-    // 유령 화면: data-ghost-view, 모든 이름표에 직업 칩(spectate.seats 수), 유령 채널 입력
+    // 유령 화면: 이름표와 직업 칩 없이 관전하고 유령 채널에 입력한다.
     {
       const sc = `${id}/ghost`;
       await untilGame(hp, (x) => x.ghostView, 9000, "유령 화면");
@@ -2035,12 +2033,10 @@ async function ghostFlow(ctx) {
       await settle(hp);
       await checkRoomWidth(ctx, sc, hp, [".mf-game__header", ".mf-game__panel"], ['[data-dock-pane="chat"]']);
       const g = await readGame(hp);
-      const view = ht.last();
-      const seats = view.spectate?.seats?.length ?? -1;
       rec(sc, "GH5", "처형된 방장 화면이 유령 화면이다(data-ghost-view)", g.counts.ghostView === 1, `ghostView ${g.counts.ghostView}`);
-      rec(sc, "GH6", "이름표마다 직업 칩이 붙는다(칩 수 = 서버가 보낸 직업 목록 = 사람 수)", g.counts.roleChips === seats && seats === view.players.length, `칩 ${g.counts.roleChips}, spectate.seats ${seats}, 사람 ${view.players.length}`);
+      rec(sc, "GH6", "머리 위 이름표와 직업 칩이 없다", g.tags.length === 0 && g.counts.roleChips === 0, `이름표 ${g.tags.length}, 직업 칩 ${g.counts.roleChips}`);
       rec(sc, "GH7", "유령 채널 입력줄이 있다", g.hasInput && g.chatChannel === "ghost", `채널 ${g.chatChannel}, 입력 ${g.hasInput}`);
-      rec(sc, "GH8", "죽은 자리 표식(data-ghost-seat)이 있다", g.counts.ghostSeats >= 1, `ghostSeats ${g.counts.ghostSeats}`);
+      rec(sc, "GH8", "죽은 자리 이름표도 화면에 없다", g.counts.ghostSeats === 0, `ghostSeats ${g.counts.ghostSeats}`);
       await gameGH(ctx, id, "ghost", host);
       // 산 사람 화면: 유령 표식·문구 0건
       for (let i = 0; i < guests.length; i++) {
@@ -2049,7 +2045,7 @@ async function ghostFlow(ctx) {
       }
     }
 
-    // 탈락자는 평소 모습의 반투명 캐릭터로 보이며 역할은 기존 관전용 이름표에 표시한다.
+    // 탈락자는 반투명 캐릭터로 보이고 관전자는 모든 실제 직업 의상을 본다.
     {
       const sc = `${id}/outfit`;
       const got = await ghostHookMatch(hp, ht.last());
@@ -2065,9 +2061,12 @@ async function ghostFlow(ctx) {
         const g = guests[i];
         if (!aliveOf(g.tracker.last()).includes(g.seat)) continue;
         const r = await readGhosts(g.page);
-        const deadNow = g.tracker.last().players.filter((p) => p.alive === false).map((p) => p.seat);
+        const view = g.tracker.last();
+        const otherSeats = view.players.filter((p) => p.seat !== g.seat).map((p) => p.seat);
+        const live = await readLiveGhost(g.page, otherSeats);
+        const privateOutfitsHidden = view.spectate === undefined && live.seats.every((seat) => seat.costume === null);
         const hidden = r.ghosts !== null && r.ghosts.seats.length === 0;
-        rec(sc, "GH15", `생존자 화면의 유령 훅과 의상 표식에 탈락 좌석이 없다 (손님${i + 1})`, hidden && r.domCount === 0, `훅 ${JSON.stringify(r.ghosts)}, 탈락 ${deadNow}, DOM ${r.domCount}개`);
+        rec(sc, "GH15", `생존자는 타인의 역할 정보·직업 의상과 유령을 보지 않는다 (손님${i + 1})`, hidden && r.domCount === 0 && privateOutfitsHidden, `유령 ${JSON.stringify(r.ghosts)}, 타인 의상 숨김 ${privateOutfitsHidden}`);
       }
     }
 
@@ -2091,31 +2090,7 @@ async function ghostFlow(ctx) {
         && Math.hypot(held.x - position.x, held.z - position.z) < 0.01 && ht.sentMoveAt.length === sent);
       rec(sc, "GH10b", "유령 화면에는 지목 버튼이 없다", (await readGame(hp)).picks.length === 0, "유령에게 이름표 버튼이 있음");
       await sleep(1200);
-      // 유령 이름표 글자 대비(09.1-09 판정): 이름표가 불투명이 되었으므로 4.5:1 이상이다. 문턱을 낮추지 않는다. GH9(참고 줄)는 이 줄로 대체됐다
-      {
-        // 유령은 떠다녀(±4px) 이름표가 프레임마다 움직인다 — 재는 동안만 모션 줄이기로 띄우기만 남겨 이름표 위치를 고정한다(판정 문턱은 그대로)
-        await hp.emulateMedia({ reducedMotion: "reduce" });
-        // 처형 알림 막(data-announce)이 걷힌 뒤에 잰다 — 막이 있으면 글자도 같이 어두워진다
-        await hp.waitForFunction(() => !document.querySelector("[data-announce]"), null, { timeout: 9000 }).catch(() => {});
-        await sleep(400);
-        const pool = await readGhostTagContrast(hp).catch(() => []);
-        await hp.emulateMedia({ reducedMotion: "no-preference" });
-        // 14-08 UI#14 알려진 한계(E8 #28 과 같은 뿌리): 가장 낮은 폰(360×560)에서는 띠가 스테이지 윗부분을 차지해 유령 이름표가 헤더·자막 띠 밑으로 올라가면 그 면이 글자를 덮어 화면 그림으로 대비를 잴 수 없다 —
-        // 그 이름표만 판정에서 빼고 GH13k 정보 줄로 남긴다(문턱 4.5 는 그대로, 다른 크기와 가려지지 않은 이름표는 그대로 판정)
-        const bandGh = ctx.size.h < SHORT_PHONE_H ? await readHostBand(hp).catch(() => null) : null;
-        const headerBottomGh = ctx.size.h < SHORT_PHONE_H ? await hp.evaluate(() => document.querySelector(".mf-game__header")?.getBoundingClientRect().bottom ?? 0).catch(() => 0) : 0;
-        const underBand = bandGh?.bandRect ? pool.filter((c) => rectsOverlap(c.rect, bandGh.bandRect)) : [];
-        const underHeader = pool.filter((c) => c.rect.top < headerBottomGh - 0.5);
-        const occluded = [...new Set([...underBand, ...underHeader])];
-        if (occluded.length > 0) infoRow(ctx, sc, "GH13k", "알려진 한계(UI#14): 낮은 폰의 유령 이름표가 헤더·자막 띠 밑에 있어 대비를 잴 수 없음(판정 아님)", `자리 ${occluded.map((c) => c.seat).join(",")} · 띠 겹침 ${underBand.length}개 · 헤더 밑 ${underHeader.length}개`);
-        const judgedPool = pool.filter((c) => !occluded.includes(c));
-        const worst = judgedPool.length > 0 ? Math.min(...judgedPool.map((c) => c.ratio)) : null;
-        const detail = pool.length === 0 ? "측정한 유령 이름표 없음" : pool.map((c) => `자리 ${c.seat} ${Math.round(c.ratio * 100) / 100}:1(불투명도 ${Math.round(c.opacity * 100) / 100}, 밝은 ${Math.round(c.hi * 1000) / 1000}, 어두운 ${Math.round(c.lo * 1000) / 1000})`).join(", ");
-        // 모두 띠 밑이면 판정할 이름표가 없다 — 정보 줄(GH13k)만 남고 GH13 은 건너뛴다. 하나라도 보이면 그 이름표가 4.5 이상이어야 한다
-        if (judgedPool.length > 0) rec(sc, "GH13", "보이는 유령 이름표의 글자 대비가 4.5:1 이상이다", worst !== null && worst >= 4.5, detail, true);
-        if (pool.length > 0) rec(sc, "GH13b", "유령 이름표 불투명도가 1 이다", pool.every((c) => c.opacity === 1), detail, true);
-      }
-      // 밤에 더 죽은 사람이 있으면 그 사람도 같은 유령 그림이다(마피아·경찰·의사였어도 모습이 같다)
+      // 밤에 탈락한 사람도 다음 날 반투명 캐릭터로 그린다.
       {
         const again = await ghostHookMatch(hp, ht.last());
         rec(sc, "GH14c", "다음 날에도 유령 그림 훅이 탈락 좌석 전부와 같다(밤에 죽은 사람 포함)", again.ok, again.ok ? again.label : again.detail, true);
@@ -3088,6 +3063,8 @@ async function nightVictim(ctx, shared) {
     rec(sc, "VC9", "'암살당했습니다' 뒤 유령 화면([data-ghost-view])이 된다", !!ghost, "유령 화면이 되지 않음");
     if (ghost) {
       await settle(hp);
+      const appearance = await ghostViewSettled(hp, ht.last(), 4000);
+      for (const row of appearance.rows) rec(sc, "VC14", row.label, row.ok, row.detail);
       await gameGH(ctx, id, "ghost", host);
     }
     const done = await nightUntil(hp, (x) => x.curtain === 0, 5000);

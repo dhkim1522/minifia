@@ -552,18 +552,20 @@ describe("재즈 바 밤의 공개 좌석", () => {
     expect(sceneLook({ ...night, map: "plaza" }, options).nightTable).toBeUndefined();
   });
 
-  it("유령은 살아 있는 사람의 같은 배치와 기존 유령 좌석을 함께 본다", () => {
+  it("유령은 밤에 살아 있는 사람과 탈락자의 실제 의상을 본다", () => {
     const night = { ...viewOf("night", { dead: [2], mySeat: 0 }), map: "bar" as const };
-    const ghost = { ...night, me: { ...night.me, seat: 2 }, spectate: { seats: [] } };
+    const ghost: RoomView = { ...night, me: { ...night.me, seat: 2 }, spectate: { seats: [{ seat: 0, job: "mafia" }, { seat: 2, job: "police" }] } };
     const aliveScene = sceneLook(night, { stageH: 400 });
     const ghostScene = sceneLook(ghost, { stageH: 400 });
-    expect(ghostScene.nightTable).toEqual(aliveScene.nightTable);
-    expect(ghostScene.seats).toEqual({ ...aliveScene.seats, 2: { show: true, ghost: true } });
+    expect(aliveScene.nightTable).toBeDefined();
+    expect(ghostScene.nightTable).toBeUndefined();
+    expect(ghostScene.spectator).toBe(true);
+    expect(ghostScene.lighting).toBe("nightGhost");
+    expect(ghostScene.seats).toEqual({ ...aliveScene.seats, 0: { show: true, ghost: false, costume: "mafia" }, 2: { show: true, ghost: true, costume: "police" } });
   });
 });
 
-// 관전에서만 반투명 탈락자를 그리며 직업 의상은 쓰지 않는다.
-describe("탈락자 장면 표는 직업과 무관하다 (결정 0083-2, L13)", () => {
+describe("탈락자 관전 장면과 직업 의상", () => {
   const JOBS_BY_SEAT: RoleId[] = ["mafia", "police", "doctor", "citizen", "citizen"];
   const ghostView = (dead: number[], phase: PhaseId = "discussion"): RoomView => {
     const v = viewOf(phase, { dead, mySeat: dead[0] ?? 0 });
@@ -580,12 +582,22 @@ describe("탈락자 장면 표는 직업과 무관하다 (결정 0083-2, L13)", 
     expect(seats[3]).toBeUndefined();
   });
 
-  it("유령 viewer(spectate 있음): 탈락 좌석도 같은 모양이고, 마피아였던 좌석과 시민이었던 좌석의 표가 같다", () => {
-    const seats = visibleSeats(ghostView([0, 3]));
-    same(seats[0], { show: true, ghost: true });
-    same(seats[3], { show: true, ghost: true });
-    expect(flat(seats[0])).toBe(flat(seats[3]));
-    for (const look of Object.values(seats)) expect("outfit" in look).toBe(false);
+  it("탈락 관전에서 살아 있는 캐릭터와 유령 모두 직업 의상을 입는다", () => {
+    const scene = sceneLook(ghostView([0, 3]), { stageH: 400 });
+    expect(scene.spectator).toBe(true);
+    expect(scene.seats[0]).toEqual({ show: true, ghost: true, costume: "mafia" });
+    expect(scene.seats[3]).toEqual({ show: true, ghost: true, costume: "coat" });
+    expect(scene.seats[1]).toEqual({ show: true, ghost: false, costume: "police" });
+    expect(scene.seats[2]).toEqual({ show: true, ghost: false, costume: "doctor" });
+  });
+
+  it("살아 있는 좌석이나 탈락 정보가 없는 좌석에서 관전 의상을 적용하지 않는다", () => {
+    const authorized = ghostView([0, 3]);
+    for (const view of [{ ...authorized, me: { ...authorized.me, seat: 1 } }, viewOf("discussion", { dead: [0], mySeat: 0 })]) {
+      const scene = sceneLook(view, { stageH: 400 });
+      expect(scene.spectator).toBeUndefined();
+      expect(Object.values(scene.seats).every((seat) => seat.costume === undefined)).toBe(true);
+    }
   });
 
   it("spectate 없이 내 alive 만 false 여도 같은 모양이다", () => {
