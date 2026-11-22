@@ -4039,7 +4039,7 @@ export const FLOWS = [
   { id: "vote-count", run: voteCountFlow, size: GAME_SIZE },
   { id: "will-flow", run: willFlow, size: GAME_SIZE },
   { id: "will-flow-sizes", run: willSizesFlow, extraSizes: LOBBY_EXTRA_SIZES },
-  // 23페이즈 첫날 키워드: 첫날 단계 열·시민/마피아 카드·읽기 3초·20자소·거절·모두의 답·재접속·정답 공개·첫날 승패·view 누설(P23-1~6·8~11·13) / 폰 6종 거절·키보드 컴팩트 카드(P23-6·7) / 일찍 넘어가기(P23-12)
+  // 첫날 제시어: 즉시 입력·35초·단서 수정과 발표·제시어 공개 / 휴대폰 키보드 레이아웃 / 일찍 넘어가기
   { id: "keyword", run: keywordFlow, size: GAME_SIZE },
   { id: "keyword-sizes", run: keywordSizesFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "early", run: earlyFlow, size: GAME_SIZE },

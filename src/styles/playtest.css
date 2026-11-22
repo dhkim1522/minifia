@@ -1,6 +1,5 @@
 [data-playtest-role] .mf-card { cursor: default; }
 [data-playtest-role] .mf-playtest__ready { box-sizing: border-box; min-height: 84px; }
-[data-first-round-playtest] .mf-keyword__meta[hidden] { display: none; }
 
 .mf-playtest__feedback,
 .mf-playtest__result { margin: 0; padding: 2px 4px; color: var(--gray-100); font: var(--type-label); overflow-wrap: anywhere; }

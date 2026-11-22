@@ -126,28 +126,44 @@ describe("확정 (final:true)", () => {
     }
   });
 
-  it("마피아의 금지어 거절은 keywordProbed 를 켜는 state 를 싣는다 — 이미 켜져 있으면 싣지 않는다", () => {
+  it("마피아 단서는 제시어가 들어 있어도 다른 단서와 같은 구조로 접수하고 본인에게 보낸다", () => {
     const s = keywordState();
-    const first = submitAnswer(s, idOf(s, 0), "해리포터", true);
-    expect(first.ok).toBe(false);
-    expect(!first.ok && first.error).toBe("BAD_MESSAGE");
-    expect(!first.ok && first.state?.keywordProbed).toBe(true);
-    // 켜진 상태에서는 state 없음(응답은 같다)
-    const probed = { ...s, keywordProbed: true as const };
-    expect(submitAnswer(probed, idOf(s, 0), "해리포터", true)).toEqual({ ok: false, error: "BAD_MESSAGE" });
+    const id = idOf(s, 0);
+    for (const text of [WORD, "안경"]) {
+      const { state } = must(submitAnswer(s, id, text, true));
+      expect(buildView(state, id, 0).me.answer).toEqual({ text, final: true });
+      expect(buildView(state, idOf(s, 1), 0).me.answer).toBeUndefined();
+      expect(state.keywordProbed).toBeUndefined();
+    }
   });
 
-  it("거절 뒤 다른 글은 받아지고 첫 확정은 바뀌지 않는다", () => {
+  it("시민 편에는 금지된 등록 별칭 초안의 안내가 보이고 수정할 수 있다", () => {
     const s = keywordState();
-    const rejected = submitAnswer(s, idOf(s, 0), "해리포터", true);
-    const base = !rejected.ok && rejected.state !== undefined ? rejected.state : s;
-    const ok = must(submitAnswer(base, idOf(s, 0), "안경", true));
-    expect(ok.state.answerSubmits).toEqual([{ seat: 0, text: "안경" }]);
-    expect(ok.state.keywordProbed).toBe(true);
+    const citizen = idOf(s, 1);
+    const mafia = idOf(s, 0);
+    const first = must(submitAnswer(s, citizen, "해포", false)).state;
+    const both = must(submitAnswer(first, mafia, "해포", false)).state;
+    expect(buildView(both, citizen, 0).me.answer).toEqual({ text: "해포", final: false, keywordBlocked: true });
+    expect(buildView(both, mafia, 0).me.answer).toEqual({ text: "해포", final: false });
+    expect(submitAnswer(both, citizen, "해포", true)).toEqual({ ok: false, error: "BAD_MESSAGE" });
+    const corrected = must(submitAnswer(both, citizen, "안경", false)).state;
+    expect(buildView(corrected, citizen, 0).me.answer).toEqual({ text: "안경", final: false });
+    const ok = must(submitAnswer(corrected, citizen, "안경", true));
+    expect(ok.state.answerSubmits).toEqual([{ seat: 1, text: "안경" }]);
   });
 });
 
 describe("closeKeyword (D-24)", () => {
+  it("금지 확정은 기존 초안이 남아 있어도 미제출이며 첫 번째 유효한 확정부터 공개한다", () => {
+    let s = keywordState();
+    s = must(submitAnswer(s, idOf(s, 0), WORD, true)).state;
+    s = must(submitAnswer(s, idOf(s, 1), "안경", true)).state;
+    const priorDraft = { ...s, players: s.players.map((p) => p.seat === 0 ? { ...p, answerDraft: "옛 초안" } : p) };
+    const rows = closeKeyword(priorDraft).state.keywordAnswers;
+    expect(rows?.[0]).toEqual({ order: 1, seat: 1, text: "안경" });
+    expect(rows?.find(({ seat }) => seat === 0)?.text).toBeNull();
+  });
+
   it("첫 확정만 시작자를 정하고, 이후 확정·초안·미제출은 의자 순으로 섞인다", () => {
     let s = keywordState();
     s = must(submitAnswer(s, idOf(s, 0), "빗자루", false)).state;

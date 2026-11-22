@@ -30,7 +30,7 @@ import { ROOM_MAP_ID } from "./maps";
 import { phaseDurationOf } from "./discussion";
 import { buildSummary } from "./endgame";
 import { noExecutionOf } from "./execution";
-import { answerOpenOf } from "./keywordAnswer";
+import { answerOpenOf, keywordAnswerBlocked } from "./keywordAnswer";
 import { keywordPresentationOf } from "./keywordPresentation";
 import { genreLabelOf } from "./keywords";
 import { MAP_PHASES } from "./movement";
@@ -278,7 +278,13 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   if (state.phase === "keyword" && isAlive(me)) {
     const mine = state.answerSubmits?.find((a) => a.seat === me.seat);
     if (mine !== undefined) myInfo.answer = { text: mine.text, final: true };
-    else if (me.answerDraft !== undefined) myInfo.answer = { text: me.answerDraft, final: false };
+    else if (me.answerDraft !== undefined) {
+      myInfo.answer = {
+        text: me.answerDraft,
+        final: false,
+        ...(myInfo.keyword !== undefined && keywordAnswerBlocked(state, me.answerDraft) ? { keywordBlocked: true } : {}),
+      };
+    }
   }
 
   // 내 채널은 서버가 보낸 사람 상태로 정한 값(channelOf) 그대로 본인에게만 싣는다(07-10). 말할 수 없으면(밤의 산 비마피아·채팅 단계 밖) 키 자체가 없다.

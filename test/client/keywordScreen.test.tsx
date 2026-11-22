@@ -3,6 +3,7 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { KEYWORD_MS } from "../../shared/game/phases";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import type { RoomEvent } from "../../src/net/useRoomConnection";
 
@@ -26,8 +27,8 @@ function makeView(me: RoomView["me"], elapsed = 0): RoomView {
   return {
     code: "0042",
     phase: "keyword",
-    phaseEndsAt: NOW - elapsed + 13_000,
-    phaseDurationMs: 13_000,
+    phaseEndsAt: NOW - elapsed + KEYWORD_MS,
+    phaseDurationMs: KEYWORD_MS,
     serverNow: NOW,
     minPlayers: 4,
     maxPlayers: 8,
@@ -111,7 +112,7 @@ const sendBtn = (c: HTMLElement) => q(c, "[data-answer-send]");
 const type = (c: HTMLElement, text: string) => fireEvent.change(input(c), { target: { value: text } });
 const errorFrame = (): RoomEvent => ({ t: "error", code: "BAD_MESSAGE", message: "x" }) as RoomEvent;
 
-describe("키워드 입력줄 — 읽기 3초 잠금과 입력칸 (P23-6·9)", () => {
+describe("키워드 입력줄 — 시작부터 쓰기", () => {
   beforeEach(() => {
     vi.useFakeTimers({ now: NOW });
   });
@@ -119,14 +120,8 @@ describe("키워드 입력줄 — 읽기 3초 잠금과 입력칸 (P23-6·9)", (
     vi.useRealTimers();
   });
 
-  it("처음 3초는 locked(입력칸 disabled), 3초가 되면 open 이고 입력칸이 빛난다(is-call·data-call), 한 글자를 쓰면 꺼진다", () => {
+  it("제시어가 처음 보일 때 바로 입력할 수 있고, 입력 후 강조가 사라진다", () => {
     const { container } = renderAnswer(makeView(CITIZEN));
-    expect(root(container).getAttribute("data-answer-state")).toBe("locked");
-    expect(input(container).disabled).toBe(true);
-    expect(input(container).closest(".mv-chat__field")!.classList.contains("is-call")).toBe(false);
-    act(() => {
-      vi.advanceTimersByTime(3_000);
-    });
     expect(root(container).getAttribute("data-answer-state")).toBe("open");
     expect(input(container).disabled).toBe(false);
     expect(input(container).closest(".mv-chat__field")!.classList.contains("is-call")).toBe(true);
@@ -146,12 +141,16 @@ describe("키워드 입력줄 — 읽기 3초 잠금과 입력칸 (P23-6·9)", (
     expect(el.getAttribute("aria-describedby")).toBe(q(container, ".mf-keyword__meta").id);
   });
 
-  it("메타 줄: 시간은 헤더 막대에 두고 n/20은 쓰면 늘고 20이면 data-full", () => {
+  it("입력칸 옆에 남은 초를 표시하고 글자 수가 20이면 한도를 강조한다", () => {
     const { container } = renderAnswer(makeView(CITIZEN, 5_000));
     const gauge = q(container, ".mf-reveal__header [data-phase-gauge]");
-    expect(gauge.getAttribute("aria-label")).toBe("남은 시간 8초");
+    expect(gauge.getAttribute("aria-label")).toBe("남은 시간 30초");
     expect(gauge.textContent).toBe("");
-    expect(container.querySelector("[data-answer-secs]")).toBeNull();
+    const seconds = q(container, "[data-answer-seconds]");
+    expect(seconds.textContent).toBe("30초");
+    expect(seconds.getAttribute("aria-hidden")).toBe("true");
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(seconds.textContent).toBe("29초");
     expect(q(container, "[data-answer-count]").textContent).toBe("0/20");
     type(container, "안경");
     expect(q(container, "[data-answer-count]").textContent).toBe("2/20");
@@ -183,12 +182,7 @@ describe("키워드 입력줄 — 보내기와 제출 뒤 (P23-12·13)", () => {
     expect(root(container).getAttribute("data-answer-state")).toBe("open");
   });
 
-  it("읽는 3초 중에는 전송을 숨기고 연결이 끊기면 비활성화한다", () => {
-    const locked = renderAnswer(makeView(CITIZEN));
-    expect(locked.container.querySelector("[data-answer-send]")).toBeNull();
-    fireEvent.submit(q(locked.container, "form"));
-    expect(locked.sent).toHaveLength(0);
-    cleanup();
+  it("연결이 끊기면 전송을 비활성화한다", () => {
     const off = renderAnswer(makeView(CITIZEN, 5_000), { canSend: false });
     type(off.container, "안경");
     expect((sendBtn(off.container) as HTMLButtonElement).disabled).toBe(true);
@@ -255,6 +249,25 @@ describe("키워드 입력줄 — 보내기와 제출 뒤 (P23-12·13)", () => {
       vi.advanceTimersByTime(2_500);
     });
     expect(q(container, "[data-answer-notice]").textContent).toBe("");
+  });
+
+  it("시민 편은 알려진 제시어가 들어가면 수정 안내를 받고, 모르는 마피아에게는 정상 접수와 같은 조작을 제공한다", () => {
+    const citizen = renderAnswer(makeView(CITIZEN));
+    type(citizen.container, "해 리 포 터처럼");
+    expect(q(citizen.container, "[data-answer-notice]").textContent).toBe("제시어가 들어 있어요. 다른 표현으로 바꿔 주세요.");
+    expect(input(citizen.container).getAttribute("aria-invalid")).toBe("true");
+    expect((sendBtn(citizen.container) as HTMLButtonElement).disabled).toBe(true);
+    type(citizen.container, "안경");
+    expect(q(citizen.container, "[data-answer-notice]").textContent).toBe("");
+    fireEvent.click(sendBtn(citizen.container));
+    expect(citizen.sent).toEqual([{ t: "answer", text: "안경", final: true }]);
+    cleanup();
+    const mafia = renderAnswer(makeView(MAFIA));
+    type(mafia.container, "해 리 포 터처럼");
+    expect(q(mafia.container, "[data-answer-notice]").textContent).toBe("");
+    fireEvent.click(sendBtn(mafia.container));
+    expect(mafia.sent).toEqual([{ t: "answer", text: "해 리 포 터처럼", final: true }]);
+    expect(root(mafia.container).getAttribute("data-answer-state")).toBe("sent");
   });
 
   it("마피아와 시민의 입력줄(표식·문구·거절 알림)이 같다 — 카드의 키워드 줄만 다르다 (T-23-32·33)", () => {

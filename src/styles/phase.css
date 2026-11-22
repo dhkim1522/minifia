@@ -110,12 +110,12 @@
 /* 제시어 카드에 답안과 제출 결과를 함께 표시한다. */
 .mf-keyword .mf-reveal__stage { align-items: safe center; padding: 70px var(--space-md) var(--space-md); overflow-y: auto; }
 .mf-keyword__answer { width: 100%; display: flex; flex-direction: column; }
-.mf-keyword__meta { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); min-height: 20px; font: var(--type-label); font-variant-numeric: tabular-nums; color: var(--noir-ink); }
+.mf-keyword__meta { display: flex; align-items: baseline; gap: var(--space-sm); margin-top: 4px; min-height: 20px; font: var(--type-label); font-variant-numeric: tabular-nums; color: var(--noir-ink); }
 .mf-keyword__meta[hidden] { display: none; }
 .mf-keyword__count { flex: none; min-width: 3ch; text-align: right; }
 .mf-keyword__count[data-full="true"] { font-weight: 700; }
-.mf-keyword__mid { flex: 1; min-width: 0; text-align: center; }
-.mf-keyword__mid .mv-chat__notice { display: block; color: var(--crimson-700); }
+.mf-keyword__seconds { flex: none; min-width: 3ch; text-align: right; font-weight: 700; }
+.mf-keyword__status { flex: 1; min-width: 0; text-align: start; color: var(--crimson-700); word-break: keep-all; overflow-wrap: anywhere; }
 .mf-reveal .mf-card.is-call::before,
 .mf-keyword .mv-chat__field.is-call::before { animation-iteration-count: 1; }
 /* 20자소 답은 입력칸 안에서 가로로 밀린다(입력칸은 줄바꿈 없는 한 줄). 낸 글은 night-700 면 없이 gray-100 글자만(P23-13) */

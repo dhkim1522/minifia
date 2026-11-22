@@ -2166,7 +2166,7 @@ const ROOM_WS_PATH = /^\/api\/rooms\/[^/]+\/ws$/;
  * 한 페이지의 앱 소켓 감시: 열린 앱 소켓 수, 보낸 프레임의 t 목록(순서대로), 받은 프레임에서 needles 가 나온 횟수.
  * 프레임 원문·토큰·닉네임은 보관하지 않는다 — t 이름과 횟수뿐이다(T-17-21). { opened, other, frames, hits, api, mark(), since(i), stop() }
  */
-export function watchSockets(page, { needles = [] } = {}) {
+export function watchSockets(page, { needles = [], projectReceivedText } = {}) {
   const st = { opened: 0, other: 0, frames: [], hits: {}, api: 0 };
   const tOf = (payload) => {
     try {
@@ -2191,7 +2191,8 @@ export function watchSockets(page, { needles = [] } = {}) {
     ws.on("framesent", ({ payload }) => st.frames.push(tOf(payload)));
     ws.on("framereceived", ({ payload }) => {
       const text = typeof payload === "string" ? payload : payload.toString("utf8");
-      for (const n of needles) if (text.includes(n)) st.hits[n] = (st.hits[n] ?? 0) + 1;
+      const projected = projectReceivedText ? projectReceivedText(text) : text;
+      for (const n of needles) if (projected.includes(n)) st.hits[n] = (st.hits[n] ?? 0) + 1;
     });
   };
   const onRequest = (r) => {

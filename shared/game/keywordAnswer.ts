@@ -35,16 +35,17 @@ function formsOf(state: RoomState): KeywordForms | undefined {
   return keywordEntryOf(state.keyword.genre, state.keyword.word) ?? { word: state.keyword.word, aliases: [] };
 }
 
+export function keywordAnswerBlocked(state: RoomState, text: string): boolean {
+  const forms = formsOf(state);
+  return forms !== undefined && violatesKeyword(text, forms);
+}
+
 export type AnswerError = "WRONG_PHASE" | "BAD_MESSAGE";
 
 /**
- * 키워드 답 제출(D-07·D-09, SC2). 검사 순서가 계약이다:
- * 1 단계(keyword 아니면 WRONG_PHASE) → 2 행위자(방에 있고 살아 있으며 호출 경로가 사람·서버 봇 종류와 일치, 아니면 BAD_MESSAGE) → 3 이미 확정했으면 같은 객체(조용히 무변화)
- * → 4 본문 정리(sanitizeChatText 뒤 20자소 이하, 실패면 BAD_MESSAGE) → 5 초안(final:false)은 저장(공백뿐이면 키째 삭제, 같은 값이면 같은 객체, 금지어 검사 없음)
- * → 6 확정(final:true)인데 빈 글이면 BAD_MESSAGE → 7 확정에 금지어가 있으면 BAD_MESSAGE
- * → 8 통과: answerSubmits 끝에 { seat, text } 를 더하고(낸 순서가 곧 배열 순서) 그 사람의 초안을 지운다.
- * 7 의 거절은 시민과 마피아가 똑같은 반환(ok:false, BAD_MESSAGE)이다 — 사람이 마피아이고 keywordProbed 가 아직 없을 때만 state 에 { keywordProbed: true } 를 싣고, 서버 봇의 금지어 충돌은 기록하지 않는다.
- * 방 DO 는 그 state 를 저장한 뒤 시민의 거절과 같은 두 프레임(오류 + 본인 state)을 보낸다. 응답에서는 저장 여부를 알 수 없다(T-23-18).
+ * 초안은 정리해 저장하고, 첫 확정만 제출 순서에 남긴다.
+ * 제시어를 받은 사람과 서버 봇은 확정할 때 제시어를 검사한다.
+ * 제시어를 모르는 사람의 확정은 본문과 관계없이 같은 경로로 접수한다.
  */
 export function submitAnswer(
   state: RoomState,
@@ -52,7 +53,7 @@ export function submitAnswer(
   text: string,
   final: boolean,
   source: "player" | "bot" = "player",
-): { ok: true; state: RoomState } | { ok: false; error: AnswerError; state?: RoomState } {
+): { ok: true; state: RoomState } | { ok: false; error: AnswerError } {
   if (state.phase !== "keyword") return { ok: false, error: "WRONG_PHASE" };
   const actor = state.players.find((p) => p.id === actorId);
   const automatic = source === "bot";
@@ -86,9 +87,8 @@ export function submitAnswer(
     return { ok: true, state: { ...state, players: state.players.map((p) => (p.id === actorId ? { ...p, answerDraft: clean } : p)) } };
   }
   if (blank) return { ok: false, error: "BAD_MESSAGE" };
-  const forms = formsOf(state);
-  if (forms !== undefined && violatesKeyword(clean, forms)) {
-    if (!automatic && actor.role === "mafia" && state.keywordProbed !== true) return { ok: false, error: "BAD_MESSAGE", state: { ...state, keywordProbed: true } };
+  const knowsKeyword = actor.role !== undefined && actor.role !== "mafia";
+  if ((automatic || knowsKeyword) && keywordAnswerBlocked(state, clean)) {
     return { ok: false, error: "BAD_MESSAGE" };
   }
   return {
@@ -105,9 +105,10 @@ export function submitAnswer(
   };
 }
 
-/** 답안을 확정한 뒤 첫 제출자부터 실제 의자 순으로 돌아간다. */
+/** 공개할 답안을 검증한 뒤 첫 유효한 확정 제출자부터 실제 의자 순으로 돌아간다. */
 export function closeKeyword(state: RoomState): DeadlineResult {
   const forms = formsOf(state);
+  const publishable = (text: string): string | null => forms !== undefined && violatesKeyword(text, forms) ? null : text;
   const participants = state.players.filter((p) => p.sat !== true);
   const alive = participants.filter(isAlive);
   const fallbackChairs = barChairAssignment(participants.map((p) => p.seat));
@@ -115,20 +116,23 @@ export function closeKeyword(state: RoomState): DeadlineResult {
     BAR_CHAIR_CLOCKWISE_ANGLES[state.barChairs?.[seat] ?? fallbackChairs[seat] ?? seat] ?? Number.POSITIVE_INFINITY;
   const aroundTable = alive.sort((a, b) => angleOf(a.seat) - angleOf(b.seat) || a.seat - b.seat);
   const aliveSeats = new Set(aroundTable.map((p) => p.seat));
-  const submissions = (state.answerSubmits ?? []).filter(({ seat }) => aliveSeats.has(seat));
-  const first = submissions[0]?.seat;
+  const submissions = (state.answerSubmits ?? [])
+    .filter(({ seat }) => aliveSeats.has(seat))
+    .map(({ seat, text }) => ({ seat, text: publishable(text) }));
+  const first = submissions.find(({ text }) => text !== null)?.seat;
   const start = first === undefined ? 0 : aroundTable.findIndex((p) => p.seat === first);
   const order = [...aroundTable.slice(start), ...aroundTable.slice(0, start)];
   const submittedBySeat = new Map(submissions.map(({ seat, text }) => [seat, text]));
-  const draftOf = (p: Player): string | undefined => {
-    if (isBot(p) || p.answerDraft === undefined) return undefined;
-    return forms !== undefined && violatesKeyword(p.answerDraft, forms) ? undefined : p.answerDraft;
+  const answerOf = (p: Player): string | null => {
+    const submitted = submittedBySeat.get(p.seat);
+    if (submitted !== undefined) return submitted;
+    return isBot(p) || p.answerDraft === undefined ? null : publishable(p.answerDraft);
   };
   const { answerSubmits: _submits, keywordPresentationIndex: _prevIndex, ...clean } = state;
   return {
     state: {
       ...clean,
-      keywordAnswers: order.map((p, i) => ({ order: i + 1, seat: p.seat, text: submittedBySeat.get(p.seat) ?? draftOf(p) ?? null })),
+      keywordAnswers: order.map((p, i) => ({ order: i + 1, seat: p.seat, text: answerOf(p) })),
       ...(state.keyword !== undefined && order.length > 0 ? { keywordPresentationIndex: 0 } : {}),
       players: state.players.map(({ answerDraft: _d, ...p }) => p),
     },

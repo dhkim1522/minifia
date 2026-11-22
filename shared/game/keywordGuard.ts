@@ -1,13 +1,12 @@
 // 23-03: 키워드 단계 답의 금지어 판정(결정 0089-5·D-08, SC2). 순수 모듈 — 의존이 없고 시각·난수를 읽지 않는다.
-// 서버 전용이다: 클라이언트(src/)는 import 하지 않는다(정적 가드 keywordStaticGuard.test, Pitfall 8). 자유 채팅에는 쓰지 않는다(D-26).
+// 받은 단어와 별칭만 비교한다. 단어 목록은 서버 전용이다. 자유 채팅에는 쓰지 않는다(D-26).
 //
 // 규칙: 답과 키워드·별칭을 NFKC → 글자·숫자 외 제거 → 소문자로 정규화한 뒤 부분 포함이면 막는다.
-// 3글자 이상(완성형 음절만) 키워드는 초성열이 답의 초성열에 들어 있어도 막는다. 2글자·영어 키워드는 초성 검사를 하지 않는다.
+// 3글자 이상(완성형 음절만) 키워드는 답에 초성을 직접 쓴 경우도 막는다. 2글자·영어 키워드는 초성 검사를 하지 않는다.
 // 철자를 일부러 틀린 우회(hery foter)와 글자를 끼운 우회(a해b리c포d터)는 통과한다 — 매너에 맡긴다(0089-5).
 // NFKC 는 NFD 입력과 호환 자모 초성(ㅁ)·모음은 음절로 합치지만, 받침 자리의 호환 자모 자음(ㅇㄹ ㅇ)은 종성이 아니라 초성 자모로만 바꿔
 // 앞 음절과 합치지 못한다(ㅁㅕㅇㄹㅑㅇ → 며ᄋ랴ᄋ, 명량 아님). 그래서 음절 부분 포함·초성열 검사에 더해 자모 골격(jamoSkeleton)으로도 비교한다:
 // 음절을 초성·중성·종성으로 풀고 종성을 같은 자음의 초성으로, 겹모음·겹받침을 낱 자모로 접어 같은 글자의 다른 인코딩을 같은 열로 만든다(WR-01).
-// 알려진 한계: 3글자 키워드의 초성열이 흔한 단어와 우연히 겹칠 수 있다(고양이 ㄱㅇㅇ ↔ 가을이). D-08 문언대로 막는다(0091 에 기록).
 
 /** 판정 대상 키워드 한 항목의 금지 형태. keywords.ts 를 import 하지 않으려고 구조 타입으로 둔다. */
 export interface KeywordForms {
@@ -92,6 +91,5 @@ export function violatesKeyword(answer: string, forms: KeywordForms): boolean {
   // 자모 골격 부분 포함(WR-01): 받침을 호환 자모로 풀어 쓴 답을 잡는다. 길이는 음절 기준(2 이상)으로 같은 문턱을 쓴다.
   const answerSkeleton = jamoSkeleton(n);
   if (normalized.some((f) => f.length >= 2 && answerSkeleton.includes(jamoSkeleton(f)))) return true;
-  const answerCho = choseongOf(n);
-  return normalized.some((f) => f.length >= 3 && allSyllables(f) && answerCho.includes(choseongOf(f)));
+  return normalized.some((f) => f.length >= 3 && allSyllables(f) && n.includes(choseongOf(f)));
 }

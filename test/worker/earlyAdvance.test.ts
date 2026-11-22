@@ -30,6 +30,9 @@ async function gameAt(guests: number, phase: Parameters<typeof advanceTo>[2], op
     send(room.host, { t: "testBots", count: options.bots });
     const total = guests + 1 + options.bots!;
     for (const s of socks) await nextFrame(s, (m) => m.t === "state" && m.view.phase === "lobby" && m.view.players.length === total);
+    // 봇도 있는 상태에서 사람만으로 마감이 줄어드는지 본다. 재현 모드는 봇의 별도 답안 알람을 예약하지 않는다.
+    send(room.host, { t: "testBotVote", exec: "no", pick: "random" });
+    await nextFrame(room.host, (m) => m.t === "state" && m.view.me.testBotVote?.exec === "no");
     await flushAll(socks);
   }
   send(room.host, { t: "start" });
@@ -94,7 +97,7 @@ describe("키워드 — 사람 전원이 확정하면 일찍 넘어간다 (D-11)
     const got = await actAndSettle(socks, () => send(socks[2]!, { t: "answer", text: "가족들", final: true }));
     const after = await storedRoom(room.code);
     expect(after.phase).toBe("keyword");
-    expectShrunk(got, after.phaseEndsAt!, origin, 13_000);
+    expectShrunk(got, after.phaseEndsAt!, origin, 35_000);
     noEarlyFrom(socks);
     expect(await alarmOf(room.code)).toBe(after.phaseEndsAt);
     expect((after as unknown as { earlyFrom?: unknown }).earlyFrom).toEqual({ phase: "keyword", day: 0, endsAt: origin });

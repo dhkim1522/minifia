@@ -545,7 +545,7 @@ describe("buildView 단계 길이 (D-15, 결정 0012)", () => {
       return `${phase}:${v.phaseDurationMs}:${v.phaseEndsAt === s.phaseEndsAt}:${v.serverNow}`;
     });
     expect(got.join(" ")).toBe(
-      `lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 keyword:13000:true:77777 dayAnnounce:5000:true:77777 discussion:90000:true:77777 nomination:3000:true:77777 defense:10000:true:77777 verdict:10000:true:77777 execution:6600:true:77777 answerReveal:4400:true:77777 night:30000:true:77777 morning:5000:true:77777 ended:null:true:77777`,
+      `lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 keyword:35000:true:77777 dayAnnounce:5000:true:77777 discussion:90000:true:77777 nomination:3000:true:77777 defense:10000:true:77777 verdict:10000:true:77777 execution:6600:true:77777 answerReveal:4400:true:77777 night:30000:true:77777 morning:5000:true:77777 ended:null:true:77777`,
     );
   });
 
@@ -555,14 +555,15 @@ describe("buildView 단계 길이 (D-15, 결정 0012)", () => {
     const ends = ["assigning", "roleReveal", "keyword", "dayAnnounce", "discussion", "nomination", "answerReveal", "night", "morning"].map(
       (phase) => stateAt(phase as PhaseId, 4, 1).phaseEndsAt,
     );
-    const discussionEnd = START_AT + 31000 + 4 * FIRST_ANSWER_TURN_MS + DISCUSSION_MS;
+    const keywordEnd = START_AT + 53_000;
+    const discussionEnd = keywordEnd + 4 * FIRST_ANSWER_TURN_MS + DISCUSSION_MS;
     expect(DISCUSSION_MS).toBe(90000);
     expect(ends.join("/")).toBe(
       [
         START_AT + 3000,
         START_AT + 18000,
-        START_AT + 31000,
-        START_AT + 31000 + FIRST_ANSWER_TURN_MS,
+        keywordEnd,
+        keywordEnd + FIRST_ANSWER_TURN_MS,
         discussionEnd,
         discussionEnd + VERDICT_MS + NOMINATION_GATHER_MS,
         discussionEnd + VERDICT_MS + ANSWER_REVEAL_MS + NO_EXECUTION_MS,

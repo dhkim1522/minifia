@@ -5,14 +5,14 @@ import test from "node:test";
 import {
   EARLY_GRACE_MS_COPY,
   KEYWORD_NOTE_COPY,
-  KEYWORD_READ_MS_COPY,
-  KEYWORD_REJECT_COPY,
+  KEYWORD_MS_COPY,
+  KEYWORD_BLOCKED_COPY,
   kw1PhaseColumns,
   kw2CitizenCard,
   kw3MafiaCard,
-  kw4ReadLock,
+  kw4ImmediateInput,
   kw5InputLimit,
-  kw6Reject,
+  kw6Correction,
   kw7CompactGeometry,
   kw8AnswerTurns,
   kw9Reconnect,
@@ -25,8 +25,8 @@ import {
 const rect = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height });
 const noMeasure = (r) => !r.ok && /측정값 없음/.test(r.detail);
 
-test("사본 상수: 읽기 3초·조기 진행 유예 1.5초", () => {
-  assert.equal(KEYWORD_READ_MS_COPY, 3000);
+test("사본 상수: 단서 쓰기 35초·조기 진행 유예 1.5초", () => {
+  assert.equal(KEYWORD_MS_COPY, 35_000);
   assert.equal(EARLY_GRACE_MS_COPY, 1500);
 });
 
@@ -72,14 +72,13 @@ test("KW3: 마피아 카드는 ??? 이고 DOM 원문·속성 어디에도 정답
 });
 
 // ---- KW4·KW5 ----
-test("KW4: 처음 locked, 3초(±) 뒤 open, 입력칸 data-call 이면 통과", () => {
-  const ok = { firstState: "locked", firstAtMs: 600, openAtMs: 3050, callAtMs: 3100 };
-  assert.equal(kw4ReadLock(ok).ok, true);
-  assert.equal(kw4ReadLock({ ...ok, firstState: "open" }).ok, false);
-  assert.equal(kw4ReadLock({ ...ok, openAtMs: 1200 }).ok, false);
-  assert.equal(kw4ReadLock({ ...ok, openAtMs: 5200 }).ok, false);
-  assert.equal(kw4ReadLock({ ...ok, callAtMs: null }).ok, false);
-  assert.ok(noMeasure(kw4ReadLock({ ...ok, openAtMs: null })));
+test("KW4: 즉시 입력이 가능하고 35초 제한 및 줄어드는 남은 시간이 보이면 통과", () => {
+  const ok = { firstState: "open", readOnly: false, duration: 35_000, firstSeconds: 35, laterSeconds: 34 };
+  assert.equal(kw4ImmediateInput(ok).ok, true);
+  for (const edit of [{ firstState: "locked" }, { readOnly: true }, { duration: 30_000 }, { firstSeconds: 36 }, { laterSeconds: 35 }]) {
+    assert.equal(kw4ImmediateInput({ ...ok, ...edit }).ok, false);
+  }
+  assert.ok(noMeasure(kw4ImmediateInput({ ...ok, laterSeconds: null })));
 });
 test("KW5: 20자소에서 멈추고 20/20, 보내면 sent·읽기 전용·단서 보냄이면 통과", () => {
   const ok = { inputLen: 20, countText: "20/20", afterSend: { state: "sent", readOnly: true, label: "단서 보냄" } };
@@ -93,15 +92,13 @@ test("KW5: 20자소에서 멈추고 20/20, 보내면 sent·읽기 전용·단서
 });
 
 // ---- KW6 ----
-const rej = (who, over = {}) => ({ who, text: KEYWORD_REJECT_COPY, noticeMs: 2500, valueKept: true, stateAfter: "open", ...over });
-test("KW6: 두 페이지가 같은 문구를 같은 시간(2.5초) 보고 글이 남고 다시 낼 수 있으면 통과", () => {
-  assert.equal(kw6Reject([rej("시민"), rej("마피아", { noticeMs: 2620 })]).ok, true);
-  assert.equal(kw6Reject([rej("시민"), rej("마피아", { text: "금지어예요" })]).ok, false);
-  assert.equal(kw6Reject([rej("시민"), rej("마피아", { noticeMs: 4300 })]).ok, false);
-  assert.equal(kw6Reject([rej("시민", { noticeMs: 1000 }), rej("마피아", { noticeMs: 1050 })]).ok, false);
-  assert.equal(kw6Reject([rej("시민"), rej("마피아", { valueKept: false })]).ok, false);
-  assert.equal(kw6Reject([rej("시민"), rej("마피아", { stateAfter: "sent" })]).ok, false);
-  assert.ok(noMeasure(kw6Reject([rej("시민")])));
+test("KW6: 제시어 안내와 입력을 유지하고 단서를 고쳐 제출할 수 있으면 통과", () => {
+  const ok = { text: KEYWORD_BLOCKED_COPY, valueKept: true, state: "open", blocked: true, sentWhileBlocked: false, canSendAfterEdit: true, noticeCleared: true };
+  assert.equal(kw6Correction(ok).ok, true);
+  for (const edit of [{ text: "" }, { valueKept: false }, { state: "sent" }, { blocked: false }, { sentWhileBlocked: true }, { canSendAfterEdit: false }, { noticeCleared: false }]) {
+    assert.equal(kw6Correction({ ...ok, ...edit }).ok, false);
+  }
+  assert.ok(noMeasure(kw6Correction(null)));
 });
 
 // ---- KW7 ----
@@ -117,6 +114,7 @@ const geo = (over = {}) => ({
   send: rect(284, 160, 48, 48),
   gauge: rect(140, 24, 80, 8),
   count: rect(289, 134, 40, 16),
+  seconds: rect(253, 134, 30, 16),
   ...over,
 });
 test("KW7: 컴팩트 카드 한 장에 답을 쓸 수 있고 머리와 겹치지 않으면 통과", () => {
@@ -129,6 +127,7 @@ test("KW7: 컴팩트 카드 한 장에 답을 쓸 수 있고 머리와 겹치지
   assert.equal(kw7CompactGeometry(geo({ form: rect(12, 190, 336, 56) })).ok, false); // 보이는 높이 밖
   assert.equal(kw7CompactGeometry(geo({ gauge: rect(0, 0, 0, 0) })).ok, false);
   assert.equal(kw7CompactGeometry(geo({ gauge: rect(40, 24, 80, 8) })).ok, false);
+  assert.equal(kw7CompactGeometry(geo({ seconds: rect(289, 134, 40, 16) })).ok, false); // 글자 수와 겹침
   assert.ok(noMeasure(kw7CompactGeometry(geo({ card: null }))));
 });
 

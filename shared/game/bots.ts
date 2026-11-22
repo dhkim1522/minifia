@@ -4,9 +4,9 @@
 // 고정 봇 투표가 설정된 방은 예전 문구·대상·간격을 유지해 테스트 시나리오를 재현한다.
 // 일반 봇은 공개 정보나 그 역할의 의사결정에 허용된 동료 정보만 읽는다.
 import { isAlive } from "./alive";
-import { KEYWORD_MS, KEYWORD_READ_MS, SHOWDOWN_TURN_MS } from "./phases";
+import { KEYWORD_MS, SHOWDOWN_TURN_MS } from "./phases";
 import type { Player, RoomState } from "./room";
-import { firstPlaytestDay, keywordReadUntil } from "./playtest";
+import { firstPlaytestDay } from "./playtest";
 import { NOTE_FIRST_DAY } from "./postit";
 import { LAST_WORD_CHIPS } from "./showdown";
 import type { RandInt } from "./tick";
@@ -285,10 +285,9 @@ function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): 
     if (Array.isArray(lines) && lines.length > 0 && !state.answerSubmits?.some((row) => row.seat === bot.seat)) {
       const early = state.earlyFrom;
       const end = early?.phase === "keyword" && early.day === (state.day ?? 0) ? early.endsAt : state.phaseEndsAt;
-      const readUntil = keywordReadUntil(state) ?? end - KEYWORD_MS + KEYWORD_READ_MS;
       const text = lines[(activitySeed(state) + bot.seat) % lines.length]!;
-      // 사람이 읽기 시간 직후에 내도 같은 1.5초 유예 안에서 봇 답을 받을 수 있다.
-      add(Math.max(now, readUntil) + 150 + randInt(750) + bot.seat * 45, { t: "answer", text });
+      // 사람이 바로 제출해도 같은 1.5초 유예 안에서 봇 답을 받을 수 있다.
+      add(Math.max(now, end - KEYWORD_MS) + 150 + randInt(750) + bot.seat * 45, { t: "answer", text });
     }
   } else if (state.phase === "discussion") {
     const replay = replayVotes(state);

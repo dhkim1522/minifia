@@ -34,6 +34,7 @@ const STATE_LIMIT_MS = 10_000;
 const FULL_TOTAL_LIMIT_MS = 900_000; // 시작 → ended. 토론 스킵 대기와 순차 지목·유언·밤·아침을 포함해 최대 3일을 기다린다.
 // 낮 단계 길이(shared/game/phases.ts 와 같은 값, 결정 0060-1). 스크립트는 TS 를 import 하지 않는다.
 const DISCUSSION_MS = 90_000;
+const ROLE_REVEAL_MS = 15_000;
 // 기본판 동시 투표(결정 0072): 산 사람 모두 한 번에 15초. shared/game/phases.ts 의 NOMINATION_MS 와 같은 값 — 고치면 함께.
 const NOMINATION_MS = 15_000;
 // 봇 지연 등 서버 간격: 한 사람이 지목을 바꾸는 최소 간격(applyPoint)은 250ms 라 바꾸기 전에 이만큼 기다린다.
@@ -94,14 +95,14 @@ const EXPECTED_ROLES = {
 };
 // 허용 전이 표(shared/game/phases.ts 의 nextPhaseOf + tick 분기와 같다). 판 종류가 없어 표는 하나다(22-08). 분기형이라 값이 배열이다(결정 0060-1).
 // test/unit/e2eContract.test.ts 가 이 표를 nextPhaseOf(단계) 와 대조한다 — 어긋나면 거짓 통과·거짓 실패가 난다.
-// 첫날(23-01): roleReveal → keyword(13초) → dayAnnounce. 낮 순서(22-09, 결정 0089-18): dayAnnounce → discussion → verdict(찬반, 후보 없음) → (통과) nomination(순차 지목) → (최다 한 명) defense(유언 자리) → execution → night | ended,
+// 첫날: roleReveal → keyword → dayAnnounce. 낮 순서(22-09, 결정 0089-18): dayAnnounce → discussion → verdict(찬반, 후보 없음) → (통과) nomination(순차 지목) → (최다 한 명) defense(유언 자리) → execution → night | ended,
 // 찬반 부결·지목 0표·동률은 곧장 night, night → morning → dayAnnounce(다음 낮) | ended. 승패가 나지 않는 한 낮 루프라 끝이 없다.
 // 첫날 정답 공개(23-05, D-02): 키워드가 있는 판의 첫날은 처형 뒤(승패 없음)와 처형 없는 낮(찬반 부결·지목 0표·동률) 뒤에 night 앞의 answerReveal(3초, 처형 없음이면 4.4초)이 끼고, 승패가 나면 건너뛴다. 둘째 날부터는 곧장 night 다.
 // 주의: 이 파일의 낮 흐름 걸음(토론 끝내기 → 지목 → 변론 → 찬반 단언)은 아직 옛 순서 그대로다 — 전이 표만 새 순서로 맞췄다(22-09). 걸음 개편은 이월(SUMMARY).
 export const PHASE_NEXT = {
   lobby: ["assigning"],
   assigning: ["roleReveal"],
-  roleReveal: ["keyword"], // 첫날 키워드 문제(23-01, D-01) — 역할 확인 다음은 13초 키워드 카드다(방 상태에 keyword 가 없는 옛 방만 곧장 dayAnnounce)
+  roleReveal: ["keyword"], // 역할 확인 다음은 첫날 단서 작성이다(방 상태에 keyword 가 없는 옛 방만 곧장 dayAnnounce)
   keyword: ["dayAnnounce"],
   dayAnnounce: ["discussion"], // 낮 시작 발표 다음이 바로 토론이다
   discussion: ["verdict"],
@@ -636,8 +637,11 @@ async function stageFull(url, args) {
   if (afterFirst.me.seat !== before.seat) fail(`재접속 뒤 seat 가 다름: ${before.seat} → ${afterFirst.me.seat}`);
   if (afterFirst.me.role !== before.role) fail("재접속 뒤 역할이 끊기 전과 다름");
 
-  // (9) 낮 시작 발표 — 모든 클라이언트가 day.n 1 을 받는다
-  await waitUntil(() => clients.every((c) => firstState(c, "dayAnnounce")), 45_000, "모든 클라이언트가 dayAnnounce 를 받지 못함"); // 역할 확인 15초 + 키워드 13초(23-01)
+  // (9) 단서 작성에 들어온 뒤 서버가 알려 준 제한 시간만큼 낮 시작 발표를 기다린다.
+  await waitUntil(() => firstState(host, "keyword"), ROLE_REVEAL_MS + STATE_LIMIT_MS, "방장이 첫날 단서 작성 단계를 받지 못함");
+  const keywordDuration = firstState(host, "keyword").msg.view.phaseDurationMs;
+  await waitUntil(() => clients.every((c) => firstState(c, "dayAnnounce")),
+    keywordDuration + STATE_LIMIT_MS, "모든 클라이언트가 dayAnnounce 를 받지 못함");
   for (const c of clients) {
     const ann = firstState(c, "dayAnnounce").msg.view;
     if (ann.day?.n !== 1) fail(`${c.nickname} 의 첫 dayAnnounce 의 day.n 이 1 이 아님: ${ann.day?.n}`);

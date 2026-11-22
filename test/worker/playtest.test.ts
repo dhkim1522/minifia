@@ -83,12 +83,9 @@ describe("첫날 실험방 HTTP·소켓", () => {
       expect((await storedRoom(code)).phase).toBe("roleReveal");
       send(sockets[3]!, { t: "roleReady" });
       await settleAll(sockets);
-      expect(lastViewOf(host)).toMatchObject({ phase: "keyword", phaseDurationMs: 33_000 });
+      expect(lastViewOf(host)).toMatchObject({ phase: "keyword", phaseDurationMs: 35_000 });
 
-      send(host, { t: "answer", text: "준비됐어", final: true });
-      await nextFrame(host, (m) => m.t === "error" && m.code === "WRONG_PHASE");
-      const keyDeadline = Date.now() + 29_000;
-      await editRoom(code, (state) => ({ ...state, phaseEndsAt: keyDeadline }));
+      const keyDeadline = (await storedRoom(code)).phaseEndsAt!;
       for (const sock of sockets) {
         send(sock, { t: "answer", text: "낯설었어", final: true });
         await settle(sock, mark(sock));

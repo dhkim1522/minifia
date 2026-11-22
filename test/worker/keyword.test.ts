@@ -37,7 +37,7 @@ describe("첫날 키워드 단계 (D-01·D-06)", () => {
     for (const a of actors) {
       const view = lastViewOf(a.sock);
       expect(view.phase).toBe("keyword");
-      expect(view.phaseDurationMs).toBe(13_000);
+      expect(view.phaseDurationMs).toBe(35_000);
       expect(view.day?.keyword).toEqual({ genre: genreLabelOf(stored.keyword!.genre) });
       if (a.role === "mafia") {
         mafia += 1;
@@ -111,7 +111,7 @@ type AnswerRoom = StoredRoom & { keywordProbed?: true; answerSubmits?: unknown }
 const answerOf = (sock: TestSocket, text: string, final: boolean): void => send(sock, { t: "answer", text, final });
 const socksOf = (room: Seated): TestSocket[] => [room.host, ...room.guests.map((g) => g.sock)];
 
-/** 사람 4명 판을 keyword 단계 첫 순간까지 돌린다(마감 13초 앞). 모든 소켓의 프레임을 flush 해 둔다. */
+/** 사람 4명 판을 keyword 단계 첫 순간까지 돌린다. 모든 소켓의 프레임을 flush 해 둔다. */
 async function inKeyword(options: { bots?: number } = {}): Promise<{ room: Seated; socks: TestSocket[]; word: string }> {
   const room = await seat(3, 0, options.bots ? { testMode: true } : {});
   const socks = socksOf(room);
@@ -166,12 +166,18 @@ describe("키워드 답 접수 (D-07·D-10)", () => {
     ]);
   }, 40_000);
 
-  it("시민이 키워드로 확정하면 [error:BAD_MESSAGE, state:keyword], 마피아가 같은 글로 확정해도 같은 두 프레임이고 그 뒤에야 keywordProbed 가 켜진다. 거절 뒤 다른 글은 받아진다", async () => {
+  it("시민 편은 금지 초안 안내를 받고 바꿀 수 있고, 마피아는 같은 글을 평소대로 접수한다", async () => {
     const { room, socks, word } = await inKeyword();
     const actors = actorsOf(room);
     const citizen = actors.find((x) => x.role !== "mafia")!;
     const mafia = actors.find((x) => x.role === "mafia")!;
     const others = (me: TestSocket): TestSocket[] => socks.filter((s) => s !== me);
+
+    const drafts = socks.map((s) => mark(s));
+    answerOf(citizen.sock, word, false);
+    expect(summary(await settle(citizen.sock, drafts[socks.indexOf(citizen.sock)]!))).toBe("[state:keyword]");
+    expect(lastViewOf(citizen.sock).me.answer).toEqual({ text: word, final: false, keywordBlocked: true });
+    for (const o of others(citizen.sock)) expect(summary(await settle(o, drafts[socks.indexOf(o)]!))).toBe("[]");
 
     const m1 = socks.map((s) => mark(s));
     answerOf(citizen.sock, word, true);
@@ -181,14 +187,15 @@ describe("키워드 답 접수 (D-07·D-10)", () => {
 
     const m2 = socks.map((s) => mark(s));
     answerOf(mafia.sock, word, true);
-    expect(summary(await settle(mafia.sock, m2[socks.indexOf(mafia.sock)]!))).toBe("[error:BAD_MESSAGE,state:keyword]");
+    expect(summary(await settle(mafia.sock, m2[socks.indexOf(mafia.sock)]!))).toBe("[state:keyword]");
+    expect(lastViewOf(mafia.sock).me.answer).toEqual({ text: word, final: true });
     for (const o of others(mafia.sock)) expect(summary(await settle(o, m2[socks.indexOf(o)]!))).toBe("[]");
-    expect(((await storedRoom(room.code)) as AnswerRoom).keywordProbed).toBe(true);
+    expect(((await storedRoom(room.code)) as AnswerRoom).keywordProbed).toBeUndefined();
 
     await pause(450);
-    const m3 = mark(mafia.sock);
-    answerOf(mafia.sock, "안경", true);
-    expect(summary(await settle(mafia.sock, m3))).toBe("[state:keyword]");
+    const m3 = mark(citizen.sock);
+    answerOf(citizen.sock, "안경", true);
+    expect(summary(await settle(citizen.sock, m3))).toBe("[state:keyword]");
   }, 40_000);
 
   it("첫 제출자의 의자부터 한 답씩 보내고, 현재 발표자에게 붙인 딱지를 토론까지 유지한다", async () => {

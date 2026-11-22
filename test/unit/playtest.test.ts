@@ -4,7 +4,7 @@ import { shrinkDeadline } from "../../shared/game/early";
 import { layoutKey } from "../../shared/game/gather";
 import { canMoveIn } from "../../shared/game/movement";
 import { completeNight, pickTarget } from "../../shared/game/night";
-import { allRolesReady, castFirstBallot, confirmRole, keywordReadUntil } from "../../shared/game/playtest";
+import { allRolesReady, castFirstBallot, confirmRole } from "../../shared/game/playtest";
 import type { PhaseId } from "../../shared/protocol";
 import { createRoomState, type RoomState } from "../../shared/game/room";
 import { resetToLobby } from "../../shared/game/testTools";
@@ -53,21 +53,19 @@ describe("로컬 첫날 실험 규칙", () => {
     expect(buildView(ready, "p0", 205_000).players).toEqual(buildView(assigning, "p0", 195_000).players);
     const timedOut = tick(tick(assigning, 200_000), 255_000);
     expect(timedOut.phase).toBe("keyword");
-    expect(timedOut.phaseEndsAt).toBe(288_000);
+    expect(timedOut.phaseEndsAt).toBe(290_000);
   });
 
-  it("키워드 읽기와 마지막 답 뒤 유예, 첫 아침 읽기 시간을 보장한다", () => {
+  it("첫날 키워드 35초와 마지막 답 뒤 유예, 첫 아침 읽기 시간을 보장한다", () => {
     const keyword = room("keyword");
-    expect(keywordReadUntil(keyword)).toBe(170_000);
     keyword.answerSubmits = keyword.players.slice(0, 3).map(({ seat }) => ({ seat, text: "한 줄" }));
     expect(shrinkDeadline(keyword, 173_000, { extend: false })).toBe(keyword);
     const allAnswered = { ...keyword, answerSubmits: [...keyword.answerSubmits, { seat: 3, text: "둘째 답" }] };
     const shortened = shrinkDeadline(allAnswered, 173_000, { extend: false });
     expect(shortened.phaseEndsAt).toBe(174_500);
-    expect(keywordReadUntil(shortened)).toBe(170_000);
     expect(tick(shortened, 174_499)).toBe(shortened);
     expect(tick(shortened, 174_500).phase).toBe("dayAnnounce");
-    expect(phaseDurationOf(keyword)).toBe(33_000);
+    expect(phaseDurationOf(keyword)).toBe(35_000);
     expect(phaseDurationOf(room("morning"))).toBe(8_000);
   });
 

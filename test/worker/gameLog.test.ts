@@ -32,7 +32,7 @@ beforeEach(() => {
 afterEach(() => restore());
 
 type Row = Record<string, string | number | null>;
-type KeywordRoom = { keyword?: { genre: string; word: string }; gameId?: string; startedAt?: number; winner?: string; keywordProbed?: true };
+type KeywordRoom = { keyword?: { genre: string; word: string }; gameId?: string; startedAt?: number; winner?: string };
 
 const socksOf = (room: Seated): TestSocket[] => [room.host, ...room.guests.map((g) => g.sock)];
 const rowOf = (id: string): Promise<Row | null> => env.DB.prepare("SELECT * FROM games WHERE id = ?").bind(id).first<Row>();
@@ -121,15 +121,15 @@ describe("판이 끝나면 D1 에 한 줄 (SC6)", () => {
     expect(row.tutorial).toBe(0);
   });
 
-  it("키워드 단계에서 마피아가 금지어 확정으로 한 번 거절된 판은 probe_success 1", { timeout: 90_000 }, async () => {
+  it("마피아가 제시어를 포함한 단서를 확정해도 떠보기 성공으로 기록하지 않는다", { timeout: 90_000 }, async () => {
     const room = await inKeyword();
     const word = ((await storedRoom(room.code)) as unknown as KeywordRoom).keyword!.word;
     send(room.host, { t: "answer", text: word, final: true }); // 방장이 마피아다
-    await until("떠보기 기록", async () => ((await storedRoom(room.code)) as unknown as KeywordRoom).keywordProbed === true);
+    await nextFrame(room.host, (m) => m.t === "state" && m.view.me.answer?.final === true);
     await driveHumansToEnded(room);
     const id = ((await storedRoom(room.code)) as unknown as KeywordRoom).gameId!;
     await until("D1 한 줄", async () => (await rowOf(id)) !== null);
-    expect((await rowOf(id))!.probe_success).toBe(1);
+    expect((await rowOf(id))!.probe_success).toBe(0);
   });
 
   it("같은 행을 insertGame 으로 두 번 넣으면 한 줄", async () => {

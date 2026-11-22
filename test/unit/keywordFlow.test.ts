@@ -1,4 +1,4 @@
-// 23-01 트레이서: 첫날 roleReveal → keyword(13초) → dayAnnounce, 키워드 선택(beginGame), view 모양(D-01·D-05·D-06·D-29).
+// 23-01 트레이서: 첫날 roleReveal → keyword → dayAnnounce, 키워드 선택(beginGame), view 모양(D-01·D-05·D-06·D-29).
 // 키워드는 서버 전용 값이다 — 장르 라벨은 모두에게, 단어는 산 시민 편 본인에게만(마피아 view 에는 키가 없다).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { genreLabelOf, GENRES, keywordEntryOf, KEYWORD_SWITCH } from "../../shared/game/keywords";
@@ -10,8 +10,6 @@ import {
   ANSWER_REVEAL_MS,
   firstDayAnswerPending,
   KEYWORD_MS,
-  KEYWORD_READ_MS,
-  KEYWORD_WRITE_MS,
   nextPhaseOf,
   NO_EXECUTION_MS,
   PHASE_DEFS,
@@ -32,13 +30,10 @@ beforeEach(() => {
 afterEach(() => restore());
 
 describe("키워드 상수와 단계 표 (D-01)", () => {
-  it("KEYWORD_MS = 읽기 3000 + 쓰기 10000 = 13000, keyword 는 본인 역할을 싣는 단계다", () => {
-    expect(KEYWORD_READ_MS).toBe(3000);
-    expect(KEYWORD_WRITE_MS).toBe(10_000);
-    expect(KEYWORD_MS).toBe(KEYWORD_READ_MS + KEYWORD_WRITE_MS);
-    expect(KEYWORD_MS).toBe(13_000);
+  it("keyword 단계는 35초이며 본인 역할을 보낸다", () => {
+    expect(KEYWORD_MS).toBe(35_000);
     expect(PHASE_DEFS.keyword.revealsOwnRole).toBe(true);
-    expect(PHASE_DEFS.keyword.durationMs).toBe(13_000);
+    expect(PHASE_DEFS.keyword.durationMs).toBe(KEYWORD_MS);
     expect(nextPhaseOf("roleReveal")).toBe("keyword");
     expect(nextPhaseOf("keyword")).toBe("dayAnnounce");
   });
@@ -90,7 +85,7 @@ describe("beginGame 의 키워드 선택 (D-05·D-29)", () => {
 });
 
 describe("roleReveal → keyword → dayAnnounce (D-01·D-29)", () => {
-  it("keyword 가 있으면 역할 확인 마감 뒤 keyword, 마감은 13초 뒤, state.day 는 아직 없다", () => {
+  it("keyword 가 있으면 역할 확인 마감 뒤 keyword, 마감은 35초 뒤, state.day 는 아직 없다", () => {
     const reveal = startedAt(6, 3, "roleReveal");
     expect(reveal.keyword).toBeDefined();
     const at = reveal.phaseEndsAt!;

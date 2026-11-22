@@ -93,8 +93,11 @@ describe("violatesKeyword — 경계", () => {
     expect(violatesKeyword("ﬁre", { word: "fire", aliases: [] })).toBe(true);
   });
 
-  it("알려진 한계, 0091 에 기록: 고양이 에 가을이 왔다 는 초성열 ㄱㅇㅇ 이 들어 있어 막힌다(D-08 문언대로)", () => {
-    expect(violatesKeyword("가을이 왔다", { word: "고양이", aliases: [] })).toBe(true);
+  it("완성형 문장의 초성이 우연히 같으면 허용하고 직접 쓴 초성은 막는다", () => {
+    const k = { word: "고양이", aliases: [] };
+    expect(violatesKeyword("가을이 왔다", k)).toBe(false);
+    expect(violatesKeyword("ㄱㅇㅇ", k)).toBe(true);
+    expect(violatesKeyword("아마 ㄱ.ㅇ.ㅇ 같아요", k)).toBe(true);
   });
 });
 

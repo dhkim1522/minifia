@@ -62,8 +62,8 @@ const CARD_ENTER_MS = 420;
 // 첫날 키워드 카드(23-01, P23-1~5) + 답 입력줄(23-09, P23-6·9~15). 역할 확인과 같은 3D 무대(PreGame, sceneKey preGame) 위 가운데 카드 안에 제시어와 답 입력을 모은다 — 무대는 PreGame 이 깐다.
 // 카드는 맨 위 장르, 가운데 큰 키워드(마피아는 ???), 아래 각주 한 줄이다. 마피아 표식 칩·색·문구는 따로 두지 않는다 — 모양은 시민과 같고 ??? 하나만 다르다.
 // 키워드는 서버가 시민 편 본인에게만 보낸다(me.keyword). 마피아는 키 자체가 없으니 DOM 에도 단어가 없다. 입력줄 표식(data-answer-*)에는 역할·키워드 값이 없다(T-23-33).
-// 입력줄은 읽기 3초 동안 잠기고 풀리면 빛난다. 글이 있으면 입력칸 안에 전송을, 서버 접수 뒤에는 같은 자리에 체크를 보여 준다.
-// 글 규칙(잠금·20자소·거절·초안 저장)은 useKeywordAnswer, 서버가 정한 규칙을 표시·전송만 한다(결정 0002). 키보드가 열리면 같은 카드가 작아지고 보이는 영역 안에 놓인다.
+// 제시어가 표시되면 입력줄이 열린다. 글이 있으면 입력칸 안에 전송을, 서버 접수 뒤에는 같은 자리에 체크를 보여 준다.
+// 입력과 초안 저장은 useKeywordAnswer가 관리한다. 키보드가 열리면 카드가 작아지고 보이는 영역 안에 놓인다.
 export function Keyword({ view, offset, epoch = 0, myRoleButton, send, canSend, onEvent, timeless = false, embedded = false, introActive = false }: KeywordProps) {
   const Frame = embedded ? "section" : "main";
   const word = view.me.keyword;
@@ -83,11 +83,11 @@ export function Keyword({ view, offset, epoch = 0, myRoleButton, send, canSend, 
   const sent = answer.state === "sent";
   const confirmed = view.me.answer?.final === true;
   const showSend = answer.state === "open" && answer.value.trim() !== "";
-  // 입력칸 빛남: 사회자 표(keyword.act → 입력칸)와 훅(읽기 3초가 지났고 아직 한 글자도 안 썼다)이 모두 참일 때만 — 시각은 화면이 잠금으로 정한다
+  // 사회자가 단서를 요청하고 아직 입력하지 않은 상태에서 입력칸을 강조한다.
   const target = callTargetsOf(view);
   const call = answer.callInput && target !== null && target.kind === "tool" && target.tool === "chat";
 
-  // 읽기 3초가 끝나 입력칸이 풀리면 초점을 준다(키보드가 안 올라오는 기기에서는 빛나는 입력칸을 직접 누른다)
+  // 단계 안내 뒤 입력칸이 열리면 초점을 준다.
   const wasLocked = useRef(answer.state === "locked");
   useEffect(() => {
     if (!timeless && !playtest && wasLocked.current && answer.state === "open") inputRef.current?.focus({ preventScroll: true });
@@ -136,16 +136,6 @@ export function Keyword({ view, offset, epoch = 0, myRoleButton, send, canSend, 
             {KEYWORD_COPY.note}
           </p> : null}
           {!timeless || view.me.answer !== undefined ? <div className="mf-keyword__answer" data-answer-state={answer.state}>
-            <div className="mf-keyword__meta" id={META_ID} hidden={playtest && !answer.notice}>
-              <span className="mf-keyword__mid">
-                <span className="mv-chat__notice" role="status" data-answer-notice="">
-                  {answer.notice ?? ""}
-                </span>
-              </span>
-              {!playtest ? <span className="mf-keyword__count" data-answer-count="" data-full={answer.count >= ANSWER_MAX_GRAPHEMES ? "true" : undefined}>
-                {KEYWORD_COPY.count(answer.count)}
-              </span> : null}
-            </div>
             <span className="mf-sr-only" role="status" data-answer-done={confirmed ? "" : undefined}>{confirmed ? KEYWORD_COPY.sentName : ""}</span>
             <form className="mv-chat__form" onSubmit={onSubmit}>
               <div className={call ? "mv-chat__field is-call" : "mv-chat__field"}>
@@ -164,6 +154,7 @@ export function Keyword({ view, offset, epoch = 0, myRoleButton, send, canSend, 
                   spellCheck={false}
                   aria-label={KEYWORD_COPY.inputName}
                   aria-describedby={META_ID}
+                  aria-invalid={answer.keywordBlocked || undefined}
                   placeholder={playtest && !sent ? word === undefined ? KEYWORD_COPY.hiddenHint : KEYWORD_COPY.note : undefined}
                   disabled={answer.state === "locked"}
                   readOnly={sent || timeless}
@@ -188,6 +179,17 @@ export function Keyword({ view, offset, epoch = 0, myRoleButton, send, canSend, 
                 </span>}
               </div>
             </form>
+            <div className="mf-keyword__meta" id={META_ID} hidden={timeless && playtest && !answer.notice}>
+              <span className="mf-keyword__status" role="status" data-answer-notice="">
+                {answer.notice ?? ""}
+              </span>
+              {!playtest ? <span className="mf-keyword__count" data-answer-count="" data-full={answer.count >= ANSWER_MAX_GRAPHEMES ? "true" : undefined}>
+                {KEYWORD_COPY.count(answer.count)}
+              </span> : null}
+              {!timeless && endsAt !== null ? <span className="mf-keyword__seconds" data-answer-seconds="" aria-hidden="true">
+                {answer.secondsLeft}초
+              </span> : null}
+            </div>
           </div> : null}
         </div>
       </section>

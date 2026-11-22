@@ -1,12 +1,11 @@
 // 로컬 첫날 실험방의 진행 규칙. 시각은 Worker가 주고 화면에는 허용된 값만 전달한다.
 import type { FirstBallotResult, NoExecutionReason } from "../protocol";
 import { isAlive } from "./alive";
-import { afterDayOf, KEYWORD_READ_MS } from "./phases";
+import { afterDayOf } from "./phases";
 import type { Player, RoomState } from "./room";
 import type { DeadlineResult } from "./tick";
 
 export const PLAYTEST_ROLE_MS = 55_000;
-export const PLAYTEST_KEYWORD_MS = KEYWORD_READ_MS + 30_000;
 export const PLAYTEST_DISCUSSION_MS = 120_000;
 export const PLAYTEST_BALLOT_MS = 28_000;
 export const PLAYTEST_RESULT_MS = 7_000;
@@ -14,13 +13,6 @@ export const PLAYTEST_MORNING_EXTRA_MS = 3_000;
 
 export function firstPlaytestDay(state: Pick<RoomState, "playtest" | "day">): boolean {
   return state.playtest === true && (state.day ?? 1) === 1;
-}
-
-export function keywordReadUntil(state: RoomState): number | undefined {
-  if (!firstPlaytestDay(state) || state.phase !== "keyword" || state.phaseEndsAt === null) return undefined;
-  const from = state.earlyFrom;
-  const originalEnd = from?.phase === "keyword" && from.day === (state.day ?? 0) ? from.endsAt : state.phaseEndsAt;
-  return originalEnd - PLAYTEST_KEYWORD_MS + KEYWORD_READ_MS;
 }
 
 export function humanSeats(state: RoomState): Player[] {

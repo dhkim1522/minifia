@@ -35,7 +35,7 @@ import { saveWill } from "../../shared/game/will";
 import type { ChatSenderRate } from "../../shared/game/chatRules";
 import { pickTarget } from "../../shared/game/night";
 import { WILL_MAX_GRAPHEMES } from "../../shared/game/will";
-import { KEYWORD_READ_MS, PHASE_DEFS } from "../../shared/game/phases";
+import { KEYWORD_MS, PHASE_DEFS } from "../../shared/game/phases";
 import { GENRES } from "../../shared/game/keywords";
 import { violatesKeyword } from "../../shared/game/keywordGuard";
 import { rolesInPlay } from "../../shared/game/roles";
@@ -807,14 +807,14 @@ describe("일반 봇의 키워드 답과 의심딱지", () => {
     expect(overlaps).toEqual([]);
   });
 
-  it("공개 장르만 사용해 서로 다른 답을 읽기 직후에 내고 고정 봇 투표에서는 답 계획을 만들지 않는다", () => {
+  it("공개 장르만 사용해 서로 다른 답을 시작 직후에 내고 고정 봇 투표에서는 답 계획을 만들지 않는다", () => {
     const first = stateAt(1, 7, 3, "discussion");
-    const state = { ...first, phase: "keyword" as const, phaseEndsAt: 13_000, keyword: { genre: "movie", word: "해리포터" } };
+    const state = { ...first, phase: "keyword" as const, phaseEndsAt: KEYWORD_MS, keyword: { genre: "movie", word: "해리포터" } };
     const plans = (s: RoomState) => planBotSteps(s, 0, seededRandInt(3));
     const answers = plans(state);
     expect(answers).toHaveLength(7);
     expect(new Set(answers.flatMap(({ act }) => act.t === "answer" ? [act.text] : [])).size).toBe(7);
-    expect(answers.every(({ at }) => at > KEYWORD_READ_MS && at < KEYWORD_READ_MS + 1_500)).toBe(true);
+    expect(answers.every(({ at }) => at > 0 && at < 1_500)).toBe(true);
     const swapped = { ...state, keyword: { genre: "movie", word: "타이타닉" }, players: state.players.map((p) => ({ ...p, role: "mafia" as const })) };
     expect(plans(swapped)).toEqual(answers);
     expect(plans({ ...state, testBotVote: { exec: "no" } })).toEqual([]);

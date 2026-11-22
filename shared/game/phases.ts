@@ -36,10 +36,8 @@ export interface PhaseDef {
 
 export const ASSIGNING_MS = 3_000;
 export const ROLE_REVEAL_MS = 15_000;
-// 첫날 키워드 단계(결정 0089-3·4, D-01): 읽기 3초 + 쓰기 10초 = 13초. 시간은 참고 목표라 연출을 줄이는 근거로 쓰지 않는다.
-export const KEYWORD_READ_MS = 3_000; // 결정 0089-3 — 카드를 읽는 시간(답 시간에서 뺀다, 입력줄은 이 동안 잠긴다)
-export const KEYWORD_WRITE_MS = 10_000; // 결정 0089-4 — 떠오르는 말을 적는 시간
-export const KEYWORD_MS = KEYWORD_READ_MS + KEYWORD_WRITE_MS;
+// 제시어가 보이는 순간부터 단서를 입력할 수 있다.
+export const KEYWORD_MS = 35_000;
 export const FIRST_ANSWER_TURN_MS = 5_000; // 첫날 원탁에서 한 사람의 답을 공개하는 시간
 // 첫날 정답 공개 단계(D-02, P23-20): 처형 뒤(또는 처형 없는 첫날 뒤) 밤 직전 3초. 처형이 없으면 "처형 없음" 큰 글 1.4초가 앞에 붙는다(D-22). 시간은 참고 목표라 연출을 줄이는 근거로 쓰지 않는다.
 export const ANSWER_REVEAL_MS = 3_000;

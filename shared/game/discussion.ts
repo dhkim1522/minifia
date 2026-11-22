@@ -5,7 +5,7 @@
 import { noExecutionOf } from "./execution";
 import { keywordPresentationOf } from "./keywordPresentation";
 import { nominationStepMs } from "./nomination";
-import { firstPlaytestDay, PLAYTEST_BALLOT_MS, PLAYTEST_DISCUSSION_MS, PLAYTEST_KEYWORD_MS, PLAYTEST_MORNING_EXTRA_MS, PLAYTEST_RESULT_MS, PLAYTEST_ROLE_MS } from "./playtest";
+import { firstPlaytestDay, PLAYTEST_BALLOT_MS, PLAYTEST_DISCUSSION_MS, PLAYTEST_MORNING_EXTRA_MS, PLAYTEST_RESULT_MS, PLAYTEST_ROLE_MS } from "./playtest";
 import { runoffStepMs } from "./runoff";
 import { showdownStepMs } from "./showdown";
 import { ANSWER_REVEAL_MS, FIRST_ANSWER_TURN_MS, MORNING_MAX_MS, MORNING_MS, MORNING_NOTE_MS, MORNING_VICTIM_MS, MORNING_WILL_MS, NO_EXECUTION_MS, PHASE_DEFS } from "./phases";
@@ -37,7 +37,6 @@ export function morningMsOf(state: RoomState): number {
 export function phaseDurationOf(state: RoomState): number | null {
   if (firstPlaytestDay(state)) {
     if (state.phase === "roleReveal") return PLAYTEST_ROLE_MS;
-    if (state.phase === "keyword") return PLAYTEST_KEYWORD_MS;
     if (state.phase === "discussion") return PLAYTEST_DISCUSSION_MS;
     if (state.phase === "verdict") return state.firstBallotOutcome === undefined ? PLAYTEST_BALLOT_MS : PLAYTEST_RESULT_MS;
     if (state.phase === "morning") return morningMsOf(state) + PLAYTEST_MORNING_EXTRA_MS;

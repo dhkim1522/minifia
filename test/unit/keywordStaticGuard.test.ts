@@ -9,8 +9,8 @@ import { stripComments } from "./chatStaticGuard.test";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
-/** 클라이언트가 import 하면 안 되는 서버 전용 모듈. 정답 추론 재료(목록·판정·답 규칙)다. */
-const SERVER_ONLY_MODULE = /shared[\\/]game[\\/](keywords|keywordGuard|keywordAnswer)(\.[a-z]+)?$/;
+/** 클라이언트가 import 하면 안 되는 서버 전용 모듈. 키워드 목록과 비공개 제출 규칙을 담는다. */
+const SERVER_ONLY_MODULE = /shared[\\/]game[\\/](keywords|keywordAnswer)(\.[a-z]+)?$/;
 
 /** 주석을 지운 본문에서 서버 전용 키워드 모듈을 가리키는 import·export from·동적 import 의 지정자를 모은다. */
 export function keywordModuleImports(path: string, src: string): string[] {
@@ -49,7 +49,7 @@ describe("답 상수(D-07)", () => {
 describe("src 는 서버 전용 키워드 모듈을 import 하지 않는다(Pitfall 8)", () => {
   it("가드 자기 검사: 가짜 import 본문은 위반 1건을 낸다", () => {
     expect(keywordModuleImports("fake.ts", `import { GENRES } from '../../shared/game/keywords';`)).toHaveLength(1);
-    expect(keywordModuleImports("fake.ts", `export { violatesKeyword } from "../../shared/game/keywordGuard";`)).toHaveLength(1);
+    expect(keywordModuleImports("fake.ts", `export { violatesKeyword } from "../../shared/game/keywordGuard";`)).toHaveLength(0);
     expect(keywordModuleImports("fake.ts", `const m = await import("../../shared/game/keywordAnswer");`)).toHaveLength(1);
   });
 
@@ -122,7 +122,7 @@ describe("클라이언트에서 닿는 모든 모듈은 서버 전용 키워드 
     expect([...hit.keys()].some((f) => SERVER_ONLY_MODULE.test(f))).toBe(true);
   });
 
-  it("src/ 의 모든 파일에서 값 import 로 닿는 shared·src 모듈에 keywords·keywordGuard·keywordAnswer 가 없다", () => {
+  it("src/ 의 모든 파일에서 값 import 로 닿는 shared·src 모듈에 keywords·keywordAnswer 가 없다", () => {
     const entries = sourceFiles(`${ROOT}src`);
     const reached = reachableFrom(entries);
     expect(reached.size).toBeGreaterThan(entries.length); // shared 까지 따라갔다

@@ -49,7 +49,7 @@ import type { RoleId } from "../shared/game/roles";
 import { RULES } from "../shared/game/ruleset";
 import { nextWakeAt, tick } from "../shared/game/tick";
 import { phaseIntroActive } from "../shared/game/phases";
-import { allRolesReady, castFirstBallot, confirmRole, keywordReadUntil } from "../shared/game/playtest";
+import { allRolesReady, castFirstBallot, confirmRole } from "../shared/game/playtest";
 import { castTurnPoint, turnStartOf } from "../shared/game/nomination";
 import { castRunoffVote } from "../shared/game/runoff";
 import { acceptLastWord, castShowdownPoint } from "../shared/game/showdown";
@@ -879,25 +879,15 @@ export class Room extends DurableObject<Env> {
 
   // applyWill 과 같은 모양이다(D-10, T-23-19): 받아들여도 전원 방송(persistAndBroadcast)을 부르지 않는다 — 저장 한 번 + 보낸 본인에게만 sendViewTo.
   // 누가 썼다·냈다는 타이밍이 다른 폰에 새면 안 되고 DO 쓰기 예산(결정 0076)도 지킨다. 마감은 사람 전원이 확정한 그 순간에만 줄어든다(maybeAdvanceEarly, 0089-26·D-11) — 그때는 전원 방송 + reschedule 이고 그 밖에는 reschedule 도 없다.
-  // 다른 점 셋: ① 간격 키를 초안(answerD)·확정(answerF)으로 나눈다 — 입력 직후 [보내기]가 초안 간격에 막혀 사라지지 않게(Pitfall 6). 간격 안의 요청은 오류 없이 버린다.
-  // ② 간격은 수락·거절 모두 기록한다(T-23-22) — 마피아의 떠보기가 400ms 당 1회로 묶인다. ③ 거절에 state(keywordProbed)가 딸려 오면 저장 한 번 한 뒤 오류를 돌려준다 —
-  // handleAnswer 의 sendRejection 이 시민의 거절과 같은 두 프레임(오류 + 본인 state)으로 응답하므로 응답에서는 저장 여부를 알 수 없다(T-23-18).
+  // 초안과 확정의 전송 간격은 따로 센다. 간격은 수락·거절 모두 기록하고, 간격 안의 요청은 오류 없이 버린다.
   private async applyAnswer(playerId: string, text: string, final: boolean, now: number, source: "player" | "bot" = "player"): Promise<WsErrorCode | null> {
     if (!this.room) return "BAD_MESSAGE";
-    const readUntil = keywordReadUntil(this.room);
-    if (readUntil !== undefined && now < readUntil) return "WRONG_PHASE";
     const key = `answer${final ? "F" : "D"}:${playerId}`;
     const last = this.writeAt.get(key);
     if (last !== undefined && now - last < ANSWER_MIN_GAP_MS) return null;
     this.writeAt.set(key, now);
     const result = submitAnswer(this.room, playerId, text, final, source);
-    if (!result.ok) {
-      if (result.state !== undefined) {
-        this.room = result.state;
-        await this.ctx.storage.put("room", this.room);
-      }
-      return result.error;
-    }
+    if (!result.ok) return result.error;
     if (result.state === this.room) return null;
     this.room = result.state;
     if (await this.maybeAdvanceEarly(now, { extend: false })) return null;

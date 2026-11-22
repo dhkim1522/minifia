@@ -91,7 +91,7 @@ describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", 
     expect(row("runoff")).toBe("1000/defense/true"); // 동점 결선 앞머리 1초 → 기본 다음은 최후 변론(결정 0066-4, 결선도 동점이면 훅이 night 로)
     expect(row("assigning")).toBe("3000/roleReveal/false");
     expect(row("roleReveal")).toBe("15000/keyword/true"); // 23-01: 역할 확인 다음은 첫날 키워드(D-01). 키워드가 없는 방은 마감 훅이 곧장 dayAnnounce 로 보낸다(D-29)
-    expect(row("keyword")).toBe("13000/dayAnnounce/true"); // 읽기 3초 + 쓰기 10초
+    expect(row("keyword")).toBe("35000/dayAnnounce/true");
     expect(row("dayAnnounce")).toBe("2000/discussion/true"); // 낮 시작 발표 다음이 곧바로 토론(22페이즈 D-04, 순차 주장 단계 없음 CHAT-06)
     expect(row("discussion")).toBe("90000/verdict/true"); // 토론 다음은 찬반(결정 0089-18, D-10)
     expect(row("verdict")).toBe("10000/nomination/true"); // 찬반 다음은 지목 — 부결이면 마감 훅이 night 로 보낸다

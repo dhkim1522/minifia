@@ -643,7 +643,7 @@ export function offDeviceKeysOf(msg) {
 
 /**
  * 단계 그래프 사본: shared/game/phases.ts 의 nextPhaseOf·afterDayOf 와 tick 분기가 정하는 허용 전이(연속 중복은 접은 뒤). test/unit/e2eContract.test.ts 가 표를 앱과 대조한다.
- * roleReveal → keyword(첫날 13초 키워드 카드, 23-01) → dayAnnounce → discussion → verdict(찬반) → (과반 찬성) nomination(차례 지목) → (최다 한 명) defense(유언) → execution → night | ended,
+ * roleReveal → keyword(첫날 단서 작성) → dayAnnounce → discussion → verdict(찬반) → (과반 찬성) nomination(차례 지목) → (최다 한 명) defense(유언) → execution → night | ended,
  * 찬반 부결·0표와 지목 0표·동률은 곧장 night, night → morning → dayAnnounce | ended. 첫날 정답 공개(23-05, D-02): 키워드가 있는 판의 첫날은 처형 뒤(승패 없음)·처형 없는 낮 뒤에 night 앞의 answerReveal 이 끼고 승패가 나면 건너뛴다. 판 종류가 없어(22-07) 표는 하나다. 22-09(D-10)로 순서가 바뀌었다.
  */
 export const PHASE_GRAPH = Object.freeze({

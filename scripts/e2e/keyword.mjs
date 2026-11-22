@@ -14,10 +14,8 @@ const rectOk = (r) => !!r && [r.left, r.top, r.right, r.bottom, r.width, r.heigh
 const overlaps = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > OVERLAP_EPS && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > OVERLAP_EPS;
 
 // ---- 사본 상수(test/unit/e2eContract.test.ts 가 서버·앱 상수와 대조한다) ----
-/** 키워드 단계 길이(ms) = 읽기 3초 + 쓰기 10초 */
-export const KEYWORD_MS_COPY = 13_000;
-/** 읽기 잠금(ms) — 입력줄은 이 동안 locked */
-export const KEYWORD_READ_MS_COPY = 3_000;
+/** 제시어가 표시된 순간부터 단서를 쓸 수 있는 시간(ms) */
+export const KEYWORD_MS_COPY = 35_000;
 /** 정답 공개 단계 길이(ms) */
 export const ANSWER_REVEAL_MS_COPY = 3_000;
 /** 답 길이 상한(자소) */
@@ -26,9 +24,8 @@ export const ANSWER_MAX_GRAPHEMES_COPY = 20;
 export const ANSWER_MIN_GAP_MS_COPY = 400;
 /** 전원이 끝낸 뒤 남기는 시간(ms) */
 export const EARLY_GRACE_MS_COPY = 1_500;
-/** 금지어 거절 문구(모두 같다)와 알림이 떠 있는 시간(ms) */
-export const KEYWORD_REJECT_COPY = "쓸 수 없는 말이에요";
-export const KEYWORD_NOTICE_MS_COPY = 2_500;
+/** 제시어를 아는 사람의 수정 안내 */
+export const KEYWORD_BLOCKED_COPY = "제시어가 들어 있어요. 다른 표현으로 바꿔 주세요.";
 /** 키워드 카드 각주(사용자 글) */
 export const KEYWORD_NOTE_COPY = "제시어는 쓰지 말고 단서를 남겨요";
 /** 판정 시간 오차(ms) */
@@ -102,15 +99,17 @@ export function kw3MafiaCard(m) {
   return result("KW3", label, bad);
 }
 
-/** KW4(P23-4) 읽기 3초. m = { firstState, firstAtMs(처음 본 시각 − 단계 시작), openAtMs(open 이 된 시각 − 단계 시작), callAtMs(입력칸 data-call 이 생긴 시각 − 단계 시작 | null) } */
-export function kw4ReadLock(m) {
-  const label = `읽기 ${KEYWORD_READ_MS_COPY / 1000}초 동안 locked → 뒤에 open + 입력칸 빛남(data-call)`;
-  if (!m || typeof m.firstState !== "string" || !isNum(m.firstAtMs) || !isNum(m.openAtMs)) return noMeasure("KW4", label, "처음 상태·open 시각");
+/** KW4(P23-4) 첫 입력 상태, 서버 단계 길이, 입력칸 옆 남은 초를 확인한다. */
+export function kw4ImmediateInput(m) {
+  const label = "제시어가 뜨면 입력할 수 있고 35초 제한과 줄어드는 남은 시간을 표시한다";
+  if (!m || typeof m.firstState !== "string" || !isNum(m.duration) || !isNum(m.firstSeconds) || !isNum(m.laterSeconds)) {
+    return noMeasure("KW4", label, "입력 상태·제한 시간·남은 초");
+  }
   const bad = [];
-  if (m.firstState !== "locked") bad.push(`처음 상태 ${m.firstState}(${Math.round(m.firstAtMs)}ms)`);
-  if (Math.abs(m.openAtMs - KEYWORD_READ_MS_COPY) > KW_TOL_MS) bad.push(`open 시각 ${Math.round(m.openAtMs)}ms(기대 ${KEYWORD_READ_MS_COPY}±${KW_TOL_MS})`);
-  if (!isNum(m.callAtMs)) bad.push("입력칸 data-call 이 안 생김");
-  else if (m.callAtMs < KEYWORD_READ_MS_COPY - KW_TOL_MS) bad.push(`data-call 이 읽기 끝보다 일찍(${Math.round(m.callAtMs)}ms)`);
+  if (m.firstState !== "open" || m.readOnly !== false) bad.push(`처음 입력 상태 ${m.firstState}`);
+  if (m.duration !== KEYWORD_MS_COPY) bad.push(`서버 제한 시간 ${m.duration}ms`);
+  if (m.firstSeconds <= 0 || m.firstSeconds > KEYWORD_MS_COPY / 1000) bad.push(`처음 남은 시간 ${m.firstSeconds}초`);
+  if (m.laterSeconds <= 0 || m.laterSeconds >= m.firstSeconds) bad.push(`뒤에 남은 시간 ${m.laterSeconds}초`);
   return result("KW4", label, bad);
 }
 
@@ -127,30 +126,26 @@ export function kw5InputLimit(m) {
   return result("KW5", label, bad);
 }
 
-/** KW6(P23-6) 금지어 거절. pages = [{ who, text(알림 글), noticeMs(알림이 보인 시간), valueKept(입력칸에 쓴 글이 남음), stateAfter(거절 뒤 입력줄 상태) }] (시민·마피아 둘) */
-export function kw6Reject(pages) {
-  const label = `시민·마피아가 같은 문구 '${KEYWORD_REJECT_COPY}' 를 같은 시간(${KEYWORD_NOTICE_MS_COPY / 1000}초) 보고, 글이 입력칸에 남고, 다시 낼 수 있다`;
-  if (!Array.isArray(pages) || pages.length < 2) return noMeasure("KW6", label, "두 페이지");
+/** KW6(P23-6) 제시어를 아는 사람의 금지 단서 수정 경로. */
+export function kw6Correction(m) {
+  const label = "제시어가 들어간 단서는 수정 안내와 입력을 유지하고 다른 표현으로 바꾸면 전송할 수 있다";
+  if (!m) return noMeasure("KW6", label, "수정 전후 입력 상태");
   const bad = [];
-  for (const p of pages) {
-    if (p.text !== KEYWORD_REJECT_COPY) bad.push(`${p.who} 알림 글 '${p.text}'`);
-    if (!isNum(p.noticeMs) || Math.abs(p.noticeMs - KEYWORD_NOTICE_MS_COPY) > KW_TOL_MS) bad.push(`${p.who} 알림 시간 ${isNum(p.noticeMs) ? Math.round(p.noticeMs) : "?"}ms(기대 ${KEYWORD_NOTICE_MS_COPY}±${KW_TOL_MS})`);
-    if (p.valueKept !== true) bad.push(`${p.who} 쓴 글이 입력칸에 안 남음`);
-    if (p.stateAfter !== "open") bad.push(`${p.who} 거절 뒤 상태 ${p.stateAfter}(다시 낼 수 있어야 open)`);
-  }
-  const ms = pages.map((p) => p.noticeMs).filter(isNum);
-  if (ms.length >= 2 && Math.max(...ms) - Math.min(...ms) > KW_TOL_MS) bad.push(`두 페이지 알림 시간 차 ${Math.round(Math.max(...ms) - Math.min(...ms))}ms`);
+  if (m.text !== KEYWORD_BLOCKED_COPY) bad.push(`안내 문구 '${m.text}'`);
+  if (m.valueKept !== true || m.state !== "open") bad.push("입력칸에서 단서를 수정할 수 없음");
+  if (m.blocked !== true || m.sentWhileBlocked !== false) bad.push("금지 단서 전송이 차단되지 않음");
+  if (m.canSendAfterEdit !== true || m.noticeCleared !== true) bad.push("다른 표현으로 바꾼 뒤 전송 가능 상태로 돌아오지 않음");
   return result("KW6", label, bad);
 }
 
 /**
- * KW7(P23-7) 키보드 열림 컴팩트 카드 기하. m = { vw, vh(보이는 영역 높이), compact(data-compact), header, card, meta, form, input, send, gauge, count } (사각형 { left, top, right, bottom, width, height }).
- * 카드가 컴팩트형이고 머리와 겹치지 않는다. 메타·입력줄은 카드 안에서 서로 겹치지 않고 보내기 44 이상, 시간 막대·글자 수도 보인다.
+ * KW7(P23-7) 키보드 열림 컴팩트 카드 기하. 카드가 머리와 겹치지 않고 메타·입력줄이 카드에 들어온다.
+ * 보내기 44 이상, 시간 막대·남은 초·글자 수도 보인다.
  */
 export function kw7CompactGeometry(m) {
   const label = "키보드 열림: 머리 아래 컴팩트 카드 안에 입력줄·글자 수·보내기가 들어가고 모두 보임";
-  const parts = m && isNum(m.vw) && isNum(m.vh) && ["header", "card", "meta", "form", "input", "send", "gauge", "count"].every((k) => rectOk(m[k]));
-  if (!parts) return noMeasure("KW7", label, "머리·카드·메타·입력줄·보내기·시간 막대·글자 수 사각형");
+  const parts = m && isNum(m.vw) && isNum(m.vh) && ["header", "card", "meta", "form", "input", "send", "gauge", "count", "seconds"].every((k) => rectOk(m[k]));
+  if (!parts) return noMeasure("KW7", label, "머리·카드·메타·입력줄·보내기·시간 막대·글자 수·남은 초 사각형");
   const bad = [];
   if (m.compact !== true) bad.push("카드가 컴팩트형(data-compact)이 아님");
   const named = [["머리", m.header], ["카드", m.card], ["메타 줄", m.meta], ["입력줄", m.form]];
@@ -158,7 +153,8 @@ export function kw7CompactGeometry(m) {
   if (overlaps(m.meta, m.form)) bad.push("메타 줄과 입력줄이 겹침");
   for (const [n, r] of named.slice(2)) if (r.top < m.card.top - OVERLAP_EPS || r.bottom > m.card.bottom + OVERLAP_EPS || r.left < m.card.left - OVERLAP_EPS || r.right > m.card.right + OVERLAP_EPS) bad.push(`${n}이 카드 밖에 있음`);
   for (const [n, r] of [...named, ["보내기", m.send]]) if (r.top < -OVERLAP_EPS || r.bottom > m.vh + OVERLAP_EPS || r.left < -OVERLAP_EPS || r.right > m.vw + OVERLAP_EPS) bad.push(`${n} 가 보이는 영역(${fmt(m.vw)}x${fmt(m.vh)}) 밖 ${fmt(r.left)},${fmt(r.top)}~${fmt(r.right)},${fmt(r.bottom)}`);
-  for (const [n, r] of [["시간 막대", m.gauge], ["n/20", m.count]]) if (r.width <= 0 || r.height <= 0) bad.push(`${n} 가 안 보임`);
+  for (const [n, r] of [["시간 막대", m.gauge], ["n/20", m.count], ["남은 초", m.seconds]]) if (r.width <= 0 || r.height <= 0) bad.push(`${n} 가 안 보임`);
+  if (overlaps(m.seconds, m.count) || overlaps(m.seconds, m.form) || !overlaps(m.seconds, m.meta)) bad.push("남은 초가 글자 수·입력줄과 겹치거나 메타 줄을 벗어남");
   // 공용 헤더의 좌우 패딩(14px, 10px) 차이 때문에 실제 가운데에서 2px 옆에 놓인다.
   if (Math.abs((m.gauge.left + m.gauge.right - m.header.left - m.header.right) / 2) > 2 + OVERLAP_EPS) bad.push("시간 막대가 머리 가운데에 있지 않음");
   if (m.send.width + OVERLAP_EPS < TAP_MIN || m.send.height + OVERLAP_EPS < TAP_MIN) bad.push(`[보내기] ${fmt(m.send.width)}x${fmt(m.send.height)} < ${TAP_MIN}`);
@@ -268,27 +264,18 @@ export function kw13Leak(m) {
 
 /**
  * 키워드 입력줄 감시. 모든 페이지가 만들어질 때 넣는다(함수 하나 — addInitScript 가 문자열로 직렬화하므로 바깥 값을 쓰지 않는다).
- * 30ms 마다 `[data-answer-state]` 상태 바뀜·입력칸 data-call 첫 시각·거절 알림 글(떴다 사라진 시각)·조기 진행 표식을 기록한다.
- * 키워드·역할 값은 기록하지 않는다 — 입력칸 글(사용자가 쓴 글)과 알림 글만 담는다. 읽기는 window.__kwWatch.
+ * 30ms 마다 첫 입력 상태와 조기 진행 표식을 기록한다. 키워드·역할 값은 기록하지 않는다.
  */
 export function installKeywordWatch() {
-  const st = { states: [], callAt: null, notices: [], earlyAt: null, tones: [] };
+  const st = { firstState: null, earlyAt: null, tones: [] };
   window.__kwWatch = st;
   setInterval(() => {
     const now = Date.now();
     const header = document.querySelector("[data-phase-header][data-early]");
     if ((header || document.querySelector("[data-host-band][data-early]")) && st.earlyAt === null) st.earlyAt = now;
     const root = document.querySelector("[data-answer-state]");
-    if (!root) return;
-    const state = root.getAttribute("data-answer-state");
-    const lastState = st.states[st.states.length - 1];
-    if (!lastState || lastState.state !== state) st.states.push({ state, at: now });
-    const input = root.querySelector("[data-answer-input]");
-    if (input && input.hasAttribute("data-call") && st.callAt === null) st.callAt = now;
-    const text = (root.querySelector("[data-answer-notice]")?.textContent ?? "").trim();
-    const last = st.notices[st.notices.length - 1];
-    if (text !== "" && (!last || last.endAt !== null)) st.notices.push({ text, startAt: now, endAt: null, value: input ? input.value : "" });
-    else if (text === "" && last && last.endAt === null) last.endAt = now;
+    if (!root || root.closest("[hidden]")) return;
+    st.firstState ??= root.getAttribute("data-answer-state");
     if (header) {
       const tone = header.querySelector("[data-phase-gauge]")?.getAttribute("data-tone");
       if (tone && !st.tones.includes(tone)) st.tones.push(tone);
@@ -329,6 +316,7 @@ const readAnswerLine = (page) =>
       countText: root?.querySelector("[data-answer-count]")?.textContent ?? "",
       readOnly: !!input && input.readOnly,
       label: root?.querySelector("[data-answer-done]")?.textContent ?? null,
+      seconds: Number(/^(\d+)초$/.exec(root?.querySelector("[data-answer-seconds]")?.textContent?.trim() ?? "")?.[1]),
     };
   });
 
@@ -355,6 +343,7 @@ const readGeometry = (page) =>
       check: rectOf(q("[data-answer-check]")),
       gauge: rectOf(q("[data-phase-gauge]")),
       count: rectOf(q("[data-answer-count]")),
+      seconds: rectOf(q("[data-answer-seconds]")),
     };
   });
 
@@ -401,15 +390,15 @@ async function typeAndSend(page, text) {
   await page.locator("[data-answer-send]").click({ timeout: 3000 });
 }
 
-/** 거절 알림이 한 번 떴다 사라질 때까지 기다려 그 기록을 돌려준다 */
-async function waitNoticeCycle(page, ms = 6000) {
-  const start = performance.now();
-  for (;;) {
-    const w = await readWatch(page);
-    const n = w?.notices?.[w.notices.length - 1];
-    if (n && n.endAt !== null) return n;
-    if (performance.now() - start > ms) return null;
-    await sleep(50);
+/** 마피아가 직접 입력한 단서의 본인 응답을 제외하고 제시어 누설을 검사한다. */
+function withoutOwnAnswer(text, answer) {
+  try {
+    const frame = JSON.parse(text);
+    if (frame.t !== "state" || frame.view?.me?.answer?.text !== answer) return text;
+    delete frame.view.me.answer.text;
+    return JSON.stringify(frame);
+  } catch {
+    return text;
   }
 }
 
@@ -449,19 +438,30 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
   const openKeyword = (ctx, id, { extraHost = [], vote = { exec: "no", pick: "host" } } = {}) =>
     openGame(ctx, id, { ...GAME4, role: "mafia", vote, to: "keyword", hostNick: GAME_HOST_NICK, hostInitScripts: [installKeywordWatch, ...extraHost], guestInitScripts: [installKeywordWatch, ...extraHost] });
 
-  /** 키워드 단계 시작(서버 시각, 이 기계에서는 브라우저 시각과 같다) — 아직 아무도 제출하지 않았을 때 읽는다 */
-  const startOf = (tracker) => {
-    const v = tracker.last();
-    return v.phaseEndsAt - v.phaseDurationMs;
-  };
-
-  /** 두 페이지가 그 판 키워드를 같이 보내 거절을 받는다. 돌려주는 값: KW6 입력(페이지별 알림 기록) */
-  async function rejectBoth(pages, word) {
-    for (const p of pages) await waitOpen(p.page);
-    await at("거절 보내기", () => Promise.all(pages.map((p) => typeAndSend(p.page, word))));
-    const notices = await Promise.all(pages.map((p) => waitNoticeCycle(p.page)));
-    const lines = await Promise.all(pages.map((p) => readAnswerLine(p.page)));
-    return pages.map((p, i) => ({ who: p.who, text: notices[i]?.text ?? null, noticeMs: notices[i] ? notices[i].endAt - notices[i].startAt : null, valueKept: lines[i].value === word, stateAfter: lines[i].state }));
+  async function readCorrection(page, tracker, word) {
+    await waitOpen(page);
+    const input = page.locator("[data-answer-input]");
+    const send = page.locator("[data-answer-send]");
+    const notice = page.locator("[data-answer-notice]");
+    await input.fill(word);
+    await notice.filter({ hasText: KEYWORD_BLOCKED_COPY }).waitFor({ timeout: 3000 });
+    await tracker.waitFor((view) => view.me.answer?.text === word && view.me.answer.keywordBlocked === true, 3000, "금지 단서의 작성자 안내");
+    const text = await notice.textContent();
+    const blocked = await send.isDisabled();
+    await input.press("Enter");
+    const line = await readAnswerLine(page);
+    const sentWhileBlocked = tracker.last()?.me.answer?.final === true;
+    await input.fill(KW_WORD);
+    await notice.filter({ hasText: KEYWORD_BLOCKED_COPY }).waitFor({ state: "hidden", timeout: 3000 });
+    return {
+      text,
+      blocked,
+      sentWhileBlocked,
+      state: line.state,
+      valueKept: line.value === word,
+      canSendAfterEdit: await send.isEnabled(),
+      noticeCleared: (await notice.textContent()) === "",
+    };
   }
 
   const waitOpen = (page, ms = 8000) => page.waitForSelector('[data-answer-state="open"]', { timeout: ms });
@@ -498,18 +498,28 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       const gp = g.page;
       const pages = [{ who: "참가자(시민 편)", page: gp, tracker: g.tracker }, { who: "방장(마피아)", page: hp, tracker: ht }];
       await Promise.all(pages.map((p) => p.page.waitForSelector("[data-keyword-card]", { timeout: 6000 })));
-      const t0 = startOf(g.tracker);
-
-      // KW2·KW4: 참가자(시민 편) 카드와 읽기 3초 잠금
+      // KW2·KW4: 참가자(시민 편) 카드와 즉시 입력
       const card = await readCard(gp);
       const word = (card.word ?? "").trim();
       rec1(rec, `${id}/citizen`, kw2CitizenCard(card));
-      const answerAtStart = (await readAnswerLine(gp)).state;
-      rec(`${id}/citizen`, "KW4a", "키워드 단계가 열리자마자 입력줄이 locked 다", answerAtStart === "locked", `처음 읽은 상태 ${answerAtStart}`);
+      const opening = await readAnswerLine(gp);
+      const duration = g.tracker.last().phaseDurationMs;
+      await gp.waitForFunction((seconds) => {
+        const current = Number.parseInt(document.querySelector("[data-answer-seconds]")?.textContent, 10);
+        return current < seconds;
+      }, opening.seconds, { timeout: 3000 });
+      const w = await readWatch(gp);
+      rec1(rec, `${id}/citizen`, kw4ImmediateInput({
+        firstState: w?.firstState ?? opening.state,
+        readOnly: opening.readOnly,
+        duration,
+        firstSeconds: opening.seconds,
+        laterSeconds: (await readAnswerLine(gp)).seconds,
+      }));
 
       // KW13: 방장(마피아)·참가자(시민 편) 페이지를 다시 연결해 그 연결의 모든 프레임에 키워드가 있는지 본다(정답 공개 전까지, 시민 쪽은 키워드를 받는 대조군)
       const keyBefore = { mafia: keysOf(ht.last()), citizen: keysOf(g.tracker.last()) };
-      const mafiaWs = watchSockets(hp, { needles: [word] });
+      const mafiaWs = watchSockets(hp, { needles: [word], projectReceivedText: (text) => withoutOwnAnswer(text, word) });
       const citizenWs = watchSockets(gp, { needles: [word] });
       await Promise.all([hp, gp].map((p) => p.reload({ waitUntil: "domcontentloaded" })));
       await Promise.all([hp, gp].map((p) => p.waitForSelector("[data-keyword-card]", { timeout: 8000 })));
@@ -519,17 +529,10 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       const dom = await readDomText(hp);
       rec1(rec, `${id}/mafia`, kw3MafiaCard({ word: mcard.word ?? "", genre: mcard.genre ?? "", html: dom.html, attrs: dom.attrs, answer: word }));
 
-      // KW4: 시작 → locked → 3초 → open + data-call (참가자 페이지 감시 기록)
-      await waitOpen(gp);
-      await sleep(250);
-      const w = await readWatch(gp);
-      const openAt = w?.states?.find((s) => s.state === "open")?.at;
-      rec1(rec, `${id}/citizen`, kw4ReadLock({ firstState: w?.states?.[0]?.state, firstAtMs: w?.states?.[0] ? w.states[0].at - t0 : undefined, openAtMs: openAt !== undefined ? openAt - t0 : undefined, callAtMs: w?.callAt != null ? w.callAt - t0 : null }));
       const blank = await readGeometry(gp);
 
-      // KW6: 시민·마피아가 같은 금지어(그 판 키워드)를 보낸다
-      const rej = await rejectBoth([{ who: "참가자(시민 편)", page: gp }, { who: "방장(마피아)", page: hp }], word);
-      rec1(rec, `${id}/reject`, kw6Reject(rej));
+      // KW6: 시민 편은 그 판 제시어를 쓰면 안내를 읽고 단서를 고칠 수 있다.
+      rec1(rec, `${id}/reject`, kw6Correction(await readCorrection(gp, g.tracker, word)));
 
       // KW5: 21자 입력 → 20 에서 멈춤, n/20 → 키보드로 보내면 접수 표시·읽기 전용
       const answerInput = gp.locator("[data-answer-input]");
@@ -549,9 +552,13 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
           stays(blank.input, withText.input) && stays(withText.input, confirmed.input) && stays(withText.send, confirmed.check),
         JSON.stringify({ blank: blank.input, withText: withText.input, confirmed: confirmed.input, send: withText.send, check: confirmed.check }));
 
-      // 방장도 거절 뒤 다른 글을 보내고 양쪽에서 발표를 따라간다.
-      await at("방장 보내기", () => typeAndSend(hp, "다른말"));
-      await hp.waitForSelector('[data-answer-state="sent"]', { timeout: 4000 }).catch(() => {});
+      // 마피아의 같은 입력은 접수하되 제시어와의 일치 여부를 보내지 않는다.
+      await at("마피아 단서 보내기", () => typeAndSend(hp, word));
+      const accepted = await ht.waitFor(v => v.phase === "keyword" && v.me.answer?.final === true, 4000, "마피아 단서 접수");
+      await hp.waitForSelector("[data-answer-done]", { state: "attached", timeout: 4000 });
+      rec(`${id}/reject`, "KW6b", "마피아의 단서는 평소처럼 접수되고 제시어 포함 여부를 알리지 않는다",
+        accepted.me.answer.text === word && !("keywordBlocked" in accepted.me.answer) &&
+        (await hp.locator("[data-answer-notice]").textContent()) === "");
 
       const first = await ht.waitFor(v => v.day?.keyword?.presentation?.order === 1, 10_000, "첫 답 발표");
       const total = first.players.length;
@@ -598,6 +605,8 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
         return { who: p.who, turns: turns[i], ...await readDiscussionTools(p.page) };
       }));
       rec1(rec, `${id}/answers`, kw8AnswerTurns(presentations, expectedOrder));
+      rec(`${id}/answers`, "KW6c", "제시어가 들어간 마피아 단서는 발표에서 모두에게 미제출로 보인다",
+        turns.every(rows => rows.some(turn => turn.seat === accepted.me.seat && turn.text === null)));
       rec(`${id}/answers`, "KW8b", "발표 중 [의심!]을 누르면 [의심 해제]가 보이고 표시가 첫 토론에 남는다", suspectCopyMatches && markedSeat !== undefined &&
         pages.every(p => p.tracker.last().day?.suspects?.some(note => note.to === markedSeat)));
 
@@ -695,7 +704,7 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
     }
   }
 
-  // ---- keyword-sizes: 폰 6종 — 금지어 거절(KW6)과 키보드 열림 컴팩트 카드 기하(KW7, P23-6·7) ----
+  // ---- keyword-sizes: 폰 6종 — 단서 수정(KW6)과 키보드 열림 컴팩트 카드 기하(KW7, P23-6·7) ----
   async function keywordSizesFlow(ctx) {
     const id = "keyword-sizes";
     const rec = recorder(ctx);
@@ -707,10 +716,11 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       const pages = [{ who: "참가자(시민 편)", page: g.page }, { who: "방장(마피아)", page: hp }];
       await Promise.all(pages.map((p) => p.page.waitForSelector("[data-keyword-card]", { timeout: 6000 })));
       const word = (((await readCard(g.page)).word) ?? "").trim();
-      const rej = await rejectBoth(pages, word);
-      recLines(rec, `${id}/reject`, [kw6Reject(rej)], ` (${ctx.size.label})`);
+      const correction = await readCorrection(g.page, g.tracker, word);
+      recLines(rec, `${id}/reject`, [kw6Correction(correction)], ` (${ctx.size.label})`);
       // 키보드 열림: 입력칸 포커스 + 가짜 키보드(visualViewport 높이 − K)
       for (const p of pages) {
+        await p.page.locator("[data-answer-input]").fill(KW_WORD);
         await p.page.locator("[data-answer-input]").focus();
         await p.page.evaluate((k) => window.__mfVv.set(window.innerHeight - k, 0), K);
       }

@@ -223,7 +223,7 @@ export interface RoomState {
   keywordAnswers?: Array<{ order: number; seat: number; text: string | null }>;
   /** 서버 전용. 첫날 답안 발표의 현재 위치. 토론에서 지운다. */
   keywordPresentationIndex?: number;
-  /** 서버 전용(23-06, D-09). 그 판에서 마피아가 금지어로 거절당한 적이 있음 — D1 "떠보기 성공"의 근거. 어떤 view·프레임에도 싣지 않는다. */
+  /** 서버 전용. 이전 버전에서 진행한 판의 D1 떠보기 기록을 보존한다. */
   keywordProbed?: true;
   /**
    * 서버 전용(23-10, D-16). 판이 시작된 시각(ms) — beginGame 이 now 로 기록하고 D1 판 길이 계산에만 쓴다. 어떤 view·프레임에도 싣지 않는다.

@@ -59,10 +59,10 @@ import { RESULT_TEXT } from "../../src/game/verdict";
 import { JOB_OUTFIT } from "../../src/world/jobOutfit";
 import { SIDE_CELL, SIDE_GAP, splitSideColumn } from "../../src/components/v2/SideColumn";
 import { HOST_RAIL_LABEL } from "../../src/components/v2/HostRail";
-import { nextPhaseOf, afterDayOf, WILL_REVEAL_MS, PIN_OFF_EXEC_AT, KEYWORD_MS, KEYWORD_READ_MS, ANSWER_REVEAL_MS } from "../../shared/game/phases";
+import { nextPhaseOf, afterDayOf, WILL_REVEAL_MS, PIN_OFF_EXEC_AT, KEYWORD_MS, ANSWER_REVEAL_MS } from "../../shared/game/phases";
 import { ANSWER_MAX_GRAPHEMES, ANSWER_MIN_GAP_MS } from "../../shared/game/answerRules";
 import { EARLY_GRACE_MS } from "../../shared/game/early";
-import { KEYWORD_NOTICE_MS, KEYWORD_REJECT_COPY } from "../../src/net/useKeywordAnswer";
+import { KEYWORD_BLOCKED_COPY } from "../../src/net/useKeywordAnswer";
 // @ts-expect-error -- 선언 없는 스크립트 모듈
 import * as e2eDay from "../../scripts/e2e/day.mjs";
 // @ts-expect-error -- 선언 없는 스크립트 모듈
@@ -755,15 +755,13 @@ describe("서버 계약 소비자 스크립트의 낮 시작 → 토론 흐름 (
     expect(e2eDay.WILL_REVEAL_MS_COPY).toBe(WILL_REVEAL_MS);
   });
 
-  it("키워드 E2E 사본 상수(KEYWORD_MS·KEYWORD_READ_MS·ANSWER_REVEAL_MS·ANSWER_MAX_GRAPHEMES·ANSWER_MIN_GAP_MS·EARLY_GRACE_MS·거절 문구·알림 시간)가 서버·앱 상수와 같다 (23-12)", () => {
+  it("키워드 E2E 사본 상수와 단서 수정 안내가 서버·앱과 같다 (23-12)", () => {
     expect(e2eKeyword.KEYWORD_MS_COPY).toBe(KEYWORD_MS);
-    expect(e2eKeyword.KEYWORD_READ_MS_COPY).toBe(KEYWORD_READ_MS);
     expect(e2eKeyword.ANSWER_REVEAL_MS_COPY).toBe(ANSWER_REVEAL_MS);
     expect(e2eKeyword.ANSWER_MAX_GRAPHEMES_COPY).toBe(ANSWER_MAX_GRAPHEMES);
     expect(e2eKeyword.ANSWER_MIN_GAP_MS_COPY).toBe(ANSWER_MIN_GAP_MS);
     expect(e2eKeyword.EARLY_GRACE_MS_COPY).toBe(EARLY_GRACE_MS);
-    expect(e2eKeyword.KEYWORD_REJECT_COPY).toBe(KEYWORD_REJECT_COPY);
-    expect(e2eKeyword.KEYWORD_NOTICE_MS_COPY).toBe(KEYWORD_NOTICE_MS);
+    expect(e2eKeyword.KEYWORD_BLOCKED_COPY).toBe(KEYWORD_BLOCKED_COPY);
   });
 
   it("scripts/smoke.mjs 의 EXECUTION_MS 사본이 서버의 처형 단계 길이(6_600, 유언 카드 3.0 + 처형 3.0 + 꼬리 0.6)와 같다 (22-12 P22-13)", () => {

@@ -1,16 +1,16 @@
-// 23-09 Task 1: 키워드 답 입력 훅(useKeywordAnswer) — 읽기 3초 잠금·초안 자동 저장·마감 직전 전송·확정·거절 알림·복원·자소 상한.
-// 서버가 규칙을 정하고 이 훅은 표시·전송만 한다(결정 0002). fake timer + 가짜 send/onEvent 로 시간 규칙만 시험한다.
+// 제시어 입력 훅의 단계 시작, 남은 시간, 초안 저장, 확정, 금지 단서 안내를 가짜 시계와 서버 응답으로 확인한다.
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { bindSignals, type LocalSignal } from "../../src/audio/signals";
+import { KEYWORD_MS } from "../../shared/game/phases";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import type { RoomEvent } from "../../src/net/useRoomConnection";
-import { useKeywordAnswer, KEYWORD_AUTOSAVE_MS, KEYWORD_LAST_SEND_LEAD_MS, KEYWORD_NOTICE_MS } from "../../src/net/useKeywordAnswer";
+import { useKeywordAnswer, KEYWORD_AUTOSAVE_MS, KEYWORD_BLOCKED_COPY, KEYWORD_LAST_SEND_LEAD_MS, KEYWORD_NOTICE_MS } from "../../src/net/useKeywordAnswer";
 
 const NOW = 1_700_000_000_000;
-const DURATION = 13_000;
+const DURATION = KEYWORD_MS;
 
-function makeView(opts: { elapsed?: number; answer?: { text: string; final: boolean }; role?: "mafia" | "citizen" } = {}): RoomView {
+function makeView(opts: { elapsed?: number; answer?: RoomView["me"]["answer"]; word?: string; role?: "mafia" | "citizen" } = {}): RoomView {
   const endsAt = NOW - (opts.elapsed ?? 0) + DURATION;
   return {
     code: "0042",
@@ -26,7 +26,7 @@ function makeView(opts: { elapsed?: number; answer?: { text: string; final: bool
       { seat: 2, nickname: "민지", connected: true, isHost: false, alive: true },
       { seat: 3, nickname: "도현", connected: true, isHost: false, alive: true },
     ],
-    me: { seat: 0, isHost: true, role: opts.role ?? "citizen", ...(opts.answer ? { answer: opts.answer } : {}) },
+    me: { seat: 0, isHost: true, role: opts.role ?? "citizen", ...(opts.answer ? { answer: opts.answer } : {}), ...(opts.word ? { keyword: opts.word } : {}) },
     day: { n: 1, roles: ["mafia", "police", "doctor", "citizen"], keyword: { genre: "영화" } },
   } as RoomView;
 }
@@ -65,16 +65,16 @@ afterEach(() => {
 
 const errorFrame = (code = "BAD_MESSAGE"): RoomEvent => ({ t: "error", code, message: "x" }) as RoomEvent;
 
-describe("읽기 3초 잠금 (P23-6)", () => {
-  it("단계 시작 뒤 3초 전에는 locked, 3초가 되면 open 이고 locked 중 submit 은 아무것도 보내지 않는다", () => {
-    const t = setup(makeView());
+describe("단계 시작과 입력 가능 시간", () => {
+  it("단계 안내 중에는 잠기고 서버 시작 시각부터 바로 단서를 받는다", () => {
+    const t = setup({ ...makeView({ elapsed: -1_000 }), phaseStartsAt: NOW + 1_000 });
     expect(t.result.current.state).toBe("locked");
     expect(t.result.current.callInput).toBe(false);
     act(() => t.result.current.setValue("안경"));
     act(() => t.result.current.submit());
     expect(t.sent.filter((m) => m.t === "answer" && m.final)).toHaveLength(0);
     act(() => {
-      vi.advanceTimersByTime(3_000);
+      vi.advanceTimersByTime(1_000);
     });
     expect(t.result.current.state).toBe("open");
     expect(t.result.current.callInput).toBe(true);
@@ -82,11 +82,12 @@ describe("읽기 3초 잠금 (P23-6)", () => {
 
   it("남은 초는 마감 기준 올림이고 서버 시각 offset 을 반영한다", () => {
     const t = setup(makeView());
-    expect(t.result.current.secondsLeft).toBe(13);
+    expect(t.result.current.secondsLeft).toBe(35);
+    expect(t.result.current.state).toBe("open");
     act(() => {
       vi.advanceTimersByTime(4_000);
     });
-    expect(t.result.current.secondsLeft).toBe(9);
+    expect(t.result.current.secondsLeft).toBe(31);
   });
 
   it("처음 한 글자를 쓰면 callInput 이 꺼진다", () => {
@@ -130,7 +131,7 @@ describe("초안 자동 저장 (P23-14)", () => {
   });
 
   it("디바운스가 마감을 넘기는 늦은 입력도 마감 700ms 전에 한 번 보내고, 뒤의 디바운스는 같은 글이라 다시 보내지 않는다", () => {
-    const t = setup(makeView({ elapsed: 9_000 })); // 마감까지 4초 → 마감 직전 전송은 3.3초 뒤
+    const t = setup(makeView({ elapsed: DURATION - 4_000 })); // 마감까지 4초 → 마감 직전 전송은 3.3초 뒤
     act(() => {
       vi.advanceTimersByTime(3_000);
     });
@@ -169,7 +170,7 @@ describe("초안 자동 저장 (P23-14)", () => {
     expect(t.sent).toHaveLength(0);
   });
 
-  it("잠금 중 입력은 저장되지 않고(글 자체가 안 들어간다) 연결이 끊겨 있으면 보내지 않는다", () => {
+  it("연결이 끊겨 있으면 작성 중인 글을 보내지 않는다", () => {
     const off = setup(makeView({ elapsed: 5_000 }), { canSend: false });
     act(() => off.result.current.setValue("안경"));
     act(() => {
@@ -180,6 +181,31 @@ describe("초안 자동 저장 (P23-14)", () => {
 });
 
 describe("확정 제출 (P23-11·12·13)", () => {
+  it("시민 편의 제시어가 조합 확정 때 포함돼도 제출하지 않고 정상 단서로 수정할 수 있다", () => {
+    const t = setup(makeView({ word: "고양이" }));
+    act(() => t.result.current.setValue("고양"));
+    act(() => t.result.current.submit("고 양 이"));
+    expect(t.sent).toHaveLength(0);
+    act(() => t.result.current.setValue("고.양.이처럼"));
+    expect(t.result.current.notice).toBe(KEYWORD_BLOCKED_COPY);
+    expect(t.result.current.canSubmit).toBe(false);
+    act(() => t.result.current.setValue("가을이 좋아요"));
+    expect(t.result.current.notice).toBeNull();
+    act(() => t.result.current.submit());
+    expect(t.sent).toEqual([{ t: "answer", text: "가을이 좋아요", final: true }]);
+  });
+
+  it("서버의 별칭 안내는 그 초안에 적용되고 변경 뒤 늦은 응답은 현재 글을 막지 않는다", () => {
+    const blocked = makeView({ word: "고양이", answer: { text: "cat", final: false, keywordBlocked: true } });
+    const t = setup(blocked);
+    expect(t.result.current.notice).toBe(KEYWORD_BLOCKED_COPY);
+    expect(t.result.current.canSubmit).toBe(false);
+    act(() => t.result.current.setValue("발소리"));
+    t.rerender({ view: { ...blocked, serverNow: NOW + 1 } });
+    expect(t.result.current.notice).toBeNull();
+    expect(t.result.current.canSubmit).toBe(true);
+  });
+
   it("빈 글은 아무것도 보내지 않는다(canSubmit false)", () => {
     const t = setup(makeView({ elapsed: 5_000 }));
     expect(t.result.current.canSubmit).toBe(false);
@@ -325,7 +351,7 @@ describe("복원 (P23-13)", () => {
     expect(t.result.current.canSubmit).toBe(false);
   });
 
-  it("초안이면 value 를 채우고 3초가 지난 뒤라면 open 이다", () => {
+  it("초안을 채우고 시작 시각 뒤라면 바로 입력할 수 있다", () => {
     const t = setup(makeView({ elapsed: 8_000, answer: { text: "안경", final: false } }));
     expect(t.result.current.value).toBe("안경");
     expect(t.result.current.state).toBe("open");
