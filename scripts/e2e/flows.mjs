@@ -42,6 +42,7 @@ import {
   openGuestJoinPage,
   openHostPage,
   openPerfPage,
+  openTableDockPane,
   openTestSheet,
   readLinkState,
   collapseChatLog,
@@ -145,6 +146,7 @@ import { makeKeywordFlows } from "./keyword.mjs";
 import { SHORT_PHONE_H, readBenchView, readRematchState, readResultHidden, readRestSheet, readResultStage, rematchChecks, resultHiddenChecks, resultSkipChecks, resultStageChecks } from "./result.mjs";
 import { makePoliticsFlows } from "./politics.mjs";
 import { makeSoundFlows } from "./sound.mjs";
+import { makeTableDockFlow } from "./tableDock.mjs";
 import { makeHostFlows } from "./host.mjs";
 import { CHAT_OPEN_STAGE_MIN, ghostViewChecks, liveGhostChecks, makePolishFlows, readLiveGhost } from "./polish.mjs";
 
@@ -1594,21 +1596,22 @@ async function allAt(pages, phase, ms = 8000) {
   return Promise.all(pages.map((p) => untilGame(p, (g) => g.phase === phase, ms, `${phase} 도착`)));
 }
 
-/** 채팅과 단계별 조작을 같이 그려도 입력과 기록은 같은 위치에 둔다. */
+/** 하단 탭에서 한 패널을 열고도 단계 조작과 입력 영역이 화면 안에 있다. */
 function panelRow(rec, sc, id, g, h, who) {
   const dock = g?.chatDock;
   const input = g?.chatInput;
   const verdict = g?.verdictBtns ?? [];
   const verdictCard = g?.verdictCard;
-  const logWant = discussionLogHeight(h);
-  const want = logWant + (g?.chatLockedCount > 0 ? 64 : ROOM_CHAT_EXTRA);
-  const near = (a, b) => Math.abs(a - b) <= 1;
-  const ok = dock && input && near(dock.height, want) && near(dock.bottom, h)
-    && near(g.chatLog?.height, logWant) && near(input.bottom, h - 12)
-    && near(input.height, CHAT_CONTROL)
-    && (verdict.length === 0 || verdictCard && verdictCard.top >= g.header.bottom && verdictCard.bottom <= dock.top
-      && verdict.every(({ rect }) => rect.top >= verdictCard.top && rect.bottom <= verdictCard.bottom));
-  rec(sc, id, `기록과 입력 위치 고정 (${who})`, !!ok, `채팅 ${dock?.height}/${want}px · 입력 아래 ${input?.bottom}/${h - 12}px`);
+  const table = g?.tableDock;
+  const viewport = { left: 0, top: 0, right: g?.vw, bottom: h };
+  const tabs = table?.tabs.length === 3 && table.tabs.every((tab) => tab && rectInside(tab, viewport) && tab.height >= 44);
+  const chat = table?.open === "chat"
+    ? dock && input && g.chatLog && rectInside(input, dock) && rectInside(g.chatLog, dock) && input.height >= CHAT_CONTROL
+    : !input && !g?.chatLog;
+  const choice = verdict.length === 0 || verdictCard && rectInside(verdictCard, viewport) && verdictCard.top >= g.header.bottom
+    && verdictCard.bottom <= table?.rect?.top + 1 && verdict.every(({ rect }) => rectInside(rect, verdictCard));
+  rec(sc, id, `하단 탭·입력과 단계 조작이 화면 안에 있음 (${who})`, !!(tabs && chat && choice),
+    `패널 ${table?.open ?? "없음"} · 채팅 ${dock?.height ?? 0}px · 입력 높이 ${input?.height ?? 0}px`);
 }
 
 /** 게임 화면의 G(공통)·H(헤더 대비) 묶음을 한 페이지에 적용한다. */
@@ -1828,6 +1831,7 @@ async function dayFlow(ctx) {
       const gh = await readGame(hp);
       rec(sc, "DF1", "처형자(방장)에게 유언 시트가 하나 자동으로 열려 있다", gh.willSheets === 1, `시트 ${gh.willSheets}개`);
       for (let i = 0; i < guests.length; i++) {
+        await openTableDockPane(guests[i].page, "chat");
         const g = await readGame(guests[i].page);
         panelRow(rec, sc, "DF2", g, h, humans[i + 1].who);
         rec(sc, "DF3", `나머지 사람은 시트가 없고 채팅 입력이 잠겨 있다 (${humans[i + 1].who})`, g.willSheets === 0 && g.chatLockedCount === 1, `시트 ${g.willSheets} · 잠금 ${g.chatLockedCount}`);
@@ -2013,8 +2017,10 @@ async function ghostFlow(ctx) {
     // 유령 화면: data-ghost-view, 모든 이름표에 직업 칩(spectate.seats 수), 유령 채널 입력
     {
       const sc = `${id}/ghost`;
-      const g = await untilGame(hp, (x) => x.ghostView, 9000, "유령 화면");
+      await untilGame(hp, (x) => x.ghostView, 9000, "유령 화면");
+      await openTableDockPane(hp, "chat");
       await settle(hp);
+      const g = await readGame(hp);
       const view = ht.last();
       const seats = view.spectate?.seats?.length ?? -1;
       rec(sc, "GH5", "처형된 방장 화면이 유령 화면이다(data-ghost-view)", g.counts.ghostView === 1, `ghostView ${g.counts.ghostView}`);
@@ -2554,6 +2560,7 @@ async function writeSheet(page, tracker, kind, text) {
  */
 async function morningLetterChecks(ctx, sc, rec, game, { appearMaxMs, announceRe, wills, name }) {
   const { hp, host } = game;
+  await openTableDockPane(hp, "chat");
   const appeared = await attempt(async () => {
     const start = performance.now();
     for (;;) {
@@ -2650,7 +2657,7 @@ async function nightAssassin(ctx) {
     const alive = aliveOf(view).length;
     rec(sc, "NA1", "내 직업이 마피아이고 동료가 있다(6명판)", view.me.role === "mafia" && allies === 1, `직업 ${view.me.role}, 동료 ${allies}`);
     // 15-08: 밤 마피아도 시민·경찰·의사와 같은 얼굴 목록(나 포함 산 사람 전원)으로 고른다 — 채팅 입력·이름표 선택 버튼·다가가기 걷기·후보 효과는 없다
-    const n0 = await readNight(hp);
+    const n0 = await readNightWithTools(hp);
     rec(sc, "NA2", "밤 마피아 중앙 카드에 얼굴 목록이 있고 채팅 입력은 없다", n0?.faceList === true && !!n0.faceCard && g.hasInput === false, `얼굴 목록 ${n0?.faceList}, 입력 ${g.hasInput}`);
     rec(sc, "NA3", `이름표 선택 버튼은 없고 얼굴 칸은 나 포함 산 사람 ${alive}개`, g.picks.length === 0 && n0?.faces?.length === alive, `버튼 ${g.picks.length}개, 칸 ${n0?.faces?.length}개`);
     rec(sc, "NA4", "확정 전에는 [쪽지] 가 있고 비활성(aria-disabled)이다", n0?.noteButton?.disabled === true, `쪽지 버튼 ${JSON.stringify(n0?.noteButton)}`);
@@ -2675,6 +2682,7 @@ async function nightAssassin(ctx) {
       await hp.waitForFunction((seat) => document.querySelector(`[data-face="${seat}"] .mv-face__count[aria-label="확정"]`) !== null, target, { timeout: 9000 });
     });
     rec(sc, "NA8", "봇 마피아가 같은 대상을 고르면 대상 얼굴 칸 안에 '확정' 표시(check)가 붙는다", sure.ok, sure.detail || "9초 안에 확정 표시가 나타나지 않음");
+    await openTableDockPane(hp, "tools");
     const nSure = await readNight(hp);
     const sureLabel = await hp.evaluate((seat) => document.querySelector(`[data-face="${seat}"] .mv-face__count[aria-label]`)?.getAttribute("aria-label") ?? null, target);
     rec(sc, "NA9", "확정 표시의 접근성 이름이 '확정' 이다", sureLabel === "확정", `이름 ${sureLabel}`);
@@ -2740,13 +2748,22 @@ function assertStillNight(ht) {
   if (ht.last().phase !== "night") throw new SetupError(`밤 검사가 길어져 서버가 밤을 먼저 끝냄 (지금 ${ht.last().phase})`);
 }
 
-/** 시민 편(시민·경찰·의사) 밤 DOM(L10, T-09-46): 어둠·맥박이 있고, 이름표는 내 것 하나, 직업 칩 0, 채팅 패널 0, 아래에 [유언] 줄 */
+/** 밤 선택 장면의 치수를 읽고 도구 탭을 열어 역할 전용 조작도 확인한다. */
+async function readNightWithTools(page) {
+  const scene = await readNight(page);
+  if (!scene || !await openTableDockPane(page, "tools")) return scene;
+  const tools = await readNight(page);
+  await page.locator("[data-dock-handle]").click();
+  return { ...scene, willButton: tools?.willButton, noteButton: tools?.noteButton };
+}
+
+/** 시민 편(시민·경찰·의사) 밤 DOM(L10): 어둠·맥박, 내 이름표 하나, 직업 칩과 채팅 패널 0, 도구 탭에 유언. */
 function sideChecks(rec, sc, who, n, g) {
   rec(sc, "L1", `${who}: 밤 어둠(data-night-dark)과 맥박(data-tension-pulse)이 있다`, n.nightDark === "true" && n.tensionPulse === 1, `어둠 ${n.nightDark}, 맥박 ${n.tensionPulse}`);
   rec(sc, "L2", `${who}: 이름표가 내 것 하나뿐이다`, n.tagCount === 1 && g.tags.length === 1 && g.tags[0].me === true, `이름표 ${n.tagCount}개, 내 것 ${g.tags.filter((t) => t.me).length}개`);
   rec(sc, "L3", `${who}: 직업 칩(data-role-chip)이 0개다`, n.roleChips === 0, `칩 ${n.roleChips}개`);
   rec(sc, "L4", `${who}: 채팅 패널이 0개다`, n.chatPanels === 0, `채팅 패널 ${n.chatPanels}개`);
-  rec(sc, "L5", `${who}: 아래에 [유언] 깃펜 줄이 있다`, n.willButton === true, `깃펜 ${n.willButton}`);
+  rec(sc, "L5", `${who}: 도구 탭에서 [유언]을 열 수 있다`, n.willButton === true, `깃펜 ${n.willButton}`);
   rec(sc, "L7", `${who}: 마피아 밤 선택 효과(data-night-pick·표식)가 0개다`, n.aimTags === 0 && n.aimMarks === 0, `속성 ${n.aimTags}개, 표식 ${n.aimMarks}개`);
 }
 
@@ -2802,7 +2819,7 @@ async function nightSaved(ctx, shared) {
     const { host, hp, ht, hostSeat } = game;
     const view = ht.last();
     if (hostSeat !== 0) throw new SetupError(`방장 자리가 0 이 아님 (${hostSeat})`);
-    const n = await readNight(hp);
+    const n = await readNightWithTools(hp);
     rec(sc, "SV1", "내 직업이 의사다", view.me.role === "doctor", `직업 ${view.me.role}`);
     shared.dark.doctor = n.nightDark;
     sideChecks(rec, sc, "의사", n, g);
@@ -2822,6 +2839,7 @@ async function nightSaved(ctx, shared) {
     rec(sc, "SV5", "아침 알림이 '누군가를 지켜냈어요' 이다", morning?.text === MORNING_SAVED, `알림 ${log.filter((a) => a.text).map((a) => a.text).join(" → ") || "없음"}`);
     if (morning) recMany(rec, sc, announceChecks(morning), " (구출)");
     await sleep(3300); // 카드 공개(2.8초)가 지난 뒤에도 없어야 한다
+    await openTableDockPane(hp, "chat");
     const after = await readNight(hp);
     rec(sc, "SV6", "구출한 아침에는 분필이 없다", after?.chalk === null, `chalk ${after?.chalk}`);
     // 찬반 기록 카드는 없다(22-12) — 채팅 카드는 모두 아침 카드(유언·쪽지 등)다
@@ -2865,7 +2883,7 @@ async function nightMismatch(ctx) {
     rec(sc, "MM2", `봇이 고른 자리(${botSeat})와 다른 자리(${other})를 눌러 눌림 표시`, tap.ok, tap.detail);
     await ht.waitFor((v) => (v.me.nightTally ?? []).filter((t) => t.n >= 1).length >= 2, 3000, "갈린 선택").catch(() => {});
     await sleep(300);
-    const n = await readNight(hp);
+    const n = await readNightWithTools(hp);
     rec(sc, "MM3", "선택이 갈리면 확정 도장이 없고 [쪽지] 도 잠겨 있다", n?.sure === null && n?.noteButton?.disabled === true && ht.last().me.nightSure === undefined, `도장 ${JSON.stringify(n?.sure)}, 쪽지 ${JSON.stringify(n?.noteButton)}, nightSure ${ht.last().me.nightSure}`);
     assertStillNight(ht);
     await armAnnounceWatch(hp);
@@ -2874,6 +2892,7 @@ async function nightMismatch(ctx) {
     const { log, morning } = await waitMorningAnnounce(hp, 6000);
     rec(sc, "MM4", "아침 알림이 '아무 일도 없었습니다' 이다", morning?.text === "아무 일도 없었습니다", `알림 ${log.filter((a) => a.text).map((a) => a.text).join(" → ") || "없음"}`);
     await sleep(3300);
+    await openTableDockPane(hp, "chat");
     const after = await readNight(hp);
     // 찬반 기록 카드는 없다(22-12) — 채팅 카드는 모두 아침 카드다
     const morningCards = after?.cards ?? [];
@@ -2892,7 +2911,7 @@ async function nightPolice(ctx, shared) {
   try {
     const { host, hp, ht, hostSeat } = game;
     const view = ht.last();
-    const n = await readNight(hp);
+    const n = await readNightWithTools(hp);
     rec(sc, "PL1", "내 직업이 경찰이다", view.me.role === "police", `직업 ${view.me.role}`);
     shared.dark.police = n.nightDark;
     sideChecks(rec, sc, "경찰", n, g);
@@ -2921,6 +2940,7 @@ async function nightPolice(ctx, shared) {
     });
     const label = (await readSeen(hp)).police[0] ?? null;
     rec(sc, "PL6", "아침에 조사 결과 카드가 '마피아' 또는 '마피아 아님' 이다", seen.ok && (label === "마피아" || label === "마피아 아님"), `${seen.detail} 카드 글 ${label}`);
+    await openTableDockPane(hp, "chat");
     const eye = await nightUntil(hp, (x) => x.cards.some((c) => c.kind === "eye"), 6000);
     const eyeText = eye?.cards.find((c) => c.kind === "eye")?.text ?? null;
     rec(sc, "PL7", "채팅에 조사 카드([data-card=eye])가 있고 같은 결과다", !!eyeText && label !== null && eyeText.includes(label) && (label === "마피아" ? !eyeText.includes("마피아 아님") : true), `카드 글 ${eyeText}, 결과 카드 ${label}`);
@@ -2940,11 +2960,13 @@ async function nightWill(ctx) {
     const guest = guests[0];
     const WILL = "내 몫까지 이겨 줘요";
     const wrote = await attempt(async () => {
+      await openTableDockPane(hp, "tools");
       await hp.locator("[data-will-button]").click({ timeout: 4000 });
       await writeSheet(hp, ht, "will", WILL);
     });
     rec(sc, "WL1", "토론에서 깃펜으로 유언을 쓰고 저장하면 서버가 같은 글을 돌려준다", wrote.ok, wrote.detail);
     await executeHost(game);
+    await openTableDockPane(guest.page, "chat");
     const t0 = performance.now();
     const card = await attempt(async () => {
       for (;;) {
@@ -2979,6 +3001,7 @@ async function nightVictim(ctx, shared) {
     if (hostSeat !== 0) throw new SetupError(`방장 자리가 0 이 아님 (${hostSeat})`);
     // 유언 편지(09.1-11): 토론에서 방장이 유언을 저장해 두면 당한 아침에 본인 화면에도 편지가 0.7초 무렵 뜬다(피해자 T0)
     const wrote = await attempt(async () => {
+      await openTableDockPane(hp, "tools");
       await hp.locator("[data-will-button]").click({ timeout: 4000 });
       await writeSheet(hp, ht, "will", VICTIM_WILL);
     });
@@ -2992,7 +3015,7 @@ async function nightVictim(ctx, shared) {
     const nightEntry = await readSeen(hp);
     rec(sc, "VC1", "첫날 정답 공개에서 밤으로 이어질 때 무대를 덮지 않는다", nightEntry.curtain === 0 && nightEntry.curtainGone === 0, `막 나타남 ${nightEntry.curtain}회, 사라짐 ${nightEntry.curtainGone}회`);
     await settle(hp);
-    const n = await readNight(hp);
+    const n = await readNightWithTools(hp);
     rec(sc, "VC2", "내 직업이 시민이다", ht.last().me.role === "citizen", `직업 ${ht.last().me.role}`);
     shared.dark.citizen = n.nightDark;
     sideChecks(rec, sc, "시민", n, g);
@@ -3068,6 +3091,7 @@ async function nightSizesLetter(ctx, rec) {
     if (hostSeat !== 0) throw new SetupError(`방장 자리가 0 이 아님 (${hostSeat})`);
     if (graphemeCount(WILL50) !== 50) throw new Error(`시험 유언이 50자가 아님 (${graphemeCount(WILL50)}자)`);
     const wrote = await attempt(async () => {
+      await openTableDockPane(hp, "tools");
       await hp.locator("[data-will-button]").click({ timeout: 4000 });
       await writeSheet(hp, ht, "will", WILL50);
     });
@@ -3111,7 +3135,7 @@ async function nightSizesFlow(ctx) {
     const sc = `${id}/police`;
     const { game, g } = await openNight(ctx, id, { guests: 0, bots: 5, role: "police" });
     try {
-      const n = await readNight(game.hp);
+      const n = await readNightWithTools(game.hp);
       sideChecks(rec, sc, "경찰", n, g);
       faceListChecks(rec, sc, "경찰", n, aliveOf(game.ht.last()).length);
       recTagInStageFaces(rec, sc, "SZ4", "경찰", n);
@@ -3124,7 +3148,7 @@ async function nightSizesFlow(ctx) {
     const sc = `${id}/citizen`;
     const { game, g } = await openNight(ctx, id, { guests: 0, bots: 3, role: "citizen" });
     try {
-      const n = await readNight(game.hp);
+      const n = await readNightWithTools(game.hp);
       sideChecks(rec, sc, "시민", n, g);
       faceListChecks(rec, sc, "시민", n, aliveOf(game.ht.last()).length);
       recTagInStageFaces(rec, sc, "SZ6", "시민", n);
@@ -3663,6 +3687,7 @@ async function chatGameFlow(ctx) {
       rec(sc, cid, label, r.ok, r.detail);
     };
     const inputs = async (sc, cid, label, pages) => {
+      await Promise.all(pages.map((page) => openTableDockPane(page, "chat")));
       const gs = await Promise.all(pages.map((p) => readGame(p)));
       rec(sc, cid, label, gs.every((g) => g.hasInput), `입력줄 ${gs.map((g) => g.hasInput).join("/")}`);
     };
@@ -3816,7 +3841,7 @@ async function pcFlow(ctx) {
   await skipTo(page, tracker, "discussion");
   await settle(page);
   ctx.stage = "play";
-  await checkPcRoom(ctx, "day", [".mf-game__header", ".mf-game__panel"]);
+    await checkPcRoom(ctx, "day", [".mf-game__header", "[data-table-dock]", '[data-dock-pane="chat"]']);
   await checkState(ctx, "pc", "day");
 
   const me = await sampleWorld(page, mySeat);
@@ -3835,7 +3860,7 @@ async function pcFlow(ctx) {
   await nightCard.waitFor({ timeout: 8000 });
   await settle(page);
   const nightCtx = { ...ctx, size: reported };
-  await checkPcRoom(nightCtx, "night", [".mf-game__header", '[data-phase-event="night-action"] .mf-phase-event__card']);
+  await checkPcRoom(nightCtx, "night", [".mf-game__header", "[data-table-dock]", '[data-phase-event="night-action"] .mf-phase-event__card']);
   const faceSeats = (await readNightFaces(page)).faceSeats;
   const patient = faceSeats.find((seat) => seat !== mySeat);
   recorder(nightCtx)("pc/night", "PC-DOCTOR", "의사에게 다섯 후보가 모두 보임", tracker.last().me.role === "doctor" && faceSeats.length === 5);
@@ -3982,6 +4007,7 @@ const { emceeBandFlow, emceeToolsFlow, emceeLeakFlow, emceeSoundFlow } = makeHos
 
 // 18.1 화면 다듬기(18.1-08): polish-reveal(역할 확인 카드 문구·무대 겹침, 네 직업 × 폰 6종). 흐름 본문은 polish.mjs, 도우미만 넘긴다
 const { polishRevealFlow } = makePolishFlows({ recorder, attempt, openGame, closeGame });
+const tableDockFlow = makeTableDockFlow({ recorder, openGame, closeGame, writeSheet, gameGH });
 
 export const FLOWS = [
   // lobby·world 는 LOBBY_SIZES 6개 크기로 돈다: 기본 크기 4개에 더해 390x844·402x874 (run.mjs 의 extraSizes)
@@ -4019,6 +4045,8 @@ export const FLOWS = [
   { id: "host-handoff", run: hostHandoffFlow, size: HANDOFF_SIZE },
   // 맵 선택(11-13, MAP-06): 칩·시트·카드 기하, 손님 읽기 전용, 선택 반영, 시작 뒤 같은 맵, 광장 한 판 ended
   { id: "chat-game", run: chatGameFlow, size: GAME_SIZE },
+  { id: "table-dock", run: tableDockFlow },
+  { id: "table-dock-pc", run: tableDockFlow, size: { w: 1280, h: 800, label: "1280x800", mobile: false } },
   // 13페이즈 기본판(결정 0072): basic-off = 봇 판 한 판 전체(로비 → 낮 → 밤 → 결과)에서 꺼진 장치 DOM·프레임·단계 순서·결과 탭 0건, basic-vote = 8명 투표 화면(이름표 버튼 7개 44×44·무가림, 묶음 G·H). 폰 6종은 basic-vote 만
   { id: "basic-off", run: basicOffFlow, size: GAME_SIZE },
   { id: "basic-vote", run: basicVoteFlow, extraSizes: LOBBY_EXTRA_SIZES },

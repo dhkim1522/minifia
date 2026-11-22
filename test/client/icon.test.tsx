@@ -44,6 +44,21 @@ describe("V2Icon 새 아이콘 (09.1.1-08)", () => {
   });
 });
 
+it("게임 메뉴와 하단 패널의 아이콘은 서로 구분되는 24px 선 아이콘이다", () => {
+  const names = ["menu", "chat", "users", "toolbox"] as const;
+  const { container } = render(<>{names.map((name) => <V2Icon key={name} name={name} />)}</>);
+  const icons = [...container.querySelectorAll("svg")];
+  expect(icons).toHaveLength(names.length);
+  for (const svg of icons) {
+    expect(svg.getAttribute("viewBox")).toBe("0 0 24 24");
+    expect(svg.getAttribute("stroke-width")).toBe("2");
+    expect(svg.getAttribute("stroke-linecap")).toBe("round");
+    expect(svg.getAttribute("aria-hidden")).toBe("true");
+    expect(svg.children.length).toBeGreaterThan(0);
+  }
+  expect(new Set(icons.map((svg) => svg.innerHTML)).size).toBe(names.length);
+});
+
 // 10-05: 동작 판과 입력줄 버튼이 쓰는 아홉 아이콘(face·throat·deny·clap·cry·handshake·praise·surprise·dance).
 // 경로는 design/v2.0/design-system/components/bundle.js 의 ICONS 와 같은 데이터다(새로 그리지 않는다).
 const V2_EMOTE: V2IconName[] = ["face", "throat", "deny", "clap", "cry", "handshake", "praise", "surprise", "dance"];

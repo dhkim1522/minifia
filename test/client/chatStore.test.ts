@@ -68,6 +68,38 @@ describe("ChatStore: chat 프레임 한 줄 (CHAT-01 트레이서)", () => {
 const logFrame = (lines: ChatLogFrame["lines"]): ChatLogFrame => ({ t: "chatLog", lines });
 const wire = (ch: ChatLineFrame["ch"], seat: number, seq: number, at: number, text = `m${seq}`) => ({ ch, seat, seq, text, at });
 
+describe("ChatStore: 하단 채팅의 읽지 않은 메시지", () => {
+  it("다른 참가자의 메시지만 채널별로 세고 연 채널만 읽음으로 처리한다", () => {
+    const store = ready();
+    store.apply(chat("all", 0, 1, "내가 쓴 글", 1000), 1, 1000);
+    store.apply(chat("all", 1, 2, "참가자 채팅", 1001), 1, 1001);
+    store.apply(chat("ghost", 2, 1, "유령 채팅", 1002), 1, 1002);
+    store.apply({ ...chat("all", 1, 3, "유언", 1003), k: "will" }, 1, 1003);
+    store.addSystem("단계가 시작됐어요", { scope: "all", at: 1004 });
+
+    expect(store.unreadCount("all", 0)).toBe(1);
+    expect(store.unreadCount("ghost", 0)).toBe(1);
+    store.markRead("all");
+    expect(store.unreadCount("all", 0)).toBe(0);
+    expect(store.unreadCount("ghost", 0)).toBe(1);
+  });
+
+  it("재접속에서 이미 읽은 줄과 중복된 새 줄을 다시 세지 않는다", () => {
+    const store = ready();
+    store.apply(chat("all", 1, 5, "읽은 채팅", 1000), 1, 1000);
+    store.markRead("all");
+
+    store.apply(logFrame([wire("all", 1, 4, 900), wire("all", 1, 5, 1000), wire("all", 2, 6, 1200)]), 2, 1300);
+    store.apply(chat("all", 2, 6, "m6", 1200), 2, 1301);
+    expect(store.unreadCount("all", 0)).toBe(1);
+
+    store.reset();
+    expect(store.unreadCount("all", 0)).toBe(0);
+    store.apply(chat("all", 1, 1, "새 판 채팅", 2000), 0, 2000);
+    expect(store.unreadCount("all", 0)).toBe(1);
+  });
+});
+
 describe("ChatStore: chatLog 복원 합치기 (D2)", () => {
   it("실시간 줄과 합집합으로 합치고 at 순으로 두며 lastWasReplay 를 참으로 둔다", () => {
     const store = ready();

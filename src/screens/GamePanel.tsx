@@ -4,6 +4,7 @@ import { isAlive } from "../../shared/game/alive";
 import { MAP_PHASES } from "../../shared/game/movement";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { Button } from "../components/Button";
+import { GameDock } from "../components/GameDock";
 import { PhaseEvent } from "../components/PhaseEvent";
 import { RoomChatDock } from "../components/v2/RoomChatDock";
 import type { RoomChatBinding, RoomChatDockProps } from "../components/v2/RoomChatDock";
@@ -15,6 +16,7 @@ import { hostLineOf } from "../game/hostLine";
 import { faceSrc } from "../net/assets";
 import { playerColor } from "../game/playerIdentity";
 import { useViewChoice } from "../net/useViewChoice";
+import type { ChatStore } from "../net/chatStore";
 import "../styles/event-choices.css";
 
 export interface GamePanelProps {
@@ -56,6 +58,7 @@ export interface GamePanelProps {
   suspect?: RoomChatDockProps["suspect"];
   notice?: ReactNode;
   tableControls?: ReactNode;
+  dock?: { chatStore: ChatStore; voting: boolean; peopleCount: number };
   answerPresentation?: ReactNode;
   /** 전날 결과가 잠깐 보이는 동안에는 밤 선택을 같은 자리에 겹쳐 놓지 않는다. */
   pauseNightEvent?: boolean;
@@ -65,7 +68,7 @@ export interface GamePanelProps {
  * 단계별 선택은 중앙에 보여 주고 채팅과 상시 도구는 화면 아래에 둔다.
  * 눌림은 서버 view 가 기준이고, 내가 누른 즉시 바뀌는 것은 내 눌림 표시 하나뿐이다. 숫자는 서버 집계를 표시한다.
  */
-export function GamePanel({ view, introActive = false, send, canSend, binding, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef, suspect, notice, tableControls, answerPresentation, pauseNightEvent = false }: GamePanelProps) {
+export function GamePanel({ view, introActive = false, send, canSend, binding, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef, suspect, notice, tableControls, dock, answerPresentation, pauseNightEvent = false }: GamePanelProps) {
   const playtest = view.playtest === true;
   const presenting = answerPresentation !== undefined;
   // 거절이 오면 서버 값으로 되돌린다. 처음 그릴 때(거절 0)는 아무것도 하지 않는다.
@@ -144,7 +147,8 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
   const showNoteRow = !playtest && nightFaces && myRole === "mafia" && onOpenNote !== undefined;
   const noteHintId = useId();
   const showWillRow = !playtest && nightFaces && myRole !== "mafia" && onOpenWill !== undefined;
-  const playtestChat = discussion || (!chatLocked && view.me.chat === "ghost");
+  const nominationChat = dock !== undefined && view.phase === "nomination" && view.me.chat !== undefined;
+  const playtestChat = discussion || nominationChat || (!chatLocked && view.me.chat === "ghost");
   const showChat = !presenting && chatChannelOk && (!playtest || playtestChat);
   const canReact = !chatLocked && (!playtest || discussion);
   const showRoleTool = !presenting && (showNoteRow || showWillRow || penOn);
@@ -158,6 +162,64 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
     if (canSend) onOpenWill?.(opener);
     onCallUsed?.();
   };
+  const roomChat = (part?: RoomChatDockProps["part"]) => (
+    <RoomChatDock
+      binding={{ ...binding, ...(binding.onSend && !chatLocked ? { onSend: sendChat } : {}), ...(!canReact ? { emotes: [] } : {}) }}
+      kbOpen={kbOpen}
+      quickReactions={playtest && discussion}
+      discussion={discussion}
+      locked={chatLocked}
+      part={part}
+      inputRef={inputRef}
+      callInput={call?.chat}
+      onInputFocus={onCallUsed}
+      suspect={discussion ? suspect : undefined}
+      will={penOn ? { open: willOpen, saved: willSaved, call: call?.will === true, request: openWillFrom } : undefined}
+    />
+  );
+  const roleTools = showRoleTool ? (
+    <div className="mf-room-toolbar">
+      {showNoteRow ? (
+        <button
+          type="button"
+          className="mf-room-tool"
+          aria-label="쪽지"
+          aria-pressed={noteOpen}
+          aria-disabled={noteReady && canSend ? undefined : "true"}
+          aria-describedby={noteReady ? undefined : noteHintId}
+          data-note-button=""
+          onClick={(e) => {
+            if (noteReady && canSend) onOpenNote?.(e.currentTarget);
+          }}
+        >
+          <V2Icon name="note" size={22} />
+          {dock ? <span>쪽지</span> : null}
+        </button>
+      ) : (
+        <button
+          type="button"
+          className={call?.will ? "mf-room-tool is-call" : "mf-room-tool"}
+          aria-label={willSaved ? "유언, 저장됨" : "유언"}
+          aria-pressed={willOpen}
+          aria-disabled={!canSend || undefined}
+          data-will-button=""
+          data-call={call?.will ? "" : undefined}
+          data-will-saved={willSaved ? "" : undefined}
+          onClick={(event) => openWillFrom(event.currentTarget)}
+        >
+          <V2Icon name="quill" size={22} />
+          {dock ? <span>유언</span> : null}
+          {willSaved ? <i className="mv-chat__will-dot" aria-hidden="true" /> : null}
+        </button>
+      )}
+    </div>
+  ) : null;
+  const chatTools = showChat && (penOn || (discussion && suspect !== undefined) || (canReact && binding.onEmote !== undefined && ((playtest && discussion) || (binding.emotes?.length ?? 0) > 0)));
+  const channel = view.me.chat ?? null;
+  const waitingToNominate = view.phase === "nomination" && dock?.voting === false;
+  const peek = waitingToNominate && showChat && channel !== null
+    ? [...binding.messages].reverse().find((message) => message.kind === "player" && message.ch === channel)
+    : undefined;
 
   return (
     <>
@@ -209,62 +271,31 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
         ref={panelRef}
         inert={introActive}
         data-phase-panel-paused={introActive ? "" : undefined}
-        className={`mf-game__panel${lifted ?? kbOpen ? " mf-game__panel--kb" : ""}${showChat ? " mf-game__panel--chat" : ""}${panelEmpty ? " mf-game__panel--empty" : ""}`}
+        className={`mf-game__panel${lifted ?? kbOpen ? " mf-game__panel--kb" : ""}${dock ? " mf-game__panel--dock" : showChat ? " mf-game__panel--chat" : ""}${!dock && panelEmpty ? " mf-game__panel--empty" : ""}`}
         data-world-panel=""
         data-answer-panel={presenting ? "" : undefined}
         {...(veiled ? { "data-will-hide-panel": "true" } : {})}
       >
-        {tableControls}
+        {!dock ? tableControls : null}
         {notice}
         {answerPresentation}
-        {showChat ? (
-          <RoomChatDock
-            binding={{ ...binding, ...(binding.onSend && !chatLocked ? { onSend: sendChat } : {}), ...(!canReact ? { emotes: [] } : {}) }}
-            kbOpen={kbOpen}
-            quickReactions={playtest && discussion}
-            discussion={discussion}
-            locked={chatLocked}
+        {dock && !presenting ? (
+          <GameDock
+            scope={`${view.round ?? 1}:${view.day?.n ?? 0}:${view.phase}:${dock.voting}`}
+            initialPane={discussion ? "chat" : dock.voting ? "people" : "closed"}
+            preserveWriting={view.phase === "nomination"}
+            keepToolsOpen={willOpen || noteOpen}
+            paused={introActive}
             inputRef={inputRef}
-            callInput={call?.chat}
-            onInputFocus={onCallUsed}
-            suspect={discussion ? suspect : undefined}
-            will={penOn ? { open: willOpen, saved: willSaved, call: call?.will === true, request: openWillFrom } : undefined}
+            {...dock}
+            channel={channel}
+            mySeat={view.me.seat}
+            latest={peek}
+            chat={showChat ? roomChat("chat") : null}
+            people={tableControls}
+            tools={chatTools ? roomChat("tools") : showChat ? null : roleTools}
           />
-        ) : showRoleTool ? (
-          <div className="mf-room-toolbar">
-            {showNoteRow ? (
-              <button
-                type="button"
-                className="mf-room-tool"
-                aria-label="쪽지"
-                aria-pressed={noteOpen}
-                aria-disabled={noteReady && canSend ? undefined : "true"}
-                aria-describedby={noteReady ? undefined : noteHintId}
-                data-note-button=""
-                onClick={(e) => {
-                  if (noteReady && canSend) onOpenNote?.(e.currentTarget);
-                }}
-              >
-                <V2Icon name="note" size={22} />
-              </button>
-            ) : (
-              <button
-                type="button"
-                className={call?.will ? "mf-room-tool is-call" : "mf-room-tool"}
-                aria-label={willSaved ? "유언, 저장됨" : "유언"}
-                aria-pressed={willOpen}
-                aria-disabled={!canSend || undefined}
-                data-will-button=""
-                data-call={call?.will ? "" : undefined}
-                data-will-saved={willSaved ? "" : undefined}
-                onClick={(event) => openWillFrom(event.currentTarget)}
-              >
-                <V2Icon name="quill" size={22} />
-                {willSaved ? <i className="mv-chat__will-dot" aria-hidden="true" /> : null}
-              </button>
-            )}
-          </div>
-        ) : null}
+        ) : showChat ? roomChat() : roleTools}
         {showNoteRow && !noteReady ? (
           <span id={noteHintId} className="mf-sr-only">암살 대상을 모두 같게 고르면 쓸 수 있어요</span>
         ) : null}

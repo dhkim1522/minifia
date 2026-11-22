@@ -44,11 +44,12 @@ test("willCarryChecks: 시트가 하나 열려 있고 미리 쓴 글이 채워�
   assert.ok(willCarryChecks(null).every((l) => !l.ok));
 });
 
-test("willLockChecks: 시트 0·잠금 1·패널 208·핀이 처형자면 통과, 하나라도 다르면 실패", () => {
-  const ok = { who: "손님", sheets: 0, locked: 1, panelH: 208, pinSeat: 3 };
+test("willLockChecks: 시트 0·잠금 1·화면 안 패널·핀이 처형자면 통과한다", () => {
+  const panel = { left: 8, top: 510, width: 374, height: 280, right: 382, bottom: 790 };
+  const available = { left: 0, top: 80, width: 390, height: 720, right: 390, bottom: 800 };
+  const ok = { who: "손님", sheets: 0, locked: 1, panel, available, pinSeat: 3 };
   assert.equal(willLockChecks([ok], { condemned: 3 })[0].ok, true);
-  for (const bad of [{ sheets: 1 }, { locked: 0 }, { panelH: 236 }, { pinSeat: 2 }, { pinSeat: null }]) assert.equal(willLockChecks([{ ...ok, ...bad }], { condemned: 3 })[0].ok, false, JSON.stringify(bad));
-  assert.equal(willLockChecks([{ ...ok, panelH: 208.9 }], { condemned: 3 })[0].ok, true, "1px 오차 허용");
+  for (const bad of [{ sheets: 1 }, { locked: 0 }, { panel: { ...panel, bottom: 801 } }, { pinSeat: 2 }, { pinSeat: null }]) assert.equal(willLockChecks([{ ...ok, ...bad }], { condemned: 3 })[0].ok, false, JSON.stringify(bad));
   assert.equal(willLockChecks([], { condemned: 3 })[0].ok, false);
 });
 

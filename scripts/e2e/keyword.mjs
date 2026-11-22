@@ -3,7 +3,7 @@
 // day.mjs·avatar.mjs 와 같은 모양: helpers 를 받고 서로 import 하지 않는다.
 // helpers: { recorder, attempt, openGame, closeGame, allAt, untilGame, gameGH, GAME_HOST_NICK }.
 // 표식(data-keyword-*·data-answer-*·data-announce-label·data-early)에는 역할·키워드 값이 없다 — 키워드는 텍스트 노드로만 읽는다(T-23-43).
-import { chooseVerdict, installFakeViewport, openRoleCard, settle, skipDayToExecution, skipTo, sleep, waitForPhaseStart, watchSockets } from "./browser.mjs";
+import { chooseVerdict, installFakeViewport, openRoleCard, openTableDockPane, settle, skipDayToExecution, skipTo, sleep, waitForPhaseStart, watchSockets } from "./browser.mjs";
 import { OVERLAP_EPS, TAP_MIN } from "./lib.mjs";
 
 const isNum = (x) => typeof x === "number" && Number.isFinite(x);
@@ -605,7 +605,9 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       const sharedTarget = first.players.find(p => p.seat !== markedSeat && pages.every(x => x.tracker.last().me.seat !== p.seat))?.seat;
       if (!markedBy || !other || sharedTarget === undefined) throw new Error("첫 토론 고깔 조작을 검사할 대상이 없음");
       const chooseHat = async (actor, target, acceptedTarget) => {
+        await openTableDockPane(actor.page, "tools");
         await actor.page.locator("[data-suspect-btn]").click({ timeout: 4000 });
+        await openTableDockPane(actor.page, "people");
         await actor.page.locator(`[data-table-seat="${target}"][data-pick]`).click({ timeout: 3000 });
         await actor.tracker.waitFor(v => v.me.suspectTo === acceptedTarget, 3000, "내 고깔 변경");
       };

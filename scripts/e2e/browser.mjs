@@ -716,10 +716,22 @@ export async function collapseChatLog(page) {
 }
 
 /**
+ * 게임 하단의 원하는 패널을 연다. 로비와 튜토리얼처럼 탭이 없는 화면에는 기존 조작을 쓴다.
+ */
+export async function openTableDockPane(page, name) {
+  const tab = page.locator(`[data-dock-tab="${name}"]`);
+  if (await tab.count() === 0) return false;
+  if (await tab.getAttribute("aria-expanded") !== "true") await tab.click({ timeout: 4000 });
+  await page.locator(`[data-dock-pane="${name}"]`).waitFor({ state: "visible", timeout: 3000 });
+  return true;
+}
+
+/**
  * 채팅 입력칸에 글을 쓰고 [보내기] 를 누른다(07-13). 값은 fill 로 한 번에 넣는다 — 한글 조합 이벤트는 만들지 않는다(실제 IME 는 07-19 몫).
  * 보내기 버튼이 활성(aria-disabled "false")이 될 때까지 기다린 뒤 누르므로, 글자가 React 상태에 닿기 전에 누르는 일이 없다.
  */
 export async function typeAndSendChat(page, text) {
+  await openTableDockPane(page, "chat");
   await page.locator("[data-chat-input]").fill(text);
   await page.waitForSelector('[data-chat-send][aria-disabled="false"]', { timeout: 3000 });
   await page.locator("[data-chat-send]").click({ timeout: 3000 });
@@ -778,6 +790,7 @@ export function readChatLines(page) {
 /** 기록 칸에 본문이 text 인 사람 줄이 생길 때까지 기다린다. 시간 안에 안 오면 던진다(오류 메시지에 본문은 싣지 않는다). */
 export async function waitChatLine(page, text, ms = 5000) {
   try {
+    await openTableDockPane(page, "chat");
     await page.waitForFunction((t) => [...document.querySelectorAll("[data-chat-log] .mv-chat__msg .mv-chat__text")].some((el) => (el.textContent ?? "").trim() === t), text, { timeout: ms });
   } catch {
     throw new Error(`채팅 줄이 ${ms / 1000}초 안에 오지 않음`);
@@ -1525,6 +1538,7 @@ export async function readGame(page) {
           hasLineEl: !!lineEl,
         }
       : null;
+    const tableDock = q("[data-table-dock]");
     const headerBottom = header ? header.getBoundingClientRect().bottom : null;
     const turnStageTop = tb ? (bar ? bar.getBoundingClientRect().bottom + 4 : tb.getBoundingClientRect().top + (tb.classList.contains("is-compact") ? 52 : 60) + 4) : null;
     return {
@@ -1540,6 +1554,11 @@ export async function readGame(page) {
       turn,
       dim: q(".mf-game__dim")?.getAttribute("data-dim") ?? null,
       panel: rect(panel),
+      tableDock: tableDock ? {
+        open: tableDock.getAttribute("data-dock-open"),
+        rect: rect(tableDock),
+        tabs: qa("[data-dock-tab]", tableDock).map((tab) => rect(tab)),
+      } : null,
       chatDock: rect(q("[data-room-chat]")),
       chatLog: rect(q("[data-chat-log]")),
       chatInput: rect(q("[data-chat-input]")),
@@ -1591,12 +1610,15 @@ export async function tapPick(page, seat) {
 }
 
 /**
- * 순차 지목에서 대상을 누르면 얼굴판 선택 상태 또는 이전 맵 이름표의 선택 표식이 남는다.
+ * 순차 지목이 열리면 얼굴판의 대상을 누른다. 라이브 게임의 얼굴판은 전송 직후 접힌다.
  */
 export async function tapTurnPick(page, seat) {
+  const inNomination = await page.locator('[data-game-stage][data-phase="nomination"], main[data-phase="nomination"]').count() > 0;
+  const dock = inNomination && await openTableDockPane(page, "people");
   const btn = page.locator(`[data-pick="${seat}"]`);
   await btn.click({ timeout: 4000 });
-  await page.waitForSelector(`[data-table-seat="${seat}"][aria-pressed="true"], [data-seat="${seat}"] .mv-head[data-mine]`, { timeout: 3000, state: "attached" });
+  const pressed = `[data-table-seat="${seat}"][aria-pressed="true"], [data-seat="${seat}"] .mv-head[data-mine]`;
+  await page.waitForSelector(dock ? `${pressed}, [data-table-dock][data-dock-open="closed"]` : pressed, { timeout: 3000, state: "attached" });
 }
 
 /** 찬반 버튼을 눌러 그 쪽이 aria-pressed 가 될 때까지 기다린다. */

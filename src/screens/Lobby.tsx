@@ -118,6 +118,7 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
   const { rootRef, headerRef, panelRef, inputRef, kbOpen, sideMaxH, stageInsets } = useMapInsets();
   const motion = useMyMotion(store, view.me.seat, () => Date.now() + offset);
   const { typingSeats, ...binding } = useChat({ store: chat, connection: { send, canSend }, view, motion });
+  useLayoutEffect(() => { chat.markRead("all"); }, [chat, binding.messages]);
 
   // 꾸미기(10-07): 오른쪽 열의 hanger 버튼 → 패널을 덮는 카드 띠 시트. 아래 패널 높이(--mf-panel-h)는 DOM 에서 재서 루트에 정한다
   // (시트가 그 값을 읽는다 — GameMap 과 같은 방식). 시트가 열린 동안·키보드가 열린 동안 오른쪽 열은 그리지 않는다.

@@ -53,6 +53,7 @@ import type { ChatStore } from "../net/chatStore";
 import type { DayFx } from "../net/useDayFx";
 import { useBadge, useBadgeFx } from "../net/useBadge";
 import { useChat } from "../net/useChat";
+import { usePendingServerTime } from "../net/usePendingServerTime";
 import { useMyMotion } from "../net/useMyMotion";
 import { useTurnLook } from "../net/useTurnLook";
 import { useVerdictMoment } from "../net/useVerdictMoment";
@@ -238,6 +239,7 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
   const activeResultStage = inEnding && resultStage?.view.round === view.round ? resultStage : undefined;
   const tableCameraOn = view.map === "bar" && !camera && !panelless;
   const tableOn = tableCameraOn && (view.phase === "discussion" || view.phase === "nomination" || view.phase === "runoff" || view.phase === "showdown");
+  const tableDock = tableCameraOn && !inOpening && !inEnding && !timeless;
   const rawTableFocus = tableChoice?.key === tableKey ? tableChoice.focus : undefined;
   const tableFocus = view.players.some((p) => p.seat === rawTableFocus && isAlive(p)) ? rawTableFocus : undefined;
   const tableFocusAt = tableFocus !== undefined && tableChoice?.key === tableKey ? tableChoice.focusAt : undefined;
@@ -266,6 +268,8 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
   const { typingSeats, liveWhisperIn, ...binding } = useChat({ store: chat, connection: { send, canSend }, view, motion });
 
   const myTurnNo = isMyTurn(view) ? view.day?.turn?.i : undefined;
+  const turnDeadline = tableDock && myTurnNo !== undefined ? view.day?.turn?.endsAt : undefined;
+  const pendingTurn = usePendingServerTime(turnDeadline, offset);
   const showdownStage = showdownStageOf(view);
 
   // 유령이 된 순간(같은 단계 안이어도): 직업 칩 등장 연출을 2.5초 켠다(14-02: 헤더 안내 줄은 다시 띄우지 않는다 — 띠가 유령 줄을 말한다). 처음 마운트 때의 번호는 지난 일이라 연출하지 않는다.
@@ -433,9 +437,11 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
     : undefined;
   const [mine, chooseMine] = useViewChoice<number | undefined>(view, serverMine);
   // 순차 지목(결정 0063-1): 이름표는 내 차례에만 버튼이다. 누르면 그 차례는 끝난다 — 깜빡임·버튼이 사라지고 취소·바꾸기는 없다.
-  // pickedTurn = 내가 이미 누른 차례 번호. 서버가 거절하면 비워 다시 고를 수 있게 한다.
-  const [pickedTurn, setPickedTurn] = useState<number | undefined>(undefined);
-  const canPick = nominating && meAlive && myTurnNo !== undefined && pickedTurn !== myTurnNo && mine === undefined;
+  // 다음 날에 차례 번호가 같아도 다시 고를 수 있도록 단계 키와 함께 기억한다.
+  const [pickedTurn, setPickedTurn] = useState<{ phase: string; i: number }>();
+  const pickedThisTurn = pickedTurn?.phase === phase && pickedTurn.i === myTurnNo;
+  const canPick = nominating && meAlive && myTurnNo !== undefined && !pickedThisTurn && mine === undefined
+    && (turnDeadline === undefined || pendingTurn !== undefined);
   // 빛남(14-04, HOST-03·04, U-7): 13 의 투표 처음 3초 깜빡임을 대체한다. 대상은 callTargetsOf(view)(공개 정보·내 역할만) 하나가 정하고,
   // 같은 단계 안에서 내가 그 도구를 쓰면 즉시 꺼져 되살아나지 않는다(서버가 거절해도 다시 켜지 않는다). "썼음" 은 단계 키(단계·일차·변론자) 하나로 쥐어 키가 바뀌면 자동으로 풀린다.
   // 내 행동만으로 끄는 로컬 상태이고 남의 행동·서버 값을 미리 그리지 않는다(T-14-13). 빛은 소리를 내지 않는다.
@@ -513,7 +519,7 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
           if (send({ t: "point", target: seat }) === false) return; // 소켓이 닫혀 못 보냈으면 표시도 바꾸지 않는다
           pointSent.current = { target: seat, at: Date.now() };
           chooseMine(seat);
-          if (nominating) setPickedTurn(myTurnNo);
+          if (nominating && myTurnNo !== undefined) setPickedTurn({ phase, i: myTurnNo });
         },
         group: runoffVoting ? "결선" : showdownPointing ? SHOWDOWN_COPY.pointGroup : "지목",
       }
@@ -757,6 +763,9 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
     lookAtTableSeat(seat);
   };
 
+  const tablePlayers = view.players.filter((player) => player.seat !== view.me.seat && isAlive(player));
+  const dockVoting = tableBallot && !introActive && pick !== undefined && !pick.disabled && pick.seats.size > 0;
+
   const scene = useMemo(() => {
     const look = sceneLook(view, { stageH, ...(fading ? { fading } : {}), ...(mine !== undefined ? { mine } : {}), ...(verdictZoom !== undefined ? { verdictZoom } : {}) });
     if (camera) look.camera = camera;
@@ -903,9 +912,10 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
             <AnswerPresentation turn={presentation} player={speaker} mySeat={view.me.seat} marked={speakerMarked}
               canSuspect={canSuspectSpeaker} {...(timeless ? {} : { onSuspect: suspectSpeaker })} />
           ) : undefined}
-          tableControls={tableOn && (!kbLifted || (tableBallot && pick !== undefined)) ? (
+          tableControls={tableDock || (tableOn && (!kbLifted || (tableBallot && pick !== undefined))) ? (
             <TableControls
-              players={view.players.filter((p) => p.seat !== view.me.seat && isAlive(p))}
+              players={tablePlayers}
+              readOnly={!tableOn}
               {...(tableFocus !== undefined ? { focus: tableFocus } : {})}
               {...(tableBallot && mine !== undefined ? { selected: mine } : {})}
               {...(pick ? { pick } : {})}
@@ -913,6 +923,7 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
               onChoose={chooseTableSeat}
             />
           ) : undefined}
+          dock={tableDock ? { chatStore: chat, voting: dockVoting, peopleCount: tablePlayers.length } : undefined}
           suspect={suspect.visible && (!playtest || layerKind === null) ? {
             ...suspect,
             disabled: layerKind !== null || suspect.disabled,

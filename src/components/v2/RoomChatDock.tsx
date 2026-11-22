@@ -25,6 +25,7 @@ export interface RoomChatDockProps {
   quickReactions?: boolean;
   discussion?: boolean;
   locked?: boolean;
+  part?: "chat" | "tools";
   actions?: ReactNode;
   advance?: ReactNode;
   callInput?: boolean;
@@ -36,7 +37,7 @@ export interface RoomChatDockProps {
   will?: { open: boolean; saved: boolean; call?: boolean; request: (opener: HTMLElement) => void };
 }
 
-export function RoomChatDock({ binding, kbOpen, quickReactions = false, discussion, locked, actions, advance, callInput, onInputFocus, inputRef, suspect, will }: RoomChatDockProps) {
+export function RoomChatDock({ binding, kbOpen, quickReactions = false, discussion, locked, part, actions, advance, callInput, onInputFocus, inputRef, suspect, will }: RoomChatDockProps) {
   const [reactionsOpen, setReactionsOpen] = useState(false);
   const [reacted, setReacted] = useState("");
   const surfaceId = useId();
@@ -91,18 +92,19 @@ export function RoomChatDock({ binding, kbOpen, quickReactions = false, discussi
   };
 
   return (
-    <div ref={panelRef} className={kbOpen ? "mf-room-chat is-compact" : "mf-room-chat"} style={CHAT_SIZE} data-room-chat="" data-playtest-discussion={discussion ? "" : undefined} onKeyDownCapture={(event) => {
+    <div ref={panelRef} className={kbOpen ? "mf-room-chat is-compact" : "mf-room-chat"} style={CHAT_SIZE} data-room-chat={part === "tools" ? undefined : ""} data-playtest-discussion={discussion ? "" : undefined} onKeyDownCapture={(event) => {
       if (event.key !== "Escape" || event.nativeEvent.isComposing || !reactionsOpen) return;
       event.stopPropagation();
       if (surfaceRef.current?.contains(document.activeElement)) focus.current = "reaction";
       setReactionsOpen(false);
     }}>
-      {quickReactions ? <span className="mf-sr-only" role="status">{reacted}</span> : null}
-      {(reactions.length > 0 && binding.onEmote) || suspect || will || actions || advance ? (
+      {quickReactions && part !== "chat" ? <span className="mf-sr-only" role="status">{reacted}</span> : null}
+      {part !== "chat" && ((reactions.length > 0 && binding.onEmote) || suspect || will || actions || advance) ? (
         <div className="mf-room-chat__tools">
           <div className="mf-room-toolbar" role="group" aria-label="게임 도구">
             {reactions.length > 0 && binding.onEmote ? <button type="button" className="mf-room-tool" data-playtest-action="reaction" data-emote-button="" aria-label={reactionLabel} aria-expanded={reactionsOpen} aria-pressed={reactionsOpen} aria-controls={reactionsOpen ? surfaceId : undefined} aria-disabled={binding.sendDisabled || undefined} onMouseDown={(event) => event.preventDefault()} onClick={(event) => { if (!binding.sendDisabled) toggleReactions(event.detail === 0); }}>
               <V2Icon name="face" size={22} />
+              {part === "tools" ? <span>감정 표현</span> : null}
             </button> : null}
             {suspect ? <button type="button" className="mf-room-tool" data-playtest-action="suspect" data-suspect-btn="" data-suspect-stuck={suspect.used ? "" : undefined} aria-label={suspectLabel} title={suspectLabel} aria-pressed={suspect.mode} aria-disabled={suspect.disabled || undefined} onMouseDown={(event) => { if (suspect.disabled) event.preventDefault(); }} onClick={() => {
               if (suspect.disabled) {
@@ -115,6 +117,7 @@ export function RoomChatDock({ binding, kbOpen, quickReactions = false, discussi
               suspect.toggleMode();
             }}>
               <V2Icon name="postit" size={22} />
+              {part === "tools" ? <span>의심 딱지</span> : null}
               {suspect.used ? <i className="mv-chat__will-dot" aria-hidden="true" /> : null}
             </button> : null}
             {will ? <button type="button" className={will.call ? "mf-room-tool is-call" : "mf-room-tool"} data-will-button="" data-call={will.call ? "" : undefined} data-will-saved={will.saved ? "" : undefined} aria-label={will.saved ? CHAT_TEXT.willSaved : CHAT_TEXT.will} aria-pressed={will.open} aria-disabled={binding.sendDisabled || undefined} onMouseDown={(event) => event.preventDefault()} onClick={(event) => {
@@ -122,6 +125,7 @@ export function RoomChatDock({ binding, kbOpen, quickReactions = false, discussi
               will.request(event.currentTarget);
             }}>
               <V2Icon name="quill" size={22} />
+              {part === "tools" ? <span>유언</span> : null}
               {will.saved ? <i className="mv-chat__will-dot" aria-hidden="true" /> : null}
             </button> : null}
             {actions}
@@ -135,7 +139,7 @@ export function RoomChatDock({ binding, kbOpen, quickReactions = false, discussi
           ) : null}
         </div>
       ) : null}
-      <ChatPanel
+      {part !== "tools" ? <ChatPanel
         {...binding}
         logHeight={kbOpen ? DISCUSSION_KB_LOG_H : DISCUSSION_LOG_H}
         compact={kbOpen}
@@ -145,7 +149,7 @@ export function RoomChatDock({ binding, kbOpen, quickReactions = false, discussi
         {...(inputRef ? { inputRef } : {})}
         {...(callInput ? { callInput: true } : {})}
         {...(onInputFocus ? { onInputFocus } : {})}
-      />
+      /> : null}
     </div>
   );
 }

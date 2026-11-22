@@ -58,6 +58,8 @@ export class ChatStore {
   private ctx: ChatStoreContext | null = null;
   private all: readonly ChatStoreLine[] = [];
   private keys = new Set<string>();
+  private unread = new Map<ChatChannel, Map<number, number>>();
+  private readThrough = new Map<ChatChannel, number>();
   private typing = new Map<number, number>();
   private reject: { why: ChatRejectWhy; at: number; n: number } | null = null;
   private rejectSeq = 0;
@@ -174,6 +176,21 @@ export class ChatStore {
 
   lines(): readonly ChatStoreLine[] {
     return this.all;
+  }
+
+  unreadCount(channel: ChatChannel, mySeat: number): number {
+    let count = 0;
+    for (const seat of this.unread.get(channel)?.values() ?? []) if (seat !== mySeat) count++;
+    return count;
+  }
+
+  markRead(channel: ChatChannel): void {
+    const pending = this.unread.get(channel);
+    if (pending === undefined) return;
+    let latest = this.readThrough.get(channel) ?? 0;
+    for (const seq of pending.keys()) latest = Math.max(latest, seq);
+    this.readThrough.set(channel, latest);
+    this.unread.delete(channel);
   }
 
   /**
@@ -313,6 +330,8 @@ export class ChatStore {
     this.ctx = null;
     this.all = [];
     this.keys.clear();
+    this.unread.clear();
+    this.readThrough.clear();
     this.typing.clear();
     this.reject = null;
     this.replay = false;
@@ -352,6 +371,11 @@ export class ChatStore {
     const merged = [...this.all];
     for (const line of fresh) {
       this.keys.add(line.key);
+      if (line.kind === "player" && line.ch !== undefined && line.seq !== undefined && line.seat !== undefined && line.seq > (this.readThrough.get(line.ch) ?? 0)) {
+        const pending = this.unread.get(line.ch) ?? new Map<number, number>();
+        pending.set(line.seq, line.seat);
+        this.unread.set(line.ch, pending);
+      }
       let i = merged.length;
       while (i > 0 && merged[i - 1].at > line.at) i--;
       merged.splice(i, 0, line);

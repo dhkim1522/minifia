@@ -673,14 +673,14 @@ describe("GameMap — 헤더·[역할 카드] (UI-SPEC A2)", () => {
     expect(container.textContent).not.toContain("모두의 직업이 보여요");
   });
 
-  it("토론 메뉴는 스킵 옆에 글 없는 점 세 개 아이콘으로 표시한다", () => {
+  it("토론 메뉴는 스킵 옆에 글 없는 메뉴 아이콘으로 표시한다", () => {
     const { container } = mount(makeView());
     const btn = container.querySelector("[data-game-menu]") as HTMLButtonElement;
     expect(btn.getAttribute("aria-label")).toBe("메뉴");
     expect(btn.hasAttribute("data-tool-label")).toBe(false);
     expect(btn.querySelector(".mf-rolecard-btn__label")).toBeNull();
     expect(btn.textContent).toBe("");
-    expect(btn.querySelectorAll("svg circle")).toHaveLength(3);
+    expect(btn.querySelector("svg path")).not.toBeNull();
     expect(btn.parentElement?.classList.contains("mf-game-phase-header__actions")).toBe(true);
     expect(btn.previousElementSibling).toBe(endButton(container));
     expect(container.querySelector(".mf-game__header [data-phase-gauge]")).not.toBeNull();
@@ -1214,15 +1214,105 @@ describe("GameMap — 순차 지목 이름표 (22-10, D-12)", () => {
     expect(sendOf()).not.toHaveBeenCalled();
     fireEvent.click(face());
     expect(sendOf()).toHaveBeenCalledExactlyOnceWith({ t: "point", target: 2 });
-    expect(face().getAttribute("aria-pressed")).toBe("true");
+    expect(face()).toBeNull();
+    expect(m.container.querySelector("[data-table-dock]")?.getAttribute("data-dock-open")).toBe("closed");
     expect(tag(2)).toEqual({});
 
     const done = voteView([[0, 2]]);
     m.show({ ...done, map: "bar", day: { ...done.day!, turn: { ...done.day!.turn!, doneAt: NOW } } });
     expect(stage.props?.scene?.pin).toEqual({ mode: "turn", seat: 0 });
     expect(stage.props?.scene?.seats[0]?.pointAt).toBe(2);
+    fireEvent.click(m.container.querySelector('[data-dock-tab="people"]')!);
     expect(face().getAttribute("aria-pressed")).toBe("true");
+    expect(face().hasAttribute("data-pick")).toBe(false);
     expect(tag(2)).toEqual({});
+  });
+
+  it("다른 사람 차례의 채팅을 쓰다 내 차례가 오면 초점을 유지하고, 지목 후 초안을 이어 쓴다", () => {
+    const chat = new ChatStore();
+    const store = new WorldStore();
+    const send = vi.fn();
+    const frame = (i: number) => <GameMap view={{ ...voteView([], { count: 8, i }), map: "bar" }} store={store} chat={chat} send={send} />;
+    chat.apply({ t: "chat", ch: "all", seq: 1, at: NOW, seat: 1, text: "첫 단서" }, 1, NOW);
+    const { container, rerender } = render(frame(1));
+    const mode = () => container.querySelector("[data-table-dock]")?.getAttribute("data-dock-open");
+    expect(mode()).toBe("closed");
+    const preview = container.querySelector("[data-dock-peek]")!;
+    expect(preview.textContent).toContain("첫 단서");
+    fireEvent.click(preview);
+    const input = container.querySelector<HTMLInputElement>("[data-chat-input]")!;
+    act(() => input.focus());
+    fireEvent.change(input, { target: { value: "쓰던 단서" } });
+    rerender(frame(0));
+    expect(mode()).toBe("chat");
+    expect(document.activeElement).toBe(input);
+    expect(container.querySelector('[data-dock-tab="people"][data-dock-vote]')?.textContent).toBe("지목");
+    const vote = container.querySelector("[data-dock-vote]")!;
+    expect(fireEvent.pointerDown(vote, { pointerType: "touch", pointerId: 1, button: 0 })).toBe(false);
+    expect(fireEvent.mouseDown(vote)).toBe(false);
+    expect(document.activeElement).toBe(input);
+    fireEvent.click(vote);
+    expect(mode()).toBe("people");
+    expect(document.activeElement).not.toBe(input);
+    expect(container.querySelectorAll("[data-dock-pane]")).toHaveLength(1);
+    expect(container.querySelectorAll("[data-table-seat][data-pick]")).toHaveLength(7);
+    fireEvent.click(container.querySelector('[data-table-seat="2"]')!);
+    expect(send).toHaveBeenCalledWith({ t: "point", target: 2 });
+    expect(mode()).toBe("closed");
+    fireEvent.click(container.querySelector('[data-dock-tab="chat"]')!);
+    expect(container.querySelector<HTMLInputElement>("[data-chat-input]")?.value).toBe("쓰던 단서");
+  });
+
+  it("토론의 하단 판은 하나만 열고, 닫힌 채팅에는 내 채널의 새 메시지만 센다", () => {
+    const chat = new ChatStore();
+    const store = new WorldStore();
+    const room = { ...makeView(), map: "bar" as const };
+    const { container } = render(<GameMap view={room} store={store} chat={chat} send={vi.fn()} />);
+    const tab = (name: string) => container.querySelector<HTMLButtonElement>(`[data-dock-tab="${name}"]`)!;
+    const mode = () => container.querySelector("[data-table-dock]")?.getAttribute("data-dock-open");
+    const unread = () => container.querySelector("[data-dock-unread]")?.textContent;
+    expect(mode()).toBe("chat");
+    expect(tab("people").textContent).toBe("");
+    fireEvent.click(tab("tools"));
+    expect(mode()).toBe("tools");
+    expect(container.querySelectorAll("[data-dock-pane]")).toHaveLength(1);
+    expect(container.querySelector("[data-suspect-btn]")).not.toBeNull();
+    expect(container.querySelector("[data-chat-input]")).toBeNull();
+    act(() => {
+      chat.apply({ t: "chat", ch: "all", seq: 1, at: NOW, seat: 1, text: "읽지 않은 단서" }, 1, NOW);
+      chat.apply({ t: "chat", ch: "all", seq: 2, at: NOW, seat: 0, text: "내가 보낸 단서" }, 1, NOW);
+      chat.apply({ t: "chat", ch: "ghost", seq: 1, at: NOW, seat: 2, text: "다른 채널" }, 1, NOW);
+    });
+    expect(unread()).toBe("1");
+    fireEvent.click(tab("chat"));
+    expect(unread()).toBeUndefined();
+    expect(container.querySelector("[data-chat-log]")?.textContent).toContain("읽지 않은 단서");
+    expect(container.querySelector("[data-chat-log]")?.textContent).not.toContain("다른 채널");
+    fireEvent.click(tab("people"));
+    expect(unread()).toBeUndefined();
+    expect(mode()).toBe("people");
+    expect(container.querySelector("[data-pick]")).toBeNull();
+    fireEvent.click(container.querySelector("[data-dock-handle]")!);
+    expect(mode()).toBe("closed");
+    expect(document.activeElement).toBe(tab("people"));
+  });
+
+  it("차례가 마감되면 다음 프레임을 받기 전에도 지목 얼굴판을 접는다", () => {
+    const { container } = mount({ ...voteView(), map: "bar" });
+    const dock = container.querySelector("[data-table-dock]")!;
+    expect(dock.getAttribute("data-dock-open")).toBe("people");
+    act(() => vi.advanceTimersByTime(8000));
+    expect(dock.getAttribute("data-dock-open")).toBe("closed");
+    expect(dock.querySelector("[data-dock-vote]")).toBeNull();
+    expect(sendOf()).not.toHaveBeenCalled();
+  });
+
+  it("다음 날 같은 차례 번호에도 지목 얼굴판을 다시 연다", () => {
+    const m = mount({ ...voteView(), map: "bar" });
+    fireEvent.click(m.container.querySelector('[data-pick="2"]')!);
+    expect(m.container.querySelector("[data-dock-vote]")).toBeNull();
+    m.show({ ...voteView([], { n: 2 }), map: "bar" });
+    expect(m.container.querySelector('[data-dock-pane="people"] [data-pick="2"]')).not.toBeNull();
   });
 
   it("산 사람 4명, 내 차례: 나를 뺀 세 이름표가 누를 수 있고 묶음 '지목', 이름 '{닉네임} 님 가리키기'", () => {

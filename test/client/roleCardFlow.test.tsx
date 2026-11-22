@@ -168,21 +168,20 @@ describe("인게임 단계의 공통 메뉴", () => {
     }
   });
 
-  it("역할 확인에서도 점 세 개 메뉴에서 역할 카드를 연다", () => {
+  it("역할 확인에서도 가로줄 세 개 메뉴에서 역할 카드를 연다", () => {
     renderRoom(makeView({ phase: "roleReveal" }));
     const svg = headBtn()?.querySelector("svg");
-    expect(svg?.querySelectorAll("circle")).toHaveLength(3);
+    expect(svg?.querySelector("path")?.getAttribute("d")).toBe("M4 6h16M4 12h16M4 18h16");
     expect(headBtn()?.querySelector(".mf-rolecard-btn__label")).toBeNull();
     expect(headBtn()?.textContent).toBe("");
     openSheet();
     expect(sheet()).not.toBeNull();
   });
 
-  it("토론 점 세 개 메뉴에서 연 역할 카드를 닫으면 메뉴에 초점을 돌려준다", () => {
+  it("토론 메뉴에서 연 역할 카드를 닫으면 메뉴에 초점을 돌려준다", () => {
     renderRoom(makeView({ phase: "discussion" }));
     const button = headBtn();
     expect(button?.getAttribute("aria-haspopup")).toBe("dialog");
-    expect(button?.querySelectorAll("svg circle")).toHaveLength(3);
     openSheet();
     expect(sheet()).not.toBeNull();
     closeSheet();

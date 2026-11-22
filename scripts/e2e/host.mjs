@@ -9,6 +9,7 @@ import {
   chooseRole,
   closeRoleCard,
   openRoleCard,
+  openTableDockPane,
   openTestSheet,
   readBandWatch,
   readCallCount,
@@ -344,6 +345,7 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
       }
       // 유언 시트
       const will = await attempt(async () => {
+        await openTableDockPane(hp, "tools");
         await hp.locator("[data-will-button]").click({ timeout: 4000 });
         await hp.waitForSelector("[data-will-sheet]", { timeout: 4000 });
         await sleep(400);

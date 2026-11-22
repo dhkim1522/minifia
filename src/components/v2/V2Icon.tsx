@@ -8,16 +8,23 @@ import "../../styles/v2.css";
 // 로비 헤더의 [나가기]·[공유] 는 v1.0 Icon 을 그대로 쓴다(UI-SPEC 결정 현황) — 여기에 back·share 를 더하지 않는다.
 // 18페이즈: eyeOff(목격자 없음, eye 에 사선)·lock(옷장 잠금).
 // 의심 도구는 모서리가 접힌 느낌표 딱지로 표시한다.
-export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance" | "hanger" | "timeline" | "trophy" | "hourglass" | "mapBar" | "mapPlaza" | "shuffle" | "sound" | "soundOff" | "bell" | "bot" | "chevronRight" | "mask" | "shield" | "lens" | "eyeOff" | "lock" | "postit" | "ballot" | "ellipsis" | "sunrise";
+export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance" | "hanger" | "timeline" | "trophy" | "hourglass" | "mapBar" | "mapPlaza" | "shuffle" | "sound" | "soundOff" | "bell" | "bot" | "chevronRight" | "mask" | "shield" | "lens" | "eyeOff" | "lock" | "postit" | "ballot" | "menu" | "chat" | "users" | "toolbox" | "sunrise";
 
 // ["c", cx, cy, r, filled?] 원 · ["p", d, filled?] 경로
 type Part = readonly ["c", number, number, number, boolean?] | readonly ["p", string, boolean?];
 
 const ICONS: Readonly<Record<V2IconName, readonly Part[]>> = {
-  ellipsis: [
-    ["c", 5, 12, 1, true],
-    ["c", 12, 12, 1, true],
-    ["c", 19, 12, 1, true],
+  menu: [["p", "M4 6h16M4 12h16M4 18h16"]],
+  chat: [
+    ["p", "M21 11a9 9 0 0 1-9 9c-1.5 0-2.9-.4-4.2-1L3 21l1.9-4.8A9 9 0 1 1 21 11z"],
+  ],
+  users: [
+    ["c", 9, 7.5, 3.5],
+    ["p", "M2 20v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2M16 4.2a3.5 3.5 0 0 1 0 6.6M18 14.2a4 4 0 0 1 4 3.8v2"],
+  ],
+  toolbox: [
+    ["p", "M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M5 7h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z"],
+    ["p", "M3 12h18M10 12v2h4v-2"],
   ],
   ballot: [
     ["p", "M3 15h18v6H3zM3 15l3-4h3m7 0h2l3 4M9 15h6"],

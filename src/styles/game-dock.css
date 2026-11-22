@@ -1,0 +1,128 @@
+.mf-game .mf-game__panel--dock {
+  gap: var(--space-xs);
+  padding: 0 8px 8px;
+  box-shadow: none;
+  background: transparent;
+  pointer-events: none;
+}
+
+.mf-game__panel--dock > :not(.mf-game-dock) { pointer-events: auto; }
+
+.mf-game-dock {
+  display: grid;
+  gap: var(--space-xs);
+  min-width: 0;
+  color: var(--noir-paper);
+  font: var(--type-label);
+}
+
+.mf-game-dock__tabs,
+.mf-game-dock__pane,
+.mf-game-dock__peek {
+  min-width: 0;
+  border: 1px solid var(--noir-line);
+  border-radius: var(--noir-surface-radius);
+  background: var(--noir-sheet-light), var(--noir-panel);
+  box-shadow: var(--shadow-card);
+  pointer-events: auto;
+}
+
+.mf-game-dock button { color: inherit; font: inherit; }
+.mf-game-dock button:focus-visible { outline: 2px solid var(--noir-paper); outline-offset: -2px; }
+.mf-game-dock__pane { padding: 0 7px 6px; }
+.mf-game-dock__handle {
+  display: grid;
+  width: 100%;
+  min-height: var(--tap-min);
+  place-items: center;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.mf-game-dock__handle > span {
+  width: 33px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--noir-silver);
+}
+
+.mf-game[data-kb-open] .mf-game-dock__pane[data-dock-pane="chat"] .mf-game-dock__handle { display: none; }
+.mf-game-dock__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  padding: 0 2px 6px;
+}
+
+.mf-game-dock__title > span { color: var(--noir-silver); }
+.mf-game-dock__pane > .mf-table-controls { padding-inline: 0; }
+.mf-game-dock .mf-table-controls button { min-height: 52px; font: var(--type-label); }
+.mf-game-dock .mf-table-controls button[aria-pressed="true"] { color: var(--noir-accent); border-color: var(--noir-action-line); }
+.mf-game-dock .mf-table-controls button[data-table-readonly] { opacity: 1; cursor: default; }
+
+.mf-game-dock__pane .mf-room-chat { padding: 0; }
+.mf-game-dock__pane .mf-room-chat::before { display: none; }
+.mf-game-dock__pane .mf-room-chat .mv-chat { margin-inline: 0; background: transparent; box-shadow: none; }
+.mf-game-dock__pane .mf-room-chat .mv-chat__form { padding: 5px 1px 0; }
+.mf-game-dock__pane .mf-room-chat .mv-chat__form::before { inset-inline: 1px; }
+.mf-game-dock__pane .mf-room-chat .mv-chat__log { padding-inline: 2px; }
+.mf-game-dock__pane .mf-room-toolbar { padding: 0; }
+.mf-game-dock__pane[data-dock-pane="tools"] .mf-room-toolbar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.mf-game-dock__pane[data-dock-pane="tools"] .mf-room-tool { flex-direction: column; gap: 2px; min-height: 52px; height: auto; }
+.mf-game-dock__pane .mf-room-chat__surface {
+  position: static;
+  margin-top: var(--space-xs);
+  padding-inline: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.mf-game-dock__tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3px;
+  padding: 3px;
+}
+
+.mf-game-dock__tabs button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: var(--tap-min);
+  border: 1px solid transparent;
+  border-radius: var(--noir-control-radius);
+  background: transparent;
+  cursor: pointer;
+}
+
+.mf-game-dock__tabs button:disabled { opacity: .45; cursor: default; }
+.mf-game-dock__tabs button:is([aria-expanded="true"], [data-dock-vote]) { color: var(--noir-accent); border-color: var(--noir-action-line); }
+.mf-game-dock__tabs button[aria-expanded="true"] { background: var(--noir-control); }
+.mf-game-dock__tabs [data-dock-tab="people"] { touch-action: none; }
+.mf-game-dock__unread { color: var(--noir-accent); font: var(--type-label-strong); font-variant-numeric: tabular-nums; }
+
+.mf-game-dock__peek {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--tap-min);
+  padding: 4px 8px;
+  text-align: start;
+  cursor: pointer;
+}
+
+.mf-game-dock__peek > strong { max-width: 9ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mf-game-dock__peek > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mf-game-dock__peek .mf-player-portrait { width: 24px; height: 24px; }
+
+@media (max-height: 540px) {
+  .mf-game-dock__pane .mf-room-chat .mv-chat__log { max-height: 84px; }
+  .mf-game[data-kb-open] .mf-game-dock__pane .mf-room-chat .mv-chat__log { max-height: 42px; }
+}

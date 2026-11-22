@@ -422,7 +422,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
         setGameMenu("menu");
       }}
     >
-      <V2Icon name="ellipsis" size={23} />
+      <V2Icon name="menu" size={23} />
       {unread > 0 ? <span className="mf-rolecard-btn__dot" aria-hidden="true" /> : null}
     </button>
   );

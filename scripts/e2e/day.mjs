@@ -2,13 +2,12 @@
 // 판정 문턱은 이 파일의 순수 함수(voteCountChecks·willCarryChecks·willLockChecks·willRevealChecks·willSheetChecks)에만 있고 day.test.mjs 가 단위 시험한다. 흐름 본문은 얇게 읽고 부른다.
 // flows.mjs 가 이미 3천 8백 줄이라 흐름은 이 파일에 둔다(avatar.mjs·sound.mjs 와 같은 모양 — helpers 를 받고 서로 import 하지 않는다).
 // helpers: { recorder, attempt, openGame, closeGame, allAt, untilGame, gameGH, GAME_HOST_NICK }.
-import { chooseVerdict, installFakeViewport, readGame, settle, skipTo, sleep } from "./browser.mjs";
-import { DISCUSSION_LOG_H, OVERLAP_EPS, TAP_MIN, discussionLogHeight } from "./lib.mjs";
+import { chooseVerdict, installFakeViewport, openTableDockPane, readGame, settle, skipTo, sleep } from "./browser.mjs";
+import { OVERLAP_EPS, TAP_MIN, rectInside } from "./lib.mjs";
 
 const isNum = (x) => typeof x === "number" && Number.isFinite(x);
 const result = (id, label, bad) => ({ id, label, ok: bad.length === 0, detail: bad.length === 0 ? "" : bad.join("; ") });
 const noMeasure = (id, label, what) => result(id, label, [`측정값 없음(${what})`]);
-const LOCKED_DOCK_HEIGHT = DISCUSSION_LOG_H + 64;
 const fmt = (n) => Math.round(n * 10) / 10;
 const rectOk = (r) => r && [r.left, r.top, r.right, r.bottom, r.width, r.height].every(isNum);
 const overlaps = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > OVERLAP_EPS && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > OVERLAP_EPS;
@@ -62,17 +61,16 @@ export function willCarryChecks(m) {
 }
 
 /**
- * 유언 단계 나머지 사람 화면 판정(WF5, P22-7). pages = [{ who, sheets, locked([data-chat-locked] 수), panelH, pinSeat(__mfPin.seat) }], condemned = 처형자 좌석, panelWant = 공용 기록과 입력 높이.
- * 시트 0개 · 채팅 잠금 1개 · 지정 패널 높이(±1) · 스포트라이트(__mfPin.seat)가 처형자.
+ * 유언 단계 나머지 사람 화면 판정(WF5, P22-7). 시트 0개, 잠긴 채팅 패널은 헤더 아래의 화면 안, 스포트라이트는 처형자.
  */
-export function willLockChecks(pages, { condemned, panelWant = LOCKED_DOCK_HEIGHT }) {
-  const label = "나머지 사람: 시트 0개 · 채팅 잠금 · 고정 패널 · 스포트라이트가 처형자";
+export function willLockChecks(pages, { condemned }) {
+  const label = "나머지 사람: 시트 0개 · 채팅 잠금 · 화면에 맞는 패널 · 스포트라이트가 처형자";
   if (!Array.isArray(pages) || pages.length === 0 || !isNum(condemned)) return [noMeasure("WF5", label, "pages·condemned")];
   const bad = [];
   for (const p of pages) {
     if (p.sheets !== 0) bad.push(`${p.who} 시트 ${p.sheets}개`);
     if (p.locked !== 1) bad.push(`${p.who} 잠금 ${p.locked}개`);
-    if (!isNum(p.panelH) || Math.abs(p.panelH - panelWant) > 1) bad.push(`${p.who} 패널 ${p.panelH}(기대 ${panelWant})`);
+    if (!rectOk(p.panel) || !rectOk(p.available) || p.panel.height < TAP_MIN || !rectInside(p.panel, p.available)) bad.push(`${p.who} 패널이 화면을 벗어남`);
     if (p.pinSeat !== condemned) bad.push(`${p.who} 핀 좌석 ${p.pinSeat}(기대 ${condemned})`);
   }
   return [result("WF5", label, bad)];
@@ -201,6 +199,7 @@ export function makeDayFlows({ recorder, attempt, openGame, closeGame, allAt, un
 
   /** 토론에서 방장이 [유언](깃펜)으로 미리 유언을 써 저장한다 — 시트가 열리고 [저장] 을 눌러 닫힌다 */
   async function writeWillEarly(hp, text) {
+    await openTableDockPane(hp, "tools");
     await hp.locator("[data-will-button]").first().click({ timeout: 4000 });
     const area = hp.locator('[data-will-sheet="will"] textarea');
     await area.waitFor({ timeout: 4000 });
@@ -323,11 +322,14 @@ export function makeDayFlows({ recorder, attempt, openGame, closeGame, allAt, un
         const sheet = await readWillSheet(hp);
         recLines(rec, sc, willCarryChecks({ sheets: gh.willSheets, value: sheet?.value ?? null, wantValue: WILL_PRE }));
         // 나머지 사람 화면(P22-7)
+        await openTableDockPane(g.page, "chat");
         const gg = await readGame(g.page);
         const pin = await g.page.evaluate(() => window.__mfPin?.seat ?? null);
-        const panelWant = discussionLogHeight(h) + 64;
-        recLines(rec, sc, willLockChecks([{ who: "손님", sheets: gg.willSheets, locked: gg.chatLockedCount, panelH: gg.panel?.height, pinSeat: pin }], { condemned: hostSeat, panelWant }));
-        rec(sc, "WF5h", `방 높이 ${h}에서 나머지 사람 패널 높이는 ${panelWant}이다`, Math.abs((gg.panel?.height ?? 0) - panelWant) <= 1, `패널 ${gg.panel?.height}`);
+        const top = gg.header?.bottom ?? 0;
+        const available = { left: 0, top, right: gg.vw, bottom: h, width: gg.vw, height: h - top };
+        recLines(rec, sc, willLockChecks([{ who: "손님", sheets: gg.willSheets, locked: gg.chatLockedCount, panel: gg.tableDock?.rect, available, pinSeat: pin }], { condemned: hostSeat }));
+        const lockedInput = await g.page.locator("[data-chat-input]").evaluate((el) => el.disabled || el.readOnly);
+        rec(sc, "WF5h", "열어 본 잠긴 채팅에서 입력과 전송을 할 수 없다", lockedInput && await g.page.locator('[data-chat-send][aria-disabled="false"]').count() === 0);
         // 고쳐 [남기기] → 곧바로 처형 단계
         const stops = await Promise.all(pages.map((p) => watchWillReveal(p.page)));
         const t0 = performance.now();
