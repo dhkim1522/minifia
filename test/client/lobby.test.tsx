@@ -159,23 +159,30 @@ describe("Lobby — 맵 로비 틀 (MAP-01, 06-15)", () => {
 
 describe("Lobby — 하단 공용 도구 줄의 옷장", () => {
   const players = [player(0, "민수"), player(1, "영희"), player(2, "서준")];
-  const side = (c: ParentNode) => [...c.querySelectorAll("[data-room-chat] [data-room-tool=dress]")].map((e) => e.getAttribute("data-room-tool")).join(",");
+  const tools = (c: ParentNode) => [...c.querySelectorAll("[data-room-chat] [data-room-tool]")].map((e) => e.getAttribute("data-room-tool")).join(",");
 
   it("참가자: 공용 채팅 위에 [dress]가 있다 — 맵 칩·봇 단추가 없다 (T-16-13)", () => {
     const { container } = render(lobby(makeView(players, 2)));
-    expect(side(container)).toBe("dress");
-    expect(container.querySelector("[data-map-chip], [data-float='bots']")).toBeNull();
+    expect(tools(container)).toBe("dress");
+    expect(container.querySelector("[data-map-chip], [data-room-tool='bots']")).toBeNull();
     expect(container.querySelectorAll("[data-side-column]")).toHaveLength(0);
   });
 
-  it("방장 + 봇 도구가 켜진 방: 옷장은 공용 도구, 봇 단추는 호스트 줄에 있다", () => {
+  it("방장: 꾸미기와 봇이 채팅 기록 위 같은 줄에서 같은 아이콘 단추 스타일을 쓴다", () => {
     const view = makeView(players, 0);
     view.me = { ...view.me, testBots: 0 };
     const { container } = render(lobby(view));
-    expect(side(container)).toBe("dress");
-    expect(container.querySelectorAll("[data-side-column] [data-map-chip], [data-side-column] [data-float='bots']")).toHaveLength(0);
-    expect(container.querySelector("[data-float-stack]")).toBeNull();
-    for (const b of container.querySelectorAll("[data-room-tool]")) {
+    expect(tools(container)).toBe("dress,bots");
+    const dress = container.querySelector("[data-room-tool='dress']")!;
+    const bots = container.querySelector("[data-room-tool='bots']")!;
+    expect(dress.nextElementSibling).toBe(bots);
+    expect(bots.parentElement?.matches(".mf-room-toolbar")).toBe(true);
+    expect(bots.closest("[data-room-chat]")?.querySelector("[data-chat-log]")).not.toBeNull();
+    expect(bots.className).toBe(dress.className);
+    expect(bots.querySelector("svg")?.getAttribute("width")).toBe(dress.querySelector("svg")?.getAttribute("width"));
+    expect(container.querySelector("[data-host-rail], [data-float-stack], [data-float='bots']")).toBeNull();
+    expect(screen.getAllByRole("button", { name: "봇" })).toEqual([bots]);
+    for (const b of [dress, bots]) {
       expect(b.textContent).toBe(""); // 글 없음(접근성 이름만)
       expect(b.getAttribute("aria-label")).toBeTruthy();
     }
@@ -183,8 +190,8 @@ describe("Lobby — 하단 공용 도구 줄의 옷장", () => {
 
   it("방장도 봇 도구가 없으면(testBots 없음) 봇 단추가 어디에도 없다", () => {
     const { container } = render(lobby(makeView(players, 0)));
-    expect(container.querySelector("[data-float='bots']")).toBeNull();
-    expect(side(container)).toBe("dress");
+    expect(container.querySelector("[data-room-tool='bots']")).toBeNull();
+    expect(tools(container)).toBe("dress");
   });
 
   it("꾸미기 시트가 열려 있는 동안 열을 그리지 않는다", () => {
@@ -194,29 +201,11 @@ describe("Lobby — 하단 공용 도구 줄의 옷장", () => {
   });
 });
 
-describe("Lobby — 방장 줄 [봇]", () => {
+describe("Lobby — 하단 [봇] 조작", () => {
   const four = () => [player(0, "민수"), player(1, "영희"), player(2, "서준"), player(3, "하윤")];
-  /** 방장 view: 4명, 봇 도구 켜짐(testBots 2) */
-  const hostView = (extra: Partial<RoomView> = {}): RoomView => {
-    const v = makeView(four(), 0, extra);
-    return { ...v, me: { ...v.me, testBots: 2 } };
-  };
+  const hostView = (): RoomView => makeView(four(), 0, { me: { seat: 0, isHost: true, testBots: 2 } });
   const guestView = (extra: Partial<RoomView> = {}): RoomView => makeView(four(), 2, extra);
-  /** 줄 안 단추 표식(위 → 아래) */
-  const railIds = (c: ParentNode) => [...c.querySelectorAll("[data-host-rail] [data-host-rail-btn]")].map((e) => e.getAttribute("data-host-rail-btn")).join(",");
-  const side = (c: ParentNode) => [...c.querySelectorAll("[data-room-chat] [data-room-tool=dress]")].map((e) => e.getAttribute("data-room-tool")).join(",");
-  /** 판 종류 화면의 표식 네 가지 수 — 22-07 이후 늘 0 이다 */
-  const modeMarks = (c: ParentNode) => ['[data-host-rail-btn="mode"]', "[data-mode-sheet]", "[data-mode-card]", "[data-mode-chip]"].map((sel) => c.querySelectorAll(sel).length).join(",");
-
-  it("방장: 왼쪽 줄에는 [봇], 공용 채팅 도구 줄에는 [옷장]이 있다", () => {
-    const { container } = render(lobby(hostView()));
-    expect(container.querySelectorAll("[data-host-rail]")).toHaveLength(1);
-    expect(railIds(container)).toBe("bots");
-    expect(side(container)).toBe("dress");
-    expect(container.querySelectorAll("[data-side-column] [data-map-chip], [data-side-column] [data-float='bots']")).toHaveLength(0);
-    expect(container.querySelector('[data-host-rail-btn="bots"]')?.getAttribute("aria-label")).toBe("봇");
-    expect(modeMarks(container)).toBe("0,0,0,0");
-  });
+  const botButton = (c: ParentNode) => c.querySelector<HTMLButtonElement>("[data-room-tool='bots']");
 
   it("첫날 실험방 방장이 [봇] 시트에서 원하는 총인원을 한 번에 요청한다", () => {
     const send = vi.fn();
@@ -229,25 +218,46 @@ describe("Lobby — 방장 줄 [봇]", () => {
     expect(send.mock.calls).toEqual([[{ t: "testBots", count: 3 }], [{ t: "testBots", count: 7 }]]);
   });
 
-  it("봇 도구가 없는 방장에게는 줄 자체가 없다", () => {
-    const { container } = render(lobby(makeView(four(), 0)));
-    expect(railIds(container)).toBe("");
-    expect(container.querySelectorAll("[data-host-rail]")).toHaveLength(0);
+  it("시트를 닫으면 초점이 하단 봇 단추로 돌아온다", () => {
+    vi.useFakeTimers();
+    const { container } = render(lobby(hostView()));
+    const bot = botButton(container)!;
+    fireEvent.click(bot);
+    const dialog = screen.getByRole("dialog", { name: "봇" });
+    const close = within(dialog).getByRole("button", { name: "닫기" });
+    expect(document.activeElement).toBe(close);
+    expect(bot.getAttribute("aria-expanded")).toBe("true");
+
+    fireEvent.click(close);
+    advance(270);
+    expect(screen.queryByRole("dialog", { name: "봇" })).toBeNull();
+    expect(bot.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(bot);
   });
 
-  it("연결이 끊기면(canSend 거짓) 줄 단추가 모두 aria-disabled 이고 눌러도 시트가 열리지 않는다", () => {
-    const { container } = render(lobby(hostView(), { canSend: false }));
-    const btns = [...container.querySelectorAll("[data-host-rail] [data-host-rail-btn]")];
-    expect(btns.length).toBeGreaterThanOrEqual(1);
-    expect(btns.map((b) => b.getAttribute("aria-disabled")).join(",")).toBe(btns.map(() => "true").join(","));
-    fireEvent.click(container.querySelector('[data-host-rail-btn="bots"]')!);
-    expect(screen.queryByRole("dialog")).toBeNull();
+  it("연결이 끊기면 봇 단추가 비활성이고 이미 연 시트에서 인원도 변경할 수 없다", () => {
+    const send = vi.fn();
+    const { container, rerender } = render(lobby(hostView(), { send, canSend: false }));
+    const bot = botButton(container)!;
+    expect(bot.disabled).toBe(true);
+    fireEvent.click(bot);
+    expect(screen.queryByRole("dialog", { name: "봇" })).toBeNull();
+
+    rerender(lobby(hostView(), { send }));
+    fireEvent.click(bot);
+    const dialog = screen.getByRole("dialog", { name: "봇" });
+    rerender(lobby(hostView(), { send, canSend: false }));
+    const add = within(dialog).getByRole("button", { name: "8명 채우기" }) as HTMLButtonElement;
+    expect(add.disabled).toBe(true);
+    fireEvent.click(add);
+    expect(send).not.toHaveBeenCalled();
   });
 
-  it("참가자: 방장 줄 마크업이 없고 그 자리에 칩도 없다 — 판 종류 표식 네 가지 0건 (T-19-13, P22-15)", () => {
-    const { container } = render(lobby(guestView()));
-    expect(container.querySelectorAll("[data-host-rail], [data-host-rail-btn]")).toHaveLength(0);
-    expect(modeMarks(container)).toBe("0,0,0,0");
+  it("손님은 testBots 값이 들어간 오래된 상태를 받아도 봇을 열 수 없다", () => {
+    const view = guestView({ me: { seat: 2, isHost: false, testBots: 0 } });
+    const { container } = render(lobby(view));
+    expect(botButton(container)).toBeNull();
+    expect(screen.queryByRole("button", { name: "봇" })).toBeNull();
   });
 
   it("참가자의 판 바뀜 토스트가 없다 — mode 키가 달라지는 view 를 받아도 알림이 없다", () => {
@@ -257,25 +267,30 @@ describe("Lobby — 방장 줄 [봇]", () => {
     expect(toastText(container)).toBe("");
   });
 
-  it("방장이 바뀌어 내가 방장이 되면 줄이 나오고, 방장을 넘겨주면 줄이 사라진다 — 서버 view 의 isHost 로만", () => {
+  it("방장을 넘겨주면 단추와 열린 봇 시트가 사라지고 다음 방장 이양 때 닫힌 상태에서 시작한다", () => {
     const { container, rerender } = render(lobby(guestView()));
-    expect(container.querySelectorAll("[data-host-rail]").length).toBe(0);
+    expect(botButton(container)).toBeNull();
     const players = four().map((p) => ({ ...p, isHost: p.seat === 2 }));
-    const host = makeView(players, 2);
-    rerender(lobby({ ...host, me: { ...host.me, testBots: 0 } }));
-    expect(container.querySelectorAll("[data-host-rail]").length).toBe(1);
+    const promoted = makeView(players, 2, { me: { seat: 2, isHost: true, testBots: 0 } });
+    rerender(lobby(promoted));
+    fireEvent.click(botButton(container)!);
+    expect(screen.getByRole("dialog", { name: "봇" })).toBeTruthy();
     rerender(lobby(guestView()));
-    expect(container.querySelectorAll("[data-host-rail]").length).toBe(0);
+    expect(botButton(container)).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "봇" })).toBeNull();
+    rerender(lobby(promoted));
+    expect(botButton(container)?.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("dialog", { name: "봇" })).toBeNull();
   });
 
-  it("꾸미기 시트가 열린 동안에는 줄을 그리지 않는다 (P19-16)", () => {
-    const host = render(lobby(hostView()));
-    expect(host.container.querySelectorAll("[data-host-rail]")).toHaveLength(1);
-    fireEvent.click(within(host.container).getByRole("button", { name: "옷장" }));
-    expect(host.container.querySelectorAll("[data-host-rail]")).toHaveLength(0);
+  it("꾸미기 시트가 열린 동안에는 봇 단추를 그리지 않는다", () => {
+    const { container } = render(lobby(hostView()));
+    expect(botButton(container)).not.toBeNull();
+    fireEvent.click(within(container).getByRole("button", { name: "옷장" }));
+    expect(botButton(container)).toBeNull();
   });
 
-  it("키보드가 열린 동안에는 줄을 그리지 않는다 (P19-16)", () => {
+  it("키보드가 열린 동안에는 봇 단추를 숨긴다", () => {
     const vv = Object.assign(new EventTarget(), { height: 844, offsetTop: 0 });
     Object.defineProperty(window, "visualViewport", { value: vv, configurable: true, writable: true });
     const realInnerH = window.innerHeight;
@@ -284,26 +299,17 @@ describe("Lobby — 방장 줄 [봇]", () => {
     try {
       vv.height = 844;
       const { container } = render(lobby(hostView()));
-      expect(container.querySelectorAll("[data-host-rail]")).toHaveLength(1);
+      expect(botButton(container)).not.toBeNull();
       act(() => (container.querySelector("[data-chat-input]") as HTMLInputElement).focus());
       vv.height = 844 - 336;
       act(() => void vv.dispatchEvent(new Event("resize")));
       advance(20);
       expect(container.querySelector("main.mf-lobby")?.getAttribute("data-kb-open")).toBe("true");
-      expect(container.querySelectorAll("[data-host-rail]")).toHaveLength(0);
+      expect(botButton(container)).toBeNull();
     } finally {
       Reflect.deleteProperty(window, "visualViewport");
       Object.defineProperty(window, "innerHeight", { value: realInnerH, configurable: true, writable: true });
     }
-  });
-
-  it("테스트 방([테스트] 단추가 있음)은 줄이 그 아래에서 시작한다(data-test-shift), 없으면 기본 위치로 돌아온다 (P19-5)", () => {
-    const test = <button type="button">테스트</button>;
-    const host = render(lobby(hostView(), { testButton: test }));
-    expect(host.container.querySelector("[data-host-rail]")?.hasAttribute("data-test-shift")).toBe(true);
-    host.unmount();
-    const plain = render(lobby(hostView()));
-    expect(plain.container.querySelector("[data-host-rail]")?.hasAttribute("data-test-shift")).toBe(false);
   });
 
   it("[시작] 단추는 그대로다: 채팅 패널 위 별도 영역, 같은 클래스·접근성 이름, 방장 줄에 들어가지 않는다 (D-17)", () => {
@@ -317,11 +323,13 @@ describe("Lobby — 방장 줄 [봇]", () => {
     expect(container.querySelectorAll("[data-host-rail] [data-lobby-start]")).toHaveLength(0);
   });
 
-  it("가상 뷰포트가 밀리면 줄도 헤더 계열과 함께 내려온다 (lobby.css)", () => {
+  it("가상 뷰포트가 밀릴 때 헤더와 [테스트]만 윗부분 조작으로 이동한다", () => {
     const css = readFileSync("src/styles/lobby.css", "utf8");
-    const rule = (css.split("}").find((r) => r.includes(".mf-lobby .mv-side") && r.includes("translateY(var(--mf-vv-top")) ?? "").replace(/\s+/g, " ");
-    expect(rule.includes(".mf-lobby .mf-hostrail")).toBe(true);
-    expect(rule.includes(".mf-lobby .mf-modechip")).toBe(false);
+    const rule = css.split("}").find((row) => row.includes("translateY(var(--mf-vv-top")) ?? "";
+    expect(rule).toContain(".mf-lobby__header");
+    expect(rule).toContain(".mf-lobby__test");
+    expect(rule).not.toContain(".mf-hostrail");
+    expect(rule).not.toContain(".mf-lobby__panel");
   });
 });
 

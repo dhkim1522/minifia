@@ -4,6 +4,7 @@
 .mf-room {
   position: relative; /* 로비의 떠 있는 재접속 띠(.mf-reconnect--floating)가 이 틀 위에 얹힌다 */
   --mf-reconnect-h: 52px;
+  --mf-room-controls-max: 480px;
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
@@ -20,25 +21,21 @@
   flex-direction: column;
 }
 
-@media (hover: hover) and (pointer: fine) {
-  /* 방의 모든 단계가 같은 폭을 쓰고 3D 무대는 실제 영역을 잰다. */
-  #root:has(> .mf-room) { max-width: 960px; }
+/* 화면 폭에 맞춰 무대와 조작을 넓힌다. 터치 화면에도 같은 폭을 적용한다. */
+#root:has(> .mf-room) { max-width: 960px; }
 
-  .mf-room { --mf-room-controls-max: 600px; }
-
-  .mf-room :is(
-    .mf-lobby__header, .mf-lobby__panel,
-    .mf-assign__bar, .mf-assign__panel, .mf-reveal__header,
-    .mf-game__header, .mf-game__panel,
-    .mf-result__header, .mf-result__panel, .mf-bench__panel, .mv-host
-  ) {
-    max-width: var(--mf-room-controls-max);
-    margin-inline: auto;
-  }
-
-  .mf-room :is(.mf-assign__bar, .mf-assign__panel) { width: 100%; }
-  .mf-room .mf-will-layer { max-width: 450px; margin-inline: auto; }
+.mf-room :is(
+  .mf-lobby__header, .mf-lobby__panel,
+  .mf-assign__bar, .mf-assign__panel, .mf-reveal__header,
+  .mf-game__header, .mf-game__panel,
+  .mf-result__header, .mf-result__panel, .mf-bench__panel, .mv-host
+) {
+  max-width: var(--mf-room-controls-max);
+  margin-inline: auto;
 }
+
+.mf-room :is(.mf-assign__bar, .mf-assign__panel) { width: 100%; }
+.mf-room .mf-will-layer { max-width: 450px; margin-inline: auto; }
 
 .mf-phase {
   flex: 1;

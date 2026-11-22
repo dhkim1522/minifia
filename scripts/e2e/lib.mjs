@@ -1260,6 +1260,26 @@ export function pcCenterChecks(p, { w }) {
   return result("UX2-PC", label, bad);
 }
 
+export function roomWidthChecks({ viewport, room, canvas, rails = [], contents = [] } = {}) {
+  const stageLabel = "방과 3D 무대는 최대 960px로 가운데에 있다";
+  const controlsLabel = "상·하단 조작부는 최대 480px로, 작은 화면에서는 가용 폭으로 맞춘다";
+  if (!isNum(viewport) || viewport <= 0) return [noMeasure("RW-STAGE", stageLabel, "화면 폭"), noMeasure("RW-CONTROLS", controlsLabel, "화면 폭")];
+  const stageWidth = Math.min(960, viewport);
+  const railsWidth = Math.min(480, viewport);
+  const centered = (rect, width) => rect && allNum(rect.left, rect.width) && width > 0
+    && Math.abs(rect.width - width) <= 1 && Math.abs(rect.left - (viewport - width) / 2) <= 1;
+  const stage = [["방", room], ["캔버스", canvas]].filter(([, rect]) => !centered(rect, stageWidth));
+  const fail = (name, rect, width) => `${name} ${rect ? `${rd(rect.width)}px, 왼쪽 ${rd(rect.left)}px` : "측정값 없음"} (기준 ${width}px)`;
+  const controlFailures = [];
+  if (rails.length === 0) controlFailures.push("상·하단 조작부 측정값 없음");
+  for (const { name, rect } of rails) if (!centered(rect, railsWidth)) controlFailures.push(fail(name, rect, railsWidth));
+  for (const { name, rect } of contents) if (!rect || rect.width > railsWidth + 1 || !centered(rect, rect.width)) controlFailures.push(fail(name, rect, railsWidth));
+  return [
+    result("RW-STAGE", stageLabel, stage.map(([name, rect]) => fail(name, rect, stageWidth))),
+    result("RW-CONTROLS", controlsLabel, controlFailures),
+  ];
+}
+
 /**
  * WL1·WL2 화면 켜짐 유지(Wake Lock). mode "unsupported"(WL1): w = { hasApi, reachedPhase, consoleErrors } — API 없는 환경에서도 정상 진행하고 콘솔 오류가 없다.
  * mode "spy"(WL2): w = { requestsAtLobby, requestsAfterVisible } — 대기실에서 요청이 1회 이상이고 숨김 → 보임 복귀에 정확히 1회 늘어난다.

@@ -39,7 +39,9 @@ async function swipe(page, selector, direction, mobile) {
   }
 }
 
-export function makeTableDockFlow({ recorder, openGame, closeGame, writeSheet, gameGH }) {
+const GAME_RAILS = [".mf-game__header", ".mf-game__panel"];
+
+export function makeTableDockFlow({ recorder, openGame, closeGame, writeSheet, gameGH, checkRoomWidth }) {
   return async function tableDockFlow(ctx) {
     const id = ctx.size.mobile === false ? "table-dock-pc" : "table-dock";
     const sc = `${id}/discussion`;
@@ -53,6 +55,7 @@ export function makeTableDockFlow({ recorder, openGame, closeGame, writeSheet, g
       const { host, hp, ht, guests } = game;
       const [first, second] = guests;
       await dockMode(hp, "chat").waitFor({ timeout: 5000 });
+      await checkRoomWidth(ctx, sc, hp, GAME_RAILS, ["[data-table-dock]", '[data-dock-pane="chat"]']);
       const initial = await readGame(hp);
       const viewport = { left: 0, top: 0, right: initial.vw, bottom: initial.vh };
       const tabs = initial.tableDock.tabs;
@@ -71,6 +74,7 @@ export function makeTableDockFlow({ recorder, openGame, closeGame, writeSheet, g
 
       await openTableDockPane(hp, "people");
       const roster = hp.locator('[data-dock-pane="people"]');
+      await checkRoomWidth(ctx, `${id}/people`, hp, GAME_RAILS, ["[data-table-controls]"]);
       rec(sc, "TD3", "참가자 판에는 자신을 뺀 세 명이 보이고 토론 중에는 얼굴을 지목할 수 없다",
         await roster.locator("[data-table-seat]").count() === 3
         && await roster.locator(`[data-table-seat="${game.hostSeat}"]`).count() === 0
@@ -142,6 +146,8 @@ export function makeTableDockFlow({ recorder, openGame, closeGame, writeSheet, g
       await guestInput.fill(draft);
       if (ctx.size.mobile !== false) {
         await first.page.evaluate(() => window.__mfVv.set(window.innerHeight - 240, 0));
+        await first.page.locator('[data-kb-open="true"]').waitFor({ timeout: 3000 });
+        await checkRoomWidth(ctx, `${id}/keyboard`, first.page, GAME_RAILS, ['[data-dock-pane="chat"]']);
       }
       await tapTurnPick(hp, first.seat);
       await ht.waitFor((view) => view.day?.points?.some((point) => point.seat === game.hostSeat && point.target === first.seat),

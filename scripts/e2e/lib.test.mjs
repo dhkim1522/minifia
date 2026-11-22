@@ -73,6 +73,7 @@ import {
   docHeightChecks,
   joinFitChecks,
   pcCenterChecks,
+  roomWidthChecks,
   wakeLockChecks,
   CONSOLE_ALLOW,
   DRAW_CALL_BUDGET,
@@ -1021,6 +1022,29 @@ test("pcCenterChecks UX2-PC: left 0 실패·폭 1280 실패·측정값 없음 �
     assert.equal(r.ok, false, JSON.stringify(p));
     assert.match(r.detail, /측정값 없음/, JSON.stringify(p));
   }
+});
+
+test("roomWidthChecks: 작은 화면은 가용 폭, 768px과 1280px는 가운데 조작부 480px", () => {
+  for (const viewport of [320, 390, 430, 768, 1280]) {
+    const bounds = (width) => ({ width, left: (viewport - width) / 2 });
+    const stageWidth = Math.min(viewport, 960);
+    const railWidth = Math.min(viewport, 480);
+    const checks = roomWidthChecks({ viewport, room: bounds(stageWidth), canvas: bounds(stageWidth),
+      rails: [{ name: "헤더", rect: bounds(railWidth) }, { name: "하단", rect: bounds(railWidth) }],
+      contents: [{ name: "채팅", rect: bounds(railWidth - 16) }] });
+    assert.deepEqual(checks.map((check) => [check.id, check.ok]), [["RW-STAGE", true], ["RW-CONTROLS", true]], `${viewport}`);
+  }
+});
+
+test("roomWidthChecks: 좁게 고정된 터치 무대와 예전 600px 조작부, 잘린 하단 조작을 잡는다", () => {
+  const [stage, controls] = roomWidthChecks({ viewport: 768, room: { width: 430, left: 169 }, canvas: { width: 430, left: 169 },
+    rails: [{ name: "헤더", rect: { width: 600, left: 84 } }, { name: "하단", rect: { width: 480, left: 140 } }],
+    contents: [{ name: "입력", rect: null }] });
+  assert.equal(stage.ok, false);
+  assert.match(stage.detail, /430px/);
+  assert.equal(controls.ok, false);
+  assert.match(controls.detail, /헤더.*600px.*하단.*왼쪽 140px.*입력.*측정값 없음/);
+  assert.ok(roomWidthChecks().every(({ ok }) => !ok));
 });
 
 test("wakeLockChecks WL1(unsupported): API 없음·단계 도달·콘솔 오류 0 은 통과", () => {

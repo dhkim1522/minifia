@@ -58,7 +58,6 @@ import {
   readCallCount,
   readGuide,
   readHostBand,
-  readHostRail,
   readJoinFit,
   readHeaderContrast,
   resetAndLeave,
@@ -116,6 +115,7 @@ import {
   worldSyncChecks,
   walkStartChecks,
   pcCenterChecks,
+  roomWidthChecks,
   wakeLockChecks,
   announceChecks,
   announceClearChecks,
@@ -1425,19 +1425,24 @@ async function closeGame(game) {
   await game.host.context.close().catch(() => {});
 }
 
+const LOBBY_BOT_TOOL = '.mf-room-toolbar button[data-room-tool="bots"]';
+
 /** 총인원 버튼은 한 번에 봇 수를 바꾸며 함께 들어온 사람의 좌석을 유지한다. */
 async function botFillFlow(ctx) {
   const id = "bot-fill";
   const rec = recorder(ctx);
   const { page, tracker } = await startHost(ctx, id);
-  const openBots = () => page.locator('[data-host-rail-btn="bots"]').click();
+  const botTool = page.locator(LOBBY_BOT_TOOL);
   const targetButtons = (label) => page.getByRole("dialog", { name: label, exact: true });
   const fill = async (label, total, humans) => {
     await targetButtons(label).getByRole("button", { name: `${total}명 채우기`, exact: true }).click();
     await tracker.waitFor((v) => v.players.length === total && v.me.testBots === total - humans, 5000, `총 ${total}명`);
   };
 
-  await openBots();
+  const toolRect = await botTool.boundingBox();
+  rec(`${id}/solo`, "BF0", "방장 봇 단추가 대기실 채팅 위 도구 줄에 있고 44×44 이상이다",
+    !!toolRect && toolRect.width >= 44 && toolRect.height >= 44 && await page.locator("[data-host-rail]").count() === 0);
+  await botTool.click();
   await settle(page);
   const buttons = await targetButtons("봇").getByRole("button", { name: /^[4-8]명 채우기$/ }).evaluateAll(elements => elements.map(el => {
     const { x, y, width, height } = el.getBoundingClientRect();
@@ -1448,10 +1453,12 @@ async function botFillFlow(ctx) {
   for (const total of [8, 4, 5, 6, 7, 4]) await fill("봇", total, 1);
   rec(`${id}/solo`, "BF2", "혼자 모든 인원으로 바로 채우거나 줄인다", true);
   await closeSheet(page, "봇");
+  rec(`${id}/solo`, "BF2F", "봇 시트를 닫으면 하단 봇 단추로 초점이 돌아온다", await botTool.evaluate((el) => el === document.activeElement));
 
   const { guest, seat } = await openGuest(ctx, "채우기친구");
   try {
     await tracker.waitFor((v) => v.players.length === 5 && v.players.some((p) => p.seat === seat), 5000, "친구와 봇이 함께 입장");
+    rec(`${id}/mixed`, "BF2G", "참가자 대기실에는 방장 봇 단추가 없다", await guest.page.locator(LOBBY_BOT_TOOL).count() === 0);
     await openTestSheet(page);
     await fill("테스트 도구", 8, 2);
     await guest.tracker.waitFor((v) => v.players.length === 8, 5000, "친구 화면의 8명");
@@ -1475,8 +1482,8 @@ async function seatedOpeningFlow(ctx) {
   await waitWorldReady(page, 1);
   const mapControls = page.locator("[data-map-chip], [data-map-tab], [data-map-card]");
   rec(`${id}/lobby`, "SO0", "대기실은 재즈 바이고 맵 선택이 없다", await page.evaluate(() => window.__mfMap === "bar") && await mapControls.count() === 0);
-  const rail = await readHostRail(page);
-  rec(`${id}/lobby`, "SO0B", "테스트 방장 줄에 봇 단추가 있다", rail.buttons.map(button => button.id).join(",") === "bots");
+  rec(`${id}/lobby`, "SO0B", "방장 대기실 채팅 위에 봇 단추가 있다", await page.locator(LOBBY_BOT_TOOL).count() === 1);
+  await checkRoomWidth(ctx, `${id}/lobby`, page, [".mf-lobby__header", ".mf-lobby__panel"]);
   const hostSeat = tracker.last().me.seat;
   const lobbyPosition = await sampleWorld(page, hostSeat);
   const lobbyTarget = lobbyPosition && await farWalkableOnSurface(page, ctx.size, lobbyPosition);
@@ -1508,6 +1515,7 @@ async function seatedOpeningFlow(ctx) {
   if (!(await roleFace.isVisible())) await page.locator(".mf-reveal__stage .mf-card").click();
   await roleFace.waitFor({ state: "visible", timeout: 5000 });
   rec(`${id}/role`, "SO3", "내 자리 눈높이에서 역할 카드를 열 수 있다", true);
+  await checkRoomWidth(ctx, `${id}/role`, page, [".mf-reveal__header"], [".mf-reveal__stage .mf-card"]);
 
   const sameStage = () => page.evaluate(() => window.__seatedOpeningCanvas !== null
     && window.__seatedOpeningCanvas === document.querySelector("[data-world-stage] canvas"));
@@ -1543,6 +1551,7 @@ async function seatedOpeningFlow(ctx) {
   };
   await verifyIntro("keyword", /라이어\s*게임/);
   await page.locator("[data-keyword-card]").waitFor({ state: "visible", timeout: 6000 });
+  await checkRoomWidth(ctx, `${id}/keyword`, page, [".mf-reveal__header"], ["[data-keyword-card]"]);
   await eye();
   rec(`${id}/keyword`, "SO4", "라이어게임까지 역할 확인과 같은 눈높이 장면이 이어진다", await sameStage() && await atOwnChair());
 
@@ -1562,6 +1571,7 @@ async function seatedOpeningFlow(ctx) {
   await eye();
   rec(`${id}/discussion`, "SO5", "첫 토론에서 같은 좌석과 눈높이를 쓰고 전체 보기 전환이 없다", await sameStage() && await atOwnChair()
     && await page.locator("[data-table-view]").count() === 0);
+  await checkRoomWidth(ctx, `${id}/discussion`, page, [".mf-game__header", ".mf-game__panel"], ['[data-dock-pane="chat"]']);
 
   for (const [phase, title] of [["verdict", "찬반"], ["nomination", "지목"], ["defense", "유언"], ["execution", "처형"], ["night", "밤"]]) {
     let sameChair;
@@ -1588,6 +1598,7 @@ async function seatedOpeningFlow(ctx) {
     await page.locator("[data-result-stage]").waitFor({ state: "visible", timeout: 6000 });
     await eye();
     rec(`${id}/result`, "SO8", "결과를 같은 좌석 눈높이에서 보고 맵 선택이 없다", await sameStage() && await atOwnChair() && await mapControls.count() === 0);
+    await checkRoomWidth(ctx, `${id}/result`, page, [".mf-result__header", ".mf-result__panel"]);
   }
 }
 
@@ -2020,6 +2031,7 @@ async function ghostFlow(ctx) {
       await untilGame(hp, (x) => x.ghostView, 9000, "유령 화면");
       await openTableDockPane(hp, "chat");
       await settle(hp);
+      await checkRoomWidth(ctx, sc, hp, [".mf-game__header", ".mf-game__panel"], ['[data-dock-pane="chat"]']);
       const g = await readGame(hp);
       const view = ht.last();
       const seats = view.spectate?.seats?.length ?? -1;
@@ -3750,21 +3762,17 @@ async function chatGameFlow(ctx) {
 
 // ---- pc: 데스크톱 홈 그림과 조작 열, 대기실에서 결과까지 넓은 맵 ----
 
-async function checkPcRoom(ctx, state, selectors) {
-  const page = ctx.host.page;
+async function checkRoomWidth(ctx, state, page, railSelectors, contentSelectors = []) {
   await page.locator(".mf-world__canvas canvas").waitFor({ timeout: 8000 });
-  const { viewport, room, canvas, controls } = await page.evaluate((selectors) => {
+  const measured = await page.evaluate(({ railSelectors, contentSelectors }) => {
     const bounds = (selector) => {
       const rect = document.querySelector(selector)?.getBoundingClientRect();
       return rect ? { left: rect.left, width: rect.width } : null;
     };
-    return { viewport: window.innerWidth, room: bounds(".mf-room"), canvas: bounds(".mf-world__canvas canvas"), controls: selectors.map(bounds) };
-  }, selectors);
-  const width = Math.min(960, viewport);
-  const centeredAtWidth = (rect, expected) => rect !== null && Math.abs(rect.width - expected) <= 1 && Math.abs(rect.left - (viewport - expected) / 2) <= 1;
-  const rec = recorder(ctx);
-  rec(`pc/${state}`, "PC-ROOM", "방과 3D 맵이 같은 넓은 폭으로 가운데에 배치", centeredAtWidth(room, width) && centeredAtWidth(canvas, width), `방 ${room?.width}px, 캔버스 ${canvas?.width}px, 기준 ${width}px`);
-  rec(`pc/${state}`, "PC-CONTROLS", "헤더·하단 조작·중앙 카드가 조작 폭 안에서 가운데에 배치", controls.every((rect) => rect !== null && rect.width > 0 && rect.width <= 600 && centeredAtWidth(rect, rect.width)), JSON.stringify(controls));
+    const columns = (selectors) => selectors.map((name) => ({ name, rect: bounds(name) }));
+    return { viewport: window.innerWidth, room: bounds(".mf-room"), canvas: bounds(".mf-world__canvas canvas"), rails: columns(railSelectors), contents: columns(contentSelectors) };
+  }, { railSelectors, contentSelectors });
+  recMany(recorder(ctx), state, roomWidthChecks(measured));
 }
 
 async function checkEntryWidth(ctx, page, state, columnSelector, { width, height }, touch = false) {
@@ -3809,7 +3817,7 @@ async function pcFlow(ctx) {
   const mySeat = tracker.last().me.seat;
   await waitWorldReady(page, 1);
   await settle(page);
-  await checkPcRoom(ctx, "lobby", [".mf-lobby__header", ".mf-lobby__panel"]);
+  await checkRoomWidth(ctx, "pc/lobby", page, [".mf-lobby__header", ".mf-lobby__panel"]);
   await checkState(ctx, "pc", "lobby");
   const lobbyPosition = await sampleWorld(page, mySeat);
   const lobbyTarget = lobbyPosition ? await farWalkableOnSurface(page, ctx.size, lobbyPosition) : null;
@@ -3834,14 +3842,14 @@ async function pcFlow(ctx) {
   await setBotVote(page, tracker, { exec: "no", pick: "other" });
   await startGame(page, tracker);
   await page.locator(".mf-reveal__header").waitFor({ timeout: 8000 });
-  await checkPcRoom(ctx, "role", [".mf-reveal__header"]);
+  await checkRoomWidth(ctx, "pc/role", page, [".mf-reveal__header"]);
   await skipTo(page, tracker, "keyword");
   await page.locator("[data-keyword-card]").waitFor({ timeout: 8000 });
-  await checkPcRoom(ctx, "keyword", [".mf-reveal__header", "[data-keyword-card]"]);
+  await checkRoomWidth(ctx, "pc/keyword", page, [".mf-reveal__header"], ["[data-keyword-card]"]);
   await skipTo(page, tracker, "discussion");
   await settle(page);
   ctx.stage = "play";
-    await checkPcRoom(ctx, "day", [".mf-game__header", "[data-table-dock]", '[data-dock-pane="chat"]']);
+  await checkRoomWidth(ctx, "pc/day", page, [".mf-game__header", ".mf-game__panel"], ["[data-table-dock]", '[data-dock-pane="chat"]']);
   await checkState(ctx, "pc", "day");
 
   const me = await sampleWorld(page, mySeat);
@@ -3860,7 +3868,7 @@ async function pcFlow(ctx) {
   await nightCard.waitFor({ timeout: 8000 });
   await settle(page);
   const nightCtx = { ...ctx, size: reported };
-  await checkPcRoom(nightCtx, "night", [".mf-game__header", "[data-table-dock]", '[data-phase-event="night-action"] .mf-phase-event__card']);
+  await checkRoomWidth(nightCtx, "pc/night", page, [".mf-game__header", ".mf-game__panel"], ["[data-table-dock]", '[data-phase-event="night-action"] .mf-phase-event__card']);
   const faceSeats = (await readNightFaces(page)).faceSeats;
   const patient = faceSeats.find((seat) => seat !== mySeat);
   recorder(nightCtx)("pc/night", "PC-DOCTOR", "의사에게 다섯 후보가 모두 보임", tracker.last().me.role === "doctor" && faceSeats.length === 5);
@@ -3873,7 +3881,7 @@ async function pcFlow(ctx) {
 
   await toEnded({ hp: page, ht: tracker });
   await page.locator(".mf-result__panel").waitFor({ timeout: 8000 });
-  await checkPcRoom(nightCtx, "result", [".mf-result__header", ".mf-result__panel"]);
+  await checkRoomWidth(nightCtx, "pc/result", page, [".mf-result__header", ".mf-result__panel"]);
   await checkState(nightCtx, "pc", "result");
   await page.locator("[data-game-menu]").click();
   await clickInDialog(page, "게임 메뉴", "방 나가기");
@@ -4007,7 +4015,7 @@ const { emceeBandFlow, emceeToolsFlow, emceeLeakFlow, emceeSoundFlow } = makeHos
 
 // 18.1 화면 다듬기(18.1-08): polish-reveal(역할 확인 카드 문구·무대 겹침, 네 직업 × 폰 6종). 흐름 본문은 polish.mjs, 도우미만 넘긴다
 const { polishRevealFlow } = makePolishFlows({ recorder, attempt, openGame, closeGame });
-const tableDockFlow = makeTableDockFlow({ recorder, openGame, closeGame, writeSheet, gameGH });
+const tableDockFlow = makeTableDockFlow({ recorder, openGame, closeGame, writeSheet, gameGH, checkRoomWidth });
 
 export const FLOWS = [
   // lobby·world 는 LOBBY_SIZES 6개 크기로 돈다: 기본 크기 4개에 더해 390x844·402x874 (run.mjs 의 extraSizes)

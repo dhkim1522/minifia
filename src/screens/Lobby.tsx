@@ -13,8 +13,6 @@ import { ShareSheet } from "../components/ShareSheet";
 import { RoomChatDock } from "../components/v2/RoomChatDock";
 import { V2Icon } from "../components/v2/V2Icon";
 import { DressSheet } from "../components/v2/DressSheet";
-import { HostRail } from "../components/v2/HostRail";
-import { HostRailButton } from "../components/v2/HostRailButton";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
 import { WorldStage } from "../components/WorldStage";
@@ -57,14 +55,14 @@ interface LobbyProps {
   exiting?: boolean;
   /** [나가기] 확인 뒤 불린다. 방을 나간 결과와 관계없이 첫 화면으로 간다(01-13 의 RoomScreen 이 onExit("left") 를 넘긴다) */
   onLeave?: () => void;
-  /** 테스트 방 방장의 [테스트] 버튼(결정 0022). 있으면 헤더 아래 왼쪽에 놓는다. 방장 줄은 그 아래로 내려간다(19-04, P19-5) */
+  /** 테스트 방 방장의 [테스트] 버튼(결정 0022). 있으면 헤더 아래 왼쪽에 놓는다. */
   testButton?: ReactNode;
   menuButton?: ReactNode;
 }
 
 // S-03 대기실(06-15, 07-13): 지하 재즈 바 맵(WorldStage) 위에 승인 로비 틀을 얹는다 — 위쪽 가림막, 헤더([나가기]·PhaseHeader "대기실"·[공유]),
 // 위 알림(TopToast), 패널 위 방장 시작 버튼, 아래 채팅 기록과 입력줄. 방 코드는 헤더의 공유 버튼과 초대 시트에 표시한다. 읽을 글은 "대기실" 과 접히는 한 줄뿐이다(3초 규칙).
-// 19-04(D-13): 방장 전용 [봇] 조작은 왼쪽 세로 줄(HostRail)에 모으고 오른쪽 열은 모두가 쓰는 [소리]·[옷장]만 둔다. 참가자에게는 줄 마크업이 없다(22-07).
+// 채팅 위 기능 줄에는 꾸미기와 방장 전용 봇 조작을 둔다.
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)은 WorldStage 가 React 텍스트 노드로만 그린다.
 export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offset = 0, bannerVisible = false, exiting = false, onLeave, testButton, menuButton }: LobbyProps) {
   const playtest = view.playtest === true;
@@ -99,7 +97,12 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
   // 열려 있는 시트. 화면이 기억하는 상태는 이것과 [시작] 잠금뿐이다.
   // 내보내기는 누른 시점의 닉네임을 같이 들고 있어 그사이 view 가 바뀌어도 제목이 흔들리지 않는다.
   const [sheet, setSheet] = useState<{ kind: "leave" } | { kind: "share" } | { kind: "bots" } | { kind: "kick"; seat: number; nickname: string } | null>(null);
-  const closeSheet = () => setSheet(null);
+  const botBtnRef = useRef<HTMLButtonElement>(null);
+  const restoreBotFocus = useRef(false);
+  const closeSheet = () => {
+    if (sheet?.kind === "bots") restoreBotFocus.current = true;
+    setSheet(null);
+  };
 
   // [시작] 2초 잠금. 시작이 거절되면 서버가 다시 보낸 view 대로 그린다.
   const [locked, setLocked] = useState(false);
@@ -115,13 +118,12 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
 
   // 키보드(07-19, CHAT-05)·스테이지 사각형 측정(06-15)·기록 칸 높이는 게임 맵(GameMap)과 같은 훅 하나가 맡는다(08-13).
   // 키보드가 열려 있으면 방장 시작 버튼을 접고 채팅은 키보드 위에 놓는다.
-  const { rootRef, headerRef, panelRef, inputRef, kbOpen, sideMaxH, stageInsets } = useMapInsets();
+  const { rootRef, headerRef, panelRef, inputRef, kbOpen, stageInsets } = useMapInsets();
   const motion = useMyMotion(store, view.me.seat, () => Date.now() + offset);
   const { typingSeats, ...binding } = useChat({ store: chat, connection: { send, canSend }, view, motion });
   useLayoutEffect(() => { chat.markRead("all"); }, [chat, binding.messages]);
 
-  // 꾸미기(10-07): 오른쪽 열의 hanger 버튼 → 패널을 덮는 카드 띠 시트. 아래 패널 높이(--mf-panel-h)는 DOM 에서 재서 루트에 정한다
-  // (시트가 그 값을 읽는다 — GameMap 과 같은 방식). 시트가 열린 동안·키보드가 열린 동안 오른쪽 열은 그리지 않는다.
+  // 꾸미기는 채팅 도구에서 열고 패널 위에 카드 띠를 띄운다. 시트의 위치는 측정한 패널 높이를 기준으로 정한다.
   const [dressOpen, setDressOpen] = useState(false);
   useLayoutEffect(() => {
     rootRef.current?.style.setProperty("--mf-panel-h", `${panelRef.current?.offsetHeight ?? 0}px`);
@@ -177,8 +179,14 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
   const connected = connectedCount(view.players);
   const isHost = view.me.isHost;
   const botsOn = isHost && view.me.testBots !== undefined;
-  // 테스트 방([테스트] 단추가 왼쪽 위에 있음): 줄이 그 아래(48)에서 시작하고 줄 최대 높이도 그만큼 줄어든다(P19-5, F-1)
-  const testShift = Boolean(testButton);
+  const showBots = botsOn && !kbOpen && !dressOpen;
+  const hasDress = !playtest || myAnimal !== undefined;
+  useEffect(() => {
+    if (sheet?.kind === "bots" && !botsOn) setSheet(null);
+    if (sheet !== null || !restoreBotFocus.current) return;
+    restoreBotFocus.current = false;
+    botBtnRef.current?.focus({ preventScroll: true });
+  }, [sheet, botsOn]);
   const host = view.players.find((p) => p.isHost);
   const full = view.players.length >= view.maxPlayers;
   // 서버 checkStart 와 같은 기준(연결된 사람 수)을 쓴다. 버튼 모양은 표시용이고 판정은 서버가 한다.
@@ -254,20 +262,26 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
           binding={playtest ? { ...binding, emotes: [] } : binding}
           kbOpen={kbOpen}
           inputRef={inputRef}
-          actions={(!myAnimal && playtest) ? null : (
-            <button ref={dressBtnRef} type="button" className="mf-room-tool" data-float="dress" data-room-tool="dress" aria-label={myAnimal ? "캐릭터 꾸미기" : DRESS_TEXT.open} hidden={kbOpen} inert={dressOpen} disabled={!canSend || exiting} onClick={() => openDress()}>
-              <V2Icon name="hanger" size={22} />
-            </button>
-          )}
+          actions={hasDress || showBots ? (
+            <>
+              {hasDress ? (
+                <button ref={dressBtnRef} type="button" className="mf-room-tool" data-float="dress" data-room-tool="dress" aria-label={myAnimal ? "캐릭터 꾸미기" : DRESS_TEXT.open} hidden={kbOpen} inert={dressOpen} disabled={!canSend || exiting} onClick={openDress}>
+                  <V2Icon name="hanger" size={22} />
+                </button>
+              ) : null}
+              {showBots ? (
+                <button ref={botBtnRef} type="button" className="mf-room-tool" data-room-tool="bots" aria-label="봇" aria-haspopup="dialog" aria-expanded={sheet?.kind === "bots"} disabled={!canSend || exiting}
+                  onClick={() => {
+                    inputRef.current?.blur();
+                    setSheet({ kind: "bots" });
+                  }}>
+                  <V2Icon name="bot" size={22} />
+                </button>
+              ) : null}
+            </>
+          ) : null}
         />
       </section>
-      {/* 꾸미기 시트·키보드가 열린 동안에는 줄·오른쪽 열을 그리지 않는다(P19-16) */}
-      {!dressOpen && !kbOpen && botsOn ? (
-        <HostRail maxHeight={testShift ? Math.max(0, sideMaxH - 48) : sideMaxH} testShift={testShift}>
-          {/* 결정 0075: 방장만 [봇] — 서버가 방장 대기실 view 에만 me.testBots 를 싣는다 */}
-          <HostRailButton id="bots" icon="bot" label="봇" pressed={sheet?.kind === "bots"} disabled={!canSend} onPress={() => setSheet({ kind: "bots" })} />
-        </HostRail>
-      ) : null}
       {dressOpen ? (
         <DressSheet
           value={dress.look}
@@ -301,7 +315,7 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
           onClose={closeSheet}
         />
       ) : null}
-      {sheet?.kind === "bots" && botsOn ? <BotSheet view={view} canSend={canSend} send={send} onClose={closeSheet} /> : null}
+      {sheet?.kind === "bots" && botsOn ? <BotSheet view={view} canSend={canSend && !exiting} send={send} onClose={closeSheet} /> : null}
       {sheet?.kind === "share" ? <ShareSheet code={view.code} hostNickname={host?.nickname ?? ""} full={full} onClose={closeSheet} /> : null}
     </main>
   );
