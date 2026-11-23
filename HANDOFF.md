@@ -29,6 +29,7 @@
 
 ## 다음 할 일
 
+- **사용자가 정한 작업 순서**는 [TODO.md](TODO.md)에 있다. 첫 항목은 제시어 공개 연출 시안이다.
 - **다음 첫날 라이어게임**. [고정 좌석 및 유령 시야 결정](docs/decisions/0108-seated-bar-play.md). [인원별 배치](design/v3.0/seated-camera-review/seating-review.webp), [12종 얼굴 전후](design/v3.0/seated-camera-review/character-comparison.webp), [배경·소품 전후](design/v3.0/seated-camera-review/room-comparison.webp).
 
 1. **재즈 바 검수**. 360·390px와 1280px에서 실제 클릭으로 로비 이동, 지목, 유언, 유령, 결과 의상·재접속·다시 하기를 확인했다. 이전 로비 도구 배치 E2E 6건은 변경 전에도 실패했다. 실기기 GPU와 키보드는 확인 대기.
