@@ -275,15 +275,37 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
   // 암살당한 본인: 번호가 바뀐 뒤 0.7초에 내 캐릭터가 놀란 표정을 짓는다(모션 줄이기면 표정 연출도 없이 바로 유령 상태). 처음 마운트 때의 번호는 지난 일이라 하지 않는다.
   // 번쩍임·베기는 KillFx 가, 막 붙잡기는 SceneCurtain(holdUntil)이 맡는다. 타이머는 언마운트 때만 푼다.
   const reducedMotion = useReducedMotion();
-  // 유언 편지: 편지가 화면에 보이는 동안(letterLive) 아침 알림은 편지가 대신 쥔다. 편지가 걷히면 알림도 함께 걷힌다(알림 시간은 편지보다 짧다)
+  // 닫지 않은 편지는 다음 단계에도 남지만, 사망 알림은 그 편지가 공개된 아침에만 표시한다.
   const [letterLive, setLetterLive] = useState(false);
-  const morningLetter = view.phase === "morning" ? letter : null;
+  const morningLetter = view.phase === "morning" && view.day?.morning?.eliminated === letter?.seat ? letter : null;
   const morningPolice = view.phase === "morning" ? policeResult : null;
+  const letterHasAnnounce = morningLetter !== null && morningPolice === null && Boolean(morningLetter.announce.text);
+  const showLetterAnnounce = letterHasAnnounce && letterLive;
+  const letterFrameRef = useRef<HTMLDivElement>(null);
+  const letterAnnounceRef = useRef<HTMLDivElement>(null);
+  const [compactLetterAnnounce, setCompactLetterAnnounce] = useState(false);
   const nightWithoutExecution = view.phase === "night" && announce?.text === DAY_COPY.noExecution;
   const nightIntroSummary = nightWithoutExecution && view.phaseStartsAt !== undefined ? DAY_COPY.noExecution : undefined;
   const shownAnnounce: DayFx["announce"] = morningPolice !== null || nightIntroSummary !== undefined
     ? null
     : morningLetter !== null ? (letterLive ? morningLetter.announce : null) : announce;
+  const letterAnnounceText = showLetterAnnounce ? shownAnnounce?.text : undefined;
+  useLayoutEffect(() => {
+    const frame = letterFrameRef.current;
+    const announcement = letterAnnounceRef.current;
+    if (letterAnnounceText === undefined || frame === null || announcement === null) return;
+    const update = () => {
+      setCompactLetterAnnounce(frame.clientHeight <= 310);
+      // 헤더 기준 여백 차이와 기울어진 편지 모서리까지 포함한다.
+      frame.style.setProperty("--lw-announcement-space", `${announcement.offsetHeight + 18}px`);
+    };
+    update();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(update);
+    observer.observe(frame);
+    observer.observe(announcement);
+    return () => observer.disconnect();
+  }, [letterAnnounceText]);
   const killNonce = killFx?.nonce ?? 0;
   const seenKill = useRef(killNonce);
   const killTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -907,9 +929,10 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
           </PhaseEvent>
         ) : null
       ) : !introActive ? (
-        <ResultAnnounce text={shownAnnounce?.text || null} {...(shownAnnounce?.icon !== undefined ? { icon: shownAnnounce.icon } : {})} {...(shownAnnounce?.label !== undefined ? { label: shownAnnounce.label } : {})} still={shownAnnounce?.still === true} withLetter={morningLetter !== null && letterLive} />
+        <ResultAnnounce text={shownAnnounce?.text || null} {...(shownAnnounce?.icon !== undefined ? { icon: shownAnnounce.icon } : {})} {...(shownAnnounce?.label !== undefined ? { label: shownAnnounce.label } : {})} still={shownAnnounce?.still === true}
+          withLetter={showLetterAnnounce} compactWithLetter={showLetterAnnounce && compactLetterAnnounce} bodyRef={showLetterAnnounce ? letterAnnounceRef : undefined} />
       ) : null}
-      {morningLetter !== null ? <WillLetter key={`${morningLetter.t0}:${morningLetter.seat}`} letter={morningLetter} reducedMotion={reducedMotion} onLive={setLetterLive} /> : null}
+      {letter !== null ? <WillLetter key={`${letter.t0}:${letter.seat}`} ref={letterFrameRef} letter={letter} reducedMotion={reducedMotion} withAnnounce={letterHasAnnounce} onLive={setLetterLive} /> : null}
       {morningPolice !== null ? (
         <PhaseEvent kind="investigation-result" title="조사 결과" interactive={false}>
           <PoliceResultCard

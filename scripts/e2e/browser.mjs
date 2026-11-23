@@ -1694,7 +1694,7 @@ export function armAnnounceWatch(page, { nightSummary = false } = {}) {
       if (el) {
         const cs = getComputedStyle(el);
         const title = el.closest(".mf-phase-event__card")?.querySelector(".mf-phase-event__title");
-        log.push({ text, at: performance.now(), viewportWidth: window.innerWidth, fontPx: parseFloat(cs.fontSize), titlePx: title ? parseFloat(getComputedStyle(title).fontSize) : null, lineCount: lineCountOf(el), wordBreak: cs.wordBreak, ...(summary ? { nightSummary: true } : {}), ...(el.closest(".mf-announce.is-with-letter") ? { withLetter: true } : {}) });
+        log.push({ text, at: performance.now(), viewportWidth: window.innerWidth, fontPx: parseFloat(cs.fontSize), titlePx: title ? parseFloat(getComputedStyle(title).fontSize) : null, lineCount: lineCountOf(el), wordBreak: cs.wordBreak, ...(summary ? { nightSummary: true } : {}), ...(el.closest(".mf-announce.is-with-letter-compact") ? { compactLetter: true } : {}) });
       } else log.push({ text: null, at: performance.now() });
     }, 40);
     window.__annWatch = { log, stop: () => clearInterval(timer) };
@@ -1718,7 +1718,7 @@ export function readAnnounceWatch(page, { stop = true } = {}) {
 export function armLetterWatch(page) {
   return page.evaluate(() => {
     window.__letterWatch?.stop?.();
-    const w = { morningAt: null, appearAt: null, contentAt: null, announceTopAt: null, announceText: null, announceSize: null, sealImage: null, read: null, cardAt: null, cardBase: 0, goneAt: null };
+    const w = { morningAt: null, appearAt: null, contentAt: null, announceTopAt: null, announceText: null, sealImage: null, read: null, cardAt: null, cardBase: 0, goneAt: null };
     const timer = setInterval(() => {
       const now = performance.now();
       const stage = document.querySelector("[data-game-stage]");
@@ -1750,7 +1750,6 @@ export function armLetterWatch(page) {
         if (top) {
           w.announceTopAt = now;
           w.announceText = (top.textContent ?? "").trim();
-          w.announceSize = Number.parseFloat(getComputedStyle(top).fontSize);
         }
       }
       if (w.appearAt !== null && w.cardAt === null && cards > w.cardBase) w.cardAt = now;
@@ -1812,6 +1811,9 @@ export function readLetter(page) {
     const lineEls = [...root.querySelectorAll("[data-will-line]")];
     const seal = root.querySelector("[data-will-seal]");
     const head = root.querySelector("[data-will-head]");
+    const text = root.querySelector(".mf-letter__text");
+    const gauge = root.querySelector(".mf-letter__fill");
+    const close = root.querySelector("[data-will-close]");
     const headCs = head ? getComputedStyle(head) : null;
     const lineCs = lineEls[0] ? getComputedStyle(lineEls[0]) : null;
     const lines = lineEls.flatMap(textRects);
@@ -1826,11 +1828,15 @@ export function readLetter(page) {
       head: head ? { text: (head.textContent ?? "").trim(), fontPx: parseFloat(headCs.fontSize), color: headCs.color } : null,
       paperBg: paper ? getComputedStyle(paper).backgroundColor : null,
       family: lineCs ? lineCs.fontFamily : null,
+      penLoaded: lineEls.length > 0 && [...document.fonts].some((face) => face.family.includes("Nanum Pen") && face.status === "loaded")
+        && document.fonts.check('30px "Nanum Pen Script"', lineEls.map((el) => el.textContent).join("")),
+      gaugeDuration: gauge ? Number.parseFloat(getComputedStyle(gauge).animationDuration) * 1000 : null,
+      closeHeight: close?.offsetHeight ?? null,
+      scrollGap: text ? text.scrollHeight - text.clientHeight : null,
       lineFontPx: lineCs ? parseFloat(lineCs.fontSize) : null,
       lineHeightPx: lineCs ? parseFloat(lineCs.lineHeight) : null,
       align: lineCs?.textAlign ?? null,
       lineCount: new Set(lines.map((line) => Math.round(line.top / 2))).size,
-      fallback: root.classList.contains("is-fallback"),
       text: (root.querySelector("[data-will-read]")?.textContent ?? "").trim(),
       announceTop: !!document.querySelector(".mf-announce.is-top"),
       paperH: paper ? paper.getBoundingClientRect().height : null,

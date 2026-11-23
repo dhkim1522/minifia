@@ -5,7 +5,7 @@
 import type { EmoteId } from "../../shared/protocol";
 
 /** 닫힌 신호 종류 */
-export const SIGNAL_KINDS = ["tap", "card", "tensionCue", "vote", "deny", "emote", "result", "host"] as const;
+export const SIGNAL_KINDS = ["tap", "card", "tensionCue", "vote", "deny", "emote", "result", "host", "willClose"] as const;
 export type SignalKind = (typeof SIGNAL_KINDS)[number];
 
 /** 주요 버튼이 눌렸다 — 인자 없음 */
@@ -53,7 +53,7 @@ export type ResultSignal =
 export interface HostSignal {
   kind: "host";
 }
-export type LocalSignal = TapSignal | CardSignal | TensionCueSignal | VoteSignal | DenySignal | EmoteSignal | ResultSignal | HostSignal;
+export type LocalSignal = TapSignal | CardSignal | TensionCueSignal | VoteSignal | DenySignal | EmoteSignal | ResultSignal | HostSignal | { kind: "willClose" };
 
 type Handler = (signal: LocalSignal) => void;
 

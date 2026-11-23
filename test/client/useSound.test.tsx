@@ -481,7 +481,7 @@ describe("useSound: 방 view 의 차이가 감독을 거쳐 엔진 요청이 된
       expect(logIds(rig2)).not.toContain("kill.slash");
     });
 
-    it("유언 편지는 인장과 접힘 효과음을 해당 시각에 재생한다", () => {
+    it("유언 편지는 인장을 예약하고 닫을 때 접힘 효과음을 낸다", () => {
       const rig = makeRig();
       const t0 = rig.fake.clock.now();
       const { rerender } = mountDay(rig, { view: roomView("night", { phaseEndsAt: t0 + 10_000 }), epoch: 1 });
@@ -493,6 +493,8 @@ describe("useSound: 방 view 의 차이가 감독을 거쳐 엔진 요청이 된
       expect(logIds(rig)).toContain("will.seal");
       expect(logIds(rig)).not.toContain("will.fold");
       act(() => rig.fake.clock.advance(4_500));
+      expect(logIds(rig)).not.toContain("will.fold");
+      act(() => emitSignal({ kind: "willClose" }));
       expect(logIds(rig).filter((id) => id === "will.fold")).toHaveLength(1);
       expect(logIds(rig)).not.toContain("will.quill");
     });

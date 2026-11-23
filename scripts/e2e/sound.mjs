@@ -2,7 +2,7 @@
 // flows.mjs 가 이미 3천 줄이라 흐름 본문은 이 파일에 둔다. flows.mjs 의 도우미는 `makeSoundFlows(helpers)` 로 받는다(avatar.mjs·politics.mjs 와 같은 모양 — 서로 import 하지 않는다).
 // helpers: { recorder, attempt, startHost, openGame, closeGame, nightScenario } (sound-script 는 startHost, sound-night-parity·sound-result 는 openGame·closeGame 을 쓴다)
 // 판정 문턱은 lib.mjs 의 순수 검사 함수(soundRenderChecks, SOUND_RENDER_LIMITS)에만 있고 여기서는 낮추지 않는다 (T-12-22).
-import { chooseRole, chooseVerdict, dropSockets, leaveLobby, openTestSheet, reconnectInit, SetupError, setBotVote, setBots, settle, showPeopleTarget, skipTo, sleep, startGame } from "./browser.mjs";
+import { chooseRole, chooseVerdict, dropSockets, leaveLobby, openTableDockPane, openTestSheet, reconnectInit, SetupError, setBotVote, setBots, settle, showPeopleTarget, skipTo, sleep, startGame } from "./browser.mjs";
 import { SOUND_RENDER_LIMITS, SOUND_SCRIPT_STEPS, soundButtonChecks, soundEmoteLeakChecks, soundNightParityChecks, soundRenderChecks, soundResultChecks, soundResultSkipChecks, soundSequenceChecks, soundVerdictTimingChecks } from "./lib.mjs";
 
 /** [전부 계산] 모든 렌더가 끝나기를 기다리는 상한(ms) */
@@ -438,6 +438,7 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
   /** 동작 칸을 눌러 보낸다(등장 걷기·앞 동작이 끝나 칸이 풀릴 때까지 판을 여닫으며 기다린다) */
   const sendEmote = (page, id) =>
     attempt(async () => {
+      if (await page.locator("[data-table-dock]").count()) await openTableDockPane(page, "tools");
       for (let i = 0; i < EMOTE_OPEN_TRIES; i += 1) {
         if ((await page.locator("[data-emote-tray]").count()) === 0) await page.locator("[data-emote-button]").click({ timeout: 3000 });
         await page.waitForSelector("[data-emote-tray]", { timeout: 1500 });

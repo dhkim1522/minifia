@@ -4,7 +4,7 @@
 // 시각은 모두 "그 단계 기준 시각 T0 부터 ms" 다. 시계(T0 와 현재 시각)는 부르는 쪽(감독)이 준다.
 import { PIN_OFF_EXEC_AT, WILL_REVEAL_MS } from "../../shared/game/phases";
 import { ANNOUNCE_MORNING_AT, ANNOUNCE_VICTIM_AT } from "../game/dayView";
-import { LETTER_FOLD_AT_MS, LETTER_SEAL_AT_MS } from "../game/willLetter";
+import { LETTER_SEAL_AT_MS } from "../game/willLetter";
 import type { BedId, SfxId } from "./recipes";
 
 export type Rng = () => number;
@@ -202,10 +202,10 @@ export function lightCues(input: LightInput): Script & { duck: DuckSpan } {
 
 // ───────────────────────── 유언 편지 ─────────────────────────
 
-/** 공개 편지의 인장과 접힘 소리 */
+/** 공개 편지의 인장 소리. 접힘은 닫기 신호가 낸다. */
 export function willScript(): Script {
   return {
-    items: [{ at: LETTER_SEAL_AT_MS, id: "will.seal" }, { at: LETTER_FOLD_AT_MS, id: "will.fold" }],
+    items: [{ at: LETTER_SEAL_AT_MS, id: "will.seal" }],
     duck: null,
   };
 }

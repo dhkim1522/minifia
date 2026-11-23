@@ -12,7 +12,7 @@ import { TIMELESS_PHASES } from "../../src/game/scenes";
 import { SOUND_PREF_KEY, SOUND_PREF_VERSION, loadSoundPref } from "../../src/audio/prefs";
 import { SOUND_IDS } from "../../src/audio/recipes";
 import { SOUND_LIMITS } from "../../src/debug/soundLabTable";
-import { LETTER_END_AT_MS, LETTER_FOLD_AT_MS, SEAL_GLYPH } from "../../src/game/willLetter";
+import { LETTER_CHAT_AT_MS, LETTER_FOLD_MS, LETTER_READ_MS, SEAL_GLYPH } from "../../src/game/willLetter";
 import { RESULT_PANEL_TEXT, RESULT_TABS } from "../../src/game/resultText";
 import {
   CHAT_PANEL_EXTRA,
@@ -310,11 +310,12 @@ describe("E2E 의 마지막 3인 시간 상수와 앱 상수 (09.1.1-16)", () =>
 });
 
 describe("E2E 의 유언 편지 상수와 앱 상수 (09.1-11)", () => {
-  const lib = e2eLib as { LETTER_FOLD_AT_MS: number; LETTER_END_AT_MS: number; ANNOUNCE_MORNING_AT: number; SEAL_GLYPH: string };
+  const lib = e2eLib as { LETTER_CHAT_AT_MS: number; LETTER_READ_MS: number; LETTER_FOLD_MS: number; ANNOUNCE_MORNING_AT: number; SEAL_GLYPH: string };
 
-  it("LETTER_FOLD_AT_MS·LETTER_END_AT_MS·ANNOUNCE_MORNING_AT·SEAL_GLYPH 가 앱 상수와 같다", () => {
-    expect(lib.LETTER_FOLD_AT_MS).toBe(LETTER_FOLD_AT_MS);
-    expect(lib.LETTER_END_AT_MS).toBe(LETTER_END_AT_MS);
+  it("채팅 공개·읽기·접힘 시간과 아침 알림·인장 상수가 앱과 같다", () => {
+    expect(lib.LETTER_CHAT_AT_MS).toBe(LETTER_CHAT_AT_MS);
+    expect(lib.LETTER_READ_MS).toBe(LETTER_READ_MS);
+    expect(lib.LETTER_FOLD_MS).toBe(LETTER_FOLD_MS);
     expect(lib.ANNOUNCE_MORNING_AT).toBe(ANNOUNCE_MORNING_AT);
     expect(lib.SEAL_GLYPH).toBe(SEAL_GLYPH);
   });

@@ -1,8 +1,8 @@
-/* 공개 유언. 상단 상태 줄과 하단 조작부 사이에 본문을 놓는다. */
+/* 공개 유언. 원래의 줄 친 편지지, 손글씨, 붉은 봉랍을 쓴다. */
 .mf-letter {
   --letter-paper: #f3efe4;
+  --letter-rule: rgb(70 90 130 / 22%);
   --letter-ink: #1c2a4d;
-  --letter-label: #5f687b;
   --letter-wax-1: #e0485c;
   --letter-wax-2: #a3132a;
   --letter-wax-3: #650a18;
@@ -11,10 +11,11 @@
   --letter-wax-hi-2: #f0909b;
   --letter-wax-hi-3: #ffd0d6;
   position: absolute;
-  inset-inline: clamp(12px, 4vw, 24px);
-  inset-block-start: calc(var(--mf-host-bottom, 62px) + 56px);
-  inset-block-end: calc(var(--mf-panel-h, 0px) + 8px);
-  z-index: calc(var(--z-overlay) + 1);
+  inset-inline: clamp(16px, 25vw - 64px, 32px);
+  inset-block-start: calc(var(--mf-host-bottom, 62px) + var(--mf-vv-top, 0px) + 8px);
+  inset-block-end: calc(var(--mf-panel-h, 0px) + var(--mf-kb-lift, 0px) + 8px);
+  z-index: calc(var(--z-toast) + 4);
+  container-type: size;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -22,58 +23,72 @@
   justify-content: safe center;
   pointer-events: none;
 }
+.mf-letter.is-morning { z-index: calc(var(--z-overlay) + 1); }
 
 .mf-letter__fold {
   width: min(100%, 30rem);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  max-height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, auto) auto;
   gap: 8px;
-  animation: mf-letter-fold var(--lw-fold-duration) ease-in var(--lw-fold-delay) forwards;
 }
+.mf-letter.is-morning .mf-letter__fold {
+  margin-top: var(--lw-announcement-space, 116px);
+  max-height: calc(100% - var(--lw-announcement-space, 116px));
+}
+.mf-letter.is-folding .mf-letter__fold { animation: mf-letter-fold var(--lw-fold-duration) ease-in forwards; }
 .mf-letter__rise {
-  width: 100%;
-  filter: drop-shadow(0 12px 20px rgb(0 0 0 / 45%));
-  animation: mf-letter-rise var(--lw-rise-duration) var(--ease-out) var(--lw-rise-delay) both;
+  min-width: 0;
+  min-height: 0;
+  filter: drop-shadow(0 18px 24px rgb(0 0 0 / 65%));
+  animation: mf-letter-rise var(--lw-rise-duration) cubic-bezier(0.2, 0.8, 0.2, 1) var(--lw-rise-delay) both;
 }
 .mf-letter__paper {
+  --lw-line: clamp(36px, 9.5vw, 40px);
+  --lw-seal-size: clamp(64px, 22vw, 84px);
+  position: relative;
+  display: flex;
+  flex-direction: column;
   box-sizing: border-box;
-  width: 100%;
-  padding: 12px clamp(16px, 4.8vw, 26px) 19px;
-  border: 1px solid var(--noir-paper-line);
-  border-radius: 10px;
-  background: linear-gradient(rgb(243 239 228 / 70%), rgb(243 239 228 / 70%)), var(--stationery-will-paper, none) center / 100% 100% no-repeat, var(--letter-paper);
+  max-height: 100%;
+  padding: 18px clamp(16px, 10vw - 16px, 24px) calc(var(--lw-seal-size) + 10px);
+  border-radius: 6px;
+  transform: rotate(-1.5deg);
+  background-color: var(--letter-paper);
+  background-image: linear-gradient(to bottom, transparent calc(var(--lw-line) - 1px), var(--letter-rule) calc(var(--lw-line) - 1px)), var(--stationery-will-paper, none);
+  background-repeat: repeat-y, no-repeat;
+  background-size: 100% var(--lw-line), 100% 100%;
+  background-position: 0 12px, center;
   color: var(--letter-ink);
-}
-.mf-letter__heading {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 36px;
-  align-items: center;
-  gap: 8px;
-  padding-bottom: 7px;
-  border-bottom: 1px solid rgb(95 104 123 / 28%);
 }
 .mf-letter__head {
   display: flex;
+  flex: none;
   gap: .25em;
   margin: 0;
-  font: 650 16px/1.4 var(--font-ui);
-  color: var(--letter-label);
+  font: var(--type-section);
+  color: var(--letter-ink);
   white-space: nowrap;
 }
-.mf-letter__author { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--letter-ink); }
+.mf-letter__author { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.mf-letter__text { min-height: 0; margin-top: 8px; overflow: auto; overscroll-behavior: contain; }
+.mf-letter__text[data-will-scroll] { pointer-events: auto; }
 .mf-letter__line {
-  margin: 12px 0 0;
-  text-align: start;
-  font: 600 clamp(22px, 5.6vw, 24px)/1.5 var(--font-ui);
+  margin: 0;
+  text-align: center;
+  font: 400 clamp(30px, 8.3vw, 32px)/var(--lw-line) var(--font-hand);
   color: var(--letter-ink);
   word-break: keep-all;
   overflow-wrap: anywhere;
 }
 .mf-letter__seal {
-  width: 36px;
-  height: 36px;
-  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 30%));
+  position: absolute;
+  inset: auto 16px 8px auto;
+  width: var(--lw-seal-size);
+  height: var(--lw-seal-size);
+  transform: rotate(-8deg);
+  filter: drop-shadow(0 3px 5px rgb(0 0 0 / 45%));
   animation: mf-letter-seal var(--lw-seal-duration) ease-out var(--lw-delay) both;
 }
 .mf-letter__seal > :is(img, svg) { display: block; width: 100%; height: 100%; object-fit: contain; }
@@ -87,28 +102,47 @@
 .mf-letter__seal-glyph.is-light { fill: var(--letter-wax-hi-2); opacity: 0.55; }
 .mf-letter__seal-gloss { fill: none; stroke: var(--letter-wax-hi-3); stroke-width: 3; stroke-linecap: round; opacity: 0.45; }
 
-.mf-letter__guide { display: grid; justify-items: center; gap: 4px; }
+.mf-letter__guide { display: flex; align-items: center; justify-content: center; gap: var(--space-md); }
+.mf-letter__reading { display: grid; justify-items: center; gap: 4px; min-width: 0; }
 .mf-letter__guide-text { margin: 0; font: var(--type-label); color: var(--gray-300); }
-.mf-letter__bar { width: 140px; max-width: 100%; height: 3px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--gray-50) 14%, transparent); }
+.mf-letter__bar { width: min(220px, 54vw); height: 4px; border-radius: 4px; overflow: hidden; background: color-mix(in srgb, var(--gray-50) 14%, transparent); }
 .mf-letter__fill { height: 100%; background: var(--brass-400); animation: mf-letter-progress var(--lw-read-duration) linear var(--lw-rise-delay) both; }
+.mf-letter__close { pointer-events: auto; min-width: var(--tap-min); min-height: var(--tap-min); }
+
+/* 채팅을 펼치거나 키보드가 올라오면 봉랍을 제목 옆으로 보내고 본문과 닫기 공간을 확보한다. */
+@container (max-height: 450px) {
+  .mf-letter.is-morning .mf-letter__paper { --lw-seal-size: clamp(48px, 17vw, 64px); }
+}
+@container (max-height: 310px) {
+  .mf-letter .mf-letter__paper { --lw-seal-size: 34px; padding-block: 12px 8px; }
+  .mf-letter__head { padding-inline-end: 42px; }
+  .mf-letter__text { margin-top: 4px; }
+  .mf-letter__seal { inset: 6px 10px auto auto; }
+  .mf-letter.is-morning .mf-letter__fold {
+    margin-top: var(--lw-announcement-space, 62px);
+    max-height: calc(100% - var(--lw-announcement-space, 62px));
+  }
+}
 
 .mf-letter__read { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 
 @keyframes mf-letter-rise {
-  from { opacity: 0; transform: translateY(18px); }
+  from { opacity: 0; transform: translateY(60px) rotate(-3deg) scale(0.92); }
   to { opacity: 1; transform: none; }
 }
 @keyframes mf-letter-progress { from { transform: scaleX(0); transform-origin: left; } to { transform: scaleX(1); transform-origin: left; } }
 @keyframes mf-letter-seal {
-  from { opacity: 0; transform: scale(1.25); }
-  to { opacity: 1; transform: scale(1); }
+  from { opacity: 0; transform: scale(1.8) rotate(-20deg); }
+  to { opacity: 1; transform: rotate(-8deg); }
 }
 @keyframes mf-letter-fold {
   from { opacity: 1; transform: none; }
-  to { opacity: 0; transform: translateY(60px) scale(0.7); }
+  to { opacity: 0; transform: translateY(120px) scale(0.5); }
 }
 
-.mf-letter.is-still :is(.mf-letter__fold, .mf-letter__rise, .mf-letter__seal, .mf-letter__fill) { animation: none; }
+.mf-letter.is-still :is(.mf-letter__fold, .mf-letter__rise, .mf-letter__seal) { animation: none; }
+.mf-letter.is-still .mf-letter__fill { animation-timing-function: steps(10, end); }
 @media (prefers-reduced-motion: reduce) {
-  .mf-letter__fold, .mf-letter__rise, .mf-letter__seal, .mf-letter__fill { animation: none; }
+  .mf-letter__fold, .mf-letter__rise, .mf-letter__seal { animation: none; }
+  .mf-letter__fill { animation-timing-function: steps(10, end); }
 }

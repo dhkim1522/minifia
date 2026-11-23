@@ -131,8 +131,9 @@ import {
   nominationMaxMs,
   turnBlockChecks,
   ANNOUNCE_MORNING_AT,
-  LETTER_END_AT_MS,
-  LETTER_FOLD_AT_MS,
+  LETTER_CHAT_AT_MS,
+  LETTER_READ_MS,
+  LETTER_FOLD_MS,
   externalPenFontRequests,
   graphemeCount,
   letterChecks,
@@ -2545,12 +2546,11 @@ async function writeSheet(page, tracker, kind, text) {
 /**
  * 아침 유언 편지 공통 검사(09.1-11, 결정 0063-3, UI-SPEC C-1~C-3): armLetterWatch 를 아침 전에 심어 둔 페이지에서 부른다. 편지가 걷힐 때까지 기다리고 돌려준다.
  * LT1 아침 진입 appearMaxMs 안에 편지가 나타남(T0 = 일반 0.4초·피해자 0.7초) · LT2 봉랍 이미지 로드 · LT3 알림이 위(is-top)로 올라감 · LT4~LT8 letterChecks(등장·인장 애니메이션이 끝난 뒤 한 장)
- * LT9 채팅 유언 카드는 접힘(T0 + 5.0초) 때 나타남 · LT10 편지는 T0 + 5.42초에 걷힘 · LT11 Nanum 글꼴 외부 요청 0.
+ * LT9 채팅에는 T0 + 5초에 남음 · LT10 T0 + 10초 후 자동으로 접히거나 닫기 버튼으로 일찍 접힘 · LT11 Nanum 글꼴 외부 요청 0.
  * LT12: 머리글이 "{이름} 님의 유언" 이고 글 줄을 이으면 저장한 유언(wills 중 하나)과 같다(공백 제외).
  */
-async function morningLetterChecks(ctx, sc, rec, game, { appearMaxMs, announceRe, wills, name }) {
+async function morningLetterChecks(ctx, sc, rec, game, { appearMaxMs, announceRe, wills, name, earlyClose = false }) {
   const { hp, host } = game;
-  await openTableDockPane(hp, "chat");
   const appeared = await attempt(async () => {
     const start = performance.now();
     for (;;) {
@@ -2574,7 +2574,7 @@ async function morningLetterChecks(ctx, sc, rec, game, { appearMaxMs, announceRe
     }
   });
   w = await readLetterWatch(hp, { stop: false });
-  rec(sc, "LT3", "편지가 있는 아침의 사망 알림은 본문보다 작은 상단 상태 표시다", topOk.ok && w?.announceSize === 16, `${topOk.detail} ${w?.announceSize ?? "측정 없음"}px`);
+  rec(sc, "LT3", "편지가 있는 아침의 사망 알림은 위에 표시된다", topOk.ok, topOk.detail);
 
   // 등장과 인장이 안정된 뒤, 유언을 읽어야 하는 실제 초반 영역을 잰다.
   if (w?.appearAt != null) {
@@ -2591,18 +2591,22 @@ async function morningLetterChecks(ctx, sc, rec, game, { appearMaxMs, announceRe
   }
   if (snap) {
     rec(sc, "LT12", "머리글이 '{이름} 님의 유언' 이고 글 줄을 이으면 저장한 유언과 같다(줄이 잘리지 않았다)", snap.head?.text === `${name} 님의 유언` && snap.lines.length > 0 && wills.some((w) => (snap.lineTexts ?? []).join("").replace(/\s/g, "") === w.replace(/\s/g, "")), `머리글 ${snap.head?.text}, 줄 ${JSON.stringify(snap.lineTexts)}`);
-    rec(sc, "LT13", "편지 본문은 22px 이상의 고딕 글꼴에 왼쪽 정렬과 1.4배 이상 행간을 쓴다",
-      snap.lineFontPx >= 22 && snap.lineHeightPx >= snap.lineFontPx * 1.4 - 0.1 && ["left", "start"].includes(snap.align) && /system-ui|Gothic|Sans KR/.test(snap.family) && !/Nanum Pen/.test(snap.family),
+    rec(sc, "LT13", "편지 본문 전체가 30px 이상의 손글씨로 가운데 정렬되어 보인다",
+      snap.lineFontPx >= 30 && snap.scrollGap <= 1 && snap.align === "center" && snap.penLoaded,
       `글꼴 ${snap.family}, ${snap.lineFontPx}px/${snap.lineHeightPx}px, ${snap.align}`);
+    rec(sc, "LT15", "유언 게이지는 10초이며 닫기 버튼의 높이는 44px 이상이다",
+      snap.gaugeDuration === LETTER_READ_MS && snap.closeHeight >= 44, `게이지 ${snap.gaugeDuration}ms, 버튼 ${snap.closeHeight}px`);
   }
 
-  // 편지가 걷힐 때까지 기다린 뒤 카드·제거 시각을 본다
+  if (earlyClose) await hp.locator("[data-will-close]").click({ timeout: 1200 });
+  await openTableDockPane(hp, "chat");
+  // 수동·자동 접힘과 별개로 알려진 공개 시각에 채팅 카드가 오는지 본다.
   await attempt(async () => {
     const start = performance.now();
     for (;;) {
       const x = await readLetterWatch(hp, { stop: false });
-      if (x?.goneAt != null) return true;
-      if (performance.now() - start > 6000) return { ok: false, detail: "편지가 걷히지 않음" };
+      if (x?.goneAt != null && x.cardAt != null) return true;
+      if (performance.now() - start > LETTER_READ_MS + LETTER_FOLD_MS + 1000) return { ok: false, detail: "편지 접힘 또는 채팅 카드 누락" };
       await sleep(100);
     }
   });
@@ -2612,9 +2616,11 @@ async function morningLetterChecks(ctx, sc, rec, game, { appearMaxMs, announceRe
   const sealImage = w?.sealImage;
   rec(sc, "LT2", "유언 편지의 봉랍 그림이 로드된다", !!sealImage && new URL(sealImage).pathname === "/stationery/seal.webp", sealImage ?? "이미지 없음");
   const cardGap = w?.appearAt != null && w?.cardAt != null ? Math.round(w.cardAt - w.appearAt) : null;
-  rec(sc, "LT9", `채팅 유언 카드는 편지가 접힐 때(편지가 뜬 뒤 약 ${LETTER_FOLD_AT_MS / 1000}초) 나타난다`, cardGap !== null && cardGap >= LETTER_FOLD_AT_MS - 400 && cardGap <= LETTER_FOLD_AT_MS + 1500, `편지 등장 → 카드 ${cardGap}ms`);
+  rec(sc, "LT9", `채팅 유언 카드는 편지가 뜬 뒤 약 ${LETTER_CHAT_AT_MS / 1000}초에 나타난다`, cardGap !== null && cardGap >= LETTER_CHAT_AT_MS - 400 && cardGap <= LETTER_CHAT_AT_MS + 1500, `편지 등장 → 카드 ${cardGap}ms`);
   const goneGap = w?.appearAt != null && w?.goneAt != null ? Math.round(w.goneAt - w.appearAt) : null;
-  rec(sc, "LT10", `편지는 뜬 뒤 약 ${LETTER_END_AT_MS / 1000}초에 걷힌다`, goneGap !== null && goneGap >= LETTER_END_AT_MS - 400 && goneGap <= LETTER_END_AT_MS + 1500, `편지 등장 → 걷힘 ${goneGap}ms`);
+  const autoDismissAt = LETTER_READ_MS + LETTER_FOLD_MS;
+  const goneOnTime = goneGap !== null && (earlyClose ? goneGap < LETTER_READ_MS : goneGap >= autoDismissAt - 400 && goneGap <= autoDismissAt + 1500);
+  rec(sc, "LT10", earlyClose ? "닫기를 누르면 10초 전에 편지가 걷힌다" : "편지는 10초를 읽은 뒤 자동으로 걷힌다", goneOnTime, `편지 등장 → 걷힘 ${goneGap}ms`);
   const ext = externalPenFontRequests(host.penFontRequests(), ctx.origin);
   const own = ownPenFontRequests(host.penFontRequests(), ctx.origin);
   rec(sc, "LT11", "손글씨 글꼴(Nanum)을 외부 주소에서 불러오지 않는다(요청 0)", ext === 0, `외부 요청 ${ext}개 (같은 출처 조각 ${own}개)`);
@@ -2705,7 +2711,7 @@ async function nightAssassin(ctx) {
     rec(sc, "MA1", "아침에 암살 현장 분필([data-chalk])이 있다", !!chalk && /^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/.test(chalk.chalk), `chalk ${chalk?.chalk ?? "없음"}`);
     rec(sc, "MA2", `아침 알림이 '${victim} 님이 밤사이 탈락했어요' 이다`, morning?.text === `${victim} 님이 밤사이 탈락했어요`, `알림 ${log.filter((a) => a.text).map((a) => a.text).join(" → ") || "없음"}`);
     // 편지가 있는 아침의 큰 글은 띠·소리 단추를 피해 좁은 자리(.is-top)라 8자 이름이 세 줄까지 감길 수 있다(18.1-13)
-    if (morning) recMany(rec, sc, announceChecks(morning, { maxLines: 3, compact: morning.withLetter === true }), " (아침)");
+    if (morning) recMany(rec, sc, announceChecks(morning, { maxLines: 3 }), " (아침)");
     // 유언 편지(09.1-11): 일반 화면은 아침 0.4초에 편지가 뜨고 T0 + 5.0초에 접히며 카드가 채팅에 나온다. 편지가 걷힌 뒤에 아래 카드·G 검사를 본다.
     await morningLetterChecks(ctx, sc, rec, game, { appearMaxMs: ANNOUNCE_MORNING_AT + 600, announceRe: /님이 밤사이 탈락했어요$/, wills: BOT_WILL_TEXTS, name: victim });
     const cards = await nightUntil(hp, (x) => x.cards.some((c) => c.kind === "will") && x.cards.some((c) => c.kind === "note"), 7000);
@@ -3047,7 +3053,7 @@ async function nightVictim(ctx, shared) {
     rec(sc, "VC11", n.tableNight ? "공통 밤 무대는 개인용 맥박 큐를 기록하지 않는다" : "시민 밤에 맥박 큐가 2~4개 기록된다", n.tableNight ? cueCount === 0 : cueCount >= 2 && cueCount <= 4, `큐 ${cueCount}개`);
     const { log, morning: victimAnn } = await waitMorningAnnounce(hp, 6000, /^암살당했습니다$/);
     rec(sc, "VC6", "피해자 본인 화면 알림이 '암살당했습니다' 이다", !!victimAnn, `알림 ${log.filter((a) => a.text).map((a) => a.text).join(" → ") || "없음"}`);
-    if (victimAnn) recMany(rec, sc, announceChecks(victimAnn, { compact: victimAnn.withLetter === true }), " (피해자)");
+    if (victimAnn) recMany(rec, sc, announceChecks(victimAnn), " (피해자)");
     await morningLetterChecks(ctx, sc, rec, game, { appearMaxMs: 700 + 600, announceRe: /^암살당했습니다$/, wills: [VICTIM_WILL], name: nickOf(ht.last(), hostSeat) });
     const kill = await attempt(async () => {
       const start = performance.now();
@@ -3122,7 +3128,7 @@ async function nightSizesLetter(ctx, rec) {
     await skipTo(hp, ht, "morning");
     await untilGame(hp, (x) => x.phase === "morning", 6000, "아침 도착");
     if (aliveOf(ht.last()).includes(hostSeat)) throw new SetupError("방장이 이번 밤에 당하지 않음");
-    await morningLetterChecks(ctx, sc, rec, game, { appearMaxMs: 700 + 600, announceRe: /^암살당했습니다$/, wills: [WILL50], name: nickOf(ht.last(), hostSeat) });
+    await morningLetterChecks(ctx, sc, rec, game, { appearMaxMs: 700 + 600, announceRe: /^암살당했습니다$/, wills: [WILL50], name: nickOf(ht.last(), hostSeat), earlyClose: true });
   } finally {
     await closeGame(game);
   }

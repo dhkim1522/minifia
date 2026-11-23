@@ -1,13 +1,13 @@
 import type { RoomView } from "../../shared/protocol";
 import { dayEvents } from "./dayView";
 
-// 편지 등장, 인장, 접힘의 시각을 화면과 소리가 함께 쓴다.
+// 편지 등장과 인장 시각은 화면·소리가 공유한다. 채팅 공개 시계와 편지 읽기 시간은 따로 간다.
 export const LETTER_RISE_MS = 700;
 export const LETTER_SEAL_AT_MS = LETTER_RISE_MS + 60;
 export const LETTER_SEAL_MS = 500;
-export const LETTER_FOLD_AT_MS = 5000;
+export const LETTER_CHAT_AT_MS = 5000;
+export const LETTER_READ_MS = 10000;
 export const LETTER_FOLD_MS = 420;
-export const LETTER_END_AT_MS = LETTER_FOLD_AT_MS + LETTER_FOLD_MS;
 export const SEAL_GLYPH = "M";
 
 /** 줄바꿈이 든 유언을 공백으로 이어 한 문단으로(9페이즈 규칙) */

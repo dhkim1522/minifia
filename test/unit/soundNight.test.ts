@@ -9,7 +9,7 @@ import { RECIPES } from "../../src/audio/recipes";
 import { MORNING_SLASH_AT, nightCues, NIGHT_CUE, willScript } from "../../src/audio/script";
 import { KILL_FX_START_MS } from "../../src/components/KillFx";
 import { ANNOUNCE_MORNING_AT, ANNOUNCE_VICTIM_AT, POLICE_CARD_AT } from "../../src/game/dayView";
-import { LETTER_FOLD_AT_MS, LETTER_SEAL_AT_MS } from "../../src/game/willLetter";
+import { LETTER_SEAL_AT_MS } from "../../src/game/willLetter";
 import { SIGNAL_KINDS, type LocalSignal } from "../../src/audio/signals";
 import { nightDarkOf } from "../../src/game/nightDark";
 import { planTensionCues } from "../../src/world/tension";
@@ -261,6 +261,7 @@ describe("LS-7: 밤의 모든 UI 조작은 무음이다", () => {
     emote: { kind: "emote", id: "clap", mine: true },
     result: { kind: "result", step: "light", win: true }, // 12-11 이 더한 신호: ended 밖(밤)에서는 무음이어야 한다
     host: { kind: "host" }, // 14-03: 공개 단계 전환 신호 — 밤 무음의 유일한 예외(모든 역할 같음)
+    willClose: { kind: "willClose" },
   } as never;
   /** emote 는 받은 프레임에서만 오는 신호다: 서버가 수신자를 정하므로 밤에도 받은 마피아·유령에게는 난다(12-10, LS-4). 나머지 UI 신호는 밤 무음이다 */
   /** host 는 공개 단계 전환 신호라 밤 진입에도 모든 역할이 같은 ui.host 를 듣는다(14-03, HOST-05) — 별도 describe 에서 본다 */
@@ -476,7 +477,7 @@ describe("LS-8: 암살음은 피해자 본인만, 아침 도착 뒤", () => {
 
 // ───────────────────────── 유언 편지 (C-5) ─────────────────────────
 
-describe("유언 편지: t0 기준으로 인장과 접힘 소리", () => {
+describe("유언 편지: t0 기준 인장과 실제 닫기 소리", () => {
   const MORNING = av("morning", { endsAt: NOW + 9_000, morning: { eliminated: true, saved: false } });
   const abs = (out: DirectOutput, now: number): { at: number; id: string }[] => out.scripts.flatMap((s) => s.items.map((i) => ({ at: now + i.at, id: i.id }))).concat(out.now.map((c) => ({ at: now, id: c.id })));
 
@@ -485,21 +486,17 @@ describe("유언 편지: t0 기준으로 인장과 접힘 소리", () => {
     const out = directEvent({ kind: "letter", t0 }, MORNING, clock());
     expect(out.scripts.map((s) => s.key)).toEqual(["letter:1"]);
     expect(abs(out, NOW).sort((a, b) => a.at - b.at)).toEqual(willScript().items.map((i) => ({ at: t0 + i.at, id: i.id })));
-    const ids = out.scripts[0]!.items.map((i) => i.id);
-    expect(ids).toEqual(["will.seal", "will.fold"]);
-    const seal = out.scripts[0]!.items.find((i) => i.id === "will.seal")!;
-    const fold = out.scripts[0]!.items.find((i) => i.id === "will.fold")!;
-    expect(seal.at).toBe(600 + LETTER_SEAL_AT_MS);
-    expect(fold.at).toBe(600 + LETTER_FOLD_AT_MS);
+    expect(out.scripts[0]!.items).toEqual([{ at: 600 + LETTER_SEAL_AT_MS, id: "will.seal" }]);
   });
 
-  it("편지가 늦게 떠서 t0 가 이미 지났으면 지난 줄은 빼고 남은 줄만 난다", () => {
-    const out = directEvent({ kind: "letter", t0: NOW - 2_000 }, MORNING, clock());
-    expect(out.scripts[0]!.items).toEqual([{ at: LETTER_FOLD_AT_MS - 2_000, id: "will.fold" }]);
+  it("편지 닫기 신호만 접힘 소리를 내고, 아침에는 대기 중인 인장을 취소한다", () => {
+    const close = { kind: "willClose" } as const;
+    expect(directSignal(close, MORNING)).toMatchObject({ now: [{ id: "will.fold" }], cancel: ["letter:1"] });
+    expect(directSignal(close, av("discussion"))).toMatchObject({ now: [{ id: "will.fold" }], cancel: [] });
   });
 
-  it("접힌 뒤이거나 아침이 아니면 소리를 만들지 않는다", () => {
-    expect(quiet(directEvent({ kind: "letter", t0: NOW - LETTER_FOLD_AT_MS - 1_000 }, MORNING, clock()))).toBe(true);
+  it("인장 시각을 놓쳤거나 아침이 아니면 소리를 만들지 않는다", () => {
+    expect(quiet(directEvent({ kind: "letter", t0: NOW - LETTER_SEAL_AT_MS - 1 }, MORNING, clock()))).toBe(true);
     expect(quiet(directEvent({ kind: "letter", t0: NOW }, av("night"), clock()))).toBe(true);
     expect(quiet(directEvent({ kind: "letter", t0: NOW }, null, clock()))).toBe(true);
   });

@@ -55,8 +55,9 @@
 .mf-announce:is(.has-label, .is-embedded) .mf-announce__text { font: var(--type-body); }
 /* 처형과 유언 편지가 있는 아침에는 아래 편지가 가리지 않도록 위에 붙인다. */
 .mf-announce.is-top { align-items: flex-start; padding-top: calc(var(--mf-host-bottom, 62px) + var(--space-md)); }
-.mf-announce.is-with-letter .mf-announce__body { flex-direction: row; justify-content: center; gap: 6px; }
-.mf-announce.is-with-letter .mf-announce__text { font: var(--type-body-strong); }
+.mf-announce.is-with-letter-compact .mf-announce__body { flex-direction: row; justify-content: center; gap: 6px; }
+.mf-announce.is-with-letter-compact .mf-announce__icon { width: 24px; height: 24px; }
+.mf-announce.is-with-letter-compact .mf-announce__text { font: var(--type-body-strong); }
 /* 정답 공개처럼 제목이 있는 발표는 중앙 카드와 같은 제목 규격을 쓴다. */
 .mf-announce__label { display: block; text-align: center; font: var(--type-section); color: var(--gray-50); text-shadow: var(--shadow-text); animation: mf-announce-in 600ms var(--ease-out) both; }
 .mf-announce.is-still, .mf-announce.is-still .mf-announce__text, .mf-announce.is-still .mf-announce__label { animation: none; }

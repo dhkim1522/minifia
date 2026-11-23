@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { EXECUTION_MS, EXEC_ANNOUNCE_MS, PIN_OFF_EXEC_AT, WILL_REVEAL_MS } from "../../shared/game/phases";
 import { ANNOUNCE_MORNING_AT, ANNOUNCE_VICTIM_AT } from "../../src/game/dayView";
-import { LETTER_FOLD_AT_MS, LETTER_SEAL_AT_MS } from "../../src/game/willLetter";
+import { LETTER_SEAL_AT_MS } from "../../src/game/willLetter";
 import { mulberry32, recipeDurationMs } from "../../src/audio/recipes";
 import {
   EMOTE_GATE_EMPTY,
@@ -147,10 +147,9 @@ describe("결과 대본 — resultScript (D-15)", () => {
 });
 
 describe("유언 편지 대본 — willScript (D-10)", () => {
-  it("화면과 같은 시각에 인장과 접힘 소리 한 번씩", () => {
+  it("화면과 같은 시각에 인장 소리 한 번", () => {
     expect(willScript().items).toEqual([
       { at: LETTER_SEAL_AT_MS, id: "will.seal" },
-      { at: LETTER_FOLD_AT_MS, id: "will.fold" },
     ]);
   });
 });

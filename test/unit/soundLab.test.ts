@@ -470,12 +470,12 @@ describe("mount — 한 화면 전체 (E)", () => {
     expect(rig.engine.log().map((e) => e.id)).toContain("morning.saved");
   });
 
-  it("유언 편지: 쓰기·인장·접힘", () => {
+  it("유언 편지 등장: 인장", () => {
     const { rig, q } = open();
     q('[data-lab-script="will"]')!.click();
     rig.fake.clock.advance(6000);
     const ids = rig.engine.log().map((e) => e.id);
-    expect(ids).toEqual(["will.seal", "will.fold"]);
+    expect(ids).toEqual(["will.seal"]);
   });
 
   it("결과: 4명/8명 × 승/패 네 단추, 승은 result.win 패는 result.lose, 시상 소리는 없다", () => {

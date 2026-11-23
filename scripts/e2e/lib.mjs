@@ -880,9 +880,9 @@ export function showdownChecks(input) {
  * AN1 단독 발표 32~36px 또는 카드 제목 20px·본문 16px · AN2 한두 줄 · AN3 word-break keep-all.
  * opts.maxLines = 3 은 큰 글이 띠·소리 단추를 피해 좁아진 자리(.mf-announce.is-top, 18.1-13 결정 0083-10)에서 8자 이름이 세 줄로 감기는 것을 허용한다. 글자 크기·keep-all 은 그대로다.
  */
-export function announceChecks(m, { maxLines = 2, titled = false, compact = false } = {}) {
+export function announceChecks(m, { maxLines = 2, titled = false } = {}) {
   const viewportWidth = m?.viewportWidth ?? 360;
-  const fontPx = titled || compact ? 16 : Math.min(36, Math.max(32, viewportWidth / 10));
+  const fontPx = titled || m?.compactLetter === true ? 16 : Math.min(36, Math.max(32, viewportWidth / 10));
   const label1 = titled ? "카드 제목 20px > 결과 문장 16px" : `결과 알림 글자 ${fmt(fontPx)}px`;
   const label2 = maxLines >= 3 ? "결과 알림이 세 줄 이하(띠·소리 단추를 피해 좁아진 폭)" : "결과 알림이 한두 줄";
   const label3 = "결과 알림 word-break keep-all";
@@ -901,10 +901,10 @@ export function announceChecks(m, { maxLines = 2, titled = false, compact = fals
 
 // ---- 유언 편지(09.1-11, 결정 0063-3, UI-SPEC C-1~C-3) ----
 // 앱 상수 사본 — test/unit/e2eContract.test.ts 가 src/game/willLetter.ts·src/game/dayView.ts 와 같음을 고정한다.
-/** 편지 접힘 시작 = 채팅 카드 도착(편지 T0 기준 ms) */
-export const LETTER_FOLD_AT_MS = 5000;
-/** 편지 제거(편지 T0 기준 ms) */
-export const LETTER_END_AT_MS = 5420;
+/** 편지 시작 이후 채팅 카드가 공개되는 시각과 읽기 게이지의 길이 */
+export const LETTER_CHAT_AT_MS = 5000;
+export const LETTER_READ_MS = 10000;
+export const LETTER_FOLD_MS = 420;
 /** 일반 화면에서 아침 알림(= 편지 T0)이 시작되는 시각(아침 진입 기준 ms) */
 export const ANNOUNCE_MORNING_AT = 400;
 /** 인장 글자(임시, 미결 M-7) */

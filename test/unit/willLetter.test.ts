@@ -3,13 +3,13 @@ import { describe, expect, it } from "vitest";
 import type { DayView, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
 import type { RoomState } from "../../shared/game/room";
 import { morningMsOf } from "../../shared/game/discussion";
-import { letterT0, LETTER_END_AT_MS, LETTER_FOLD_AT_MS, LETTER_FOLD_MS, LETTER_RISE_MS, LETTER_SEAL_AT_MS, LETTER_SEAL_MS, oneParagraph, SEAL_GLYPH } from "../../src/game/willLetter";
+import { letterT0, LETTER_CHAT_AT_MS, LETTER_FOLD_MS, LETTER_READ_MS, LETTER_RISE_MS, LETTER_SEAL_AT_MS, LETTER_SEAL_MS, oneParagraph, SEAL_GLYPH } from "../../src/game/willLetter";
 
 describe("유언 시간표", () => {
-  it("편지가 나타난 뒤 봉랍을 찍고 채팅 공개 시각에 접힌다", () => {
+  it("편지가 나타난 뒤 봉랍을 찍고 채팅 공개와 자동 닫힘은 서로 다른 시각을 쓴다", () => {
     expect([LETTER_RISE_MS, LETTER_SEAL_AT_MS, LETTER_SEAL_MS]).toEqual([700, 760, 500]);
-    expect(LETTER_SEAL_AT_MS + LETTER_SEAL_MS).toBeLessThan(LETTER_FOLD_AT_MS);
-    expect([LETTER_FOLD_AT_MS, LETTER_FOLD_MS, LETTER_END_AT_MS]).toEqual([5000, 420, 5420]);
+    expect(LETTER_SEAL_AT_MS + LETTER_SEAL_MS).toBeLessThan(LETTER_CHAT_AT_MS);
+    expect([LETTER_CHAT_AT_MS, LETTER_READ_MS, LETTER_FOLD_MS]).toEqual([5000, 10000, 420]);
     expect(SEAL_GLYPH).toBe("M");
   });
 });
@@ -62,7 +62,7 @@ describe("letterT0 — 보는 사람별 시작 시각", () => {
   });
 });
 
-describe("M-9 아침 길이 불변식 — 편지가 끝나고 0.5초 이상 남는다", () => {
+describe("아침 길이 불변식: 채팅에서 유언이 공개된 뒤 0.5초 이상 남는다", () => {
   const stateOf = (will: string, note: string): RoomState =>
     ({ morning: { eliminated: 3 }, players: [{ seat: 3, will }], ...(note === "" ? {} : { nightNote: note }) }) as unknown as RoomState;
   for (const [label, ms] of [
@@ -71,7 +71,7 @@ describe("M-9 아침 길이 불변식 — 편지가 끝나고 0.5초 이상 남�
   ] as const) {
     it(`${label} (${ms}ms)`, () => {
       expect(ms).toBeGreaterThanOrEqual(9000);
-      for (const t0 of [400, 700, 2600]) expect(t0 + LETTER_END_AT_MS + 500).toBeLessThanOrEqual(ms);
+      for (const t0 of [400, 700, 2600]) expect(t0 + LETTER_CHAT_AT_MS + 500).toBeLessThanOrEqual(ms);
     });
   }
 });

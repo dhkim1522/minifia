@@ -2,7 +2,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatLineFrame, DayView, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
-import { LETTER_END_AT_MS, LETTER_FOLD_AT_MS } from "../../src/game/willLetter";
+import { LETTER_CHAT_AT_MS } from "../../src/game/willLetter";
 import { ChatStore } from "../../src/net/chatStore";
 import { useWillLetter } from "../../src/net/useWillLetter";
 
@@ -52,38 +52,52 @@ afterEach(() => {
 });
 
 describe("useWillLetter", () => {
-  it("밤 → 아침에 유언 카드가 이미 있으면 편지(T0 = 렌더 + 400)를 돌려주고 카드를 접힘까지 보류한다", () => {
+  it("밤 → 아침에 유언 카드가 이미 있으면 편지(T0 = 렌더 + 400)를 돌려주고 채팅 공개 시각을 맞춘다", () => {
     const s = setup();
     s.give(card("will", 3, 1, "현우 님 말투가\n이상해요"));
     s.rerender(morning());
     const letter = s.hook.result.current;
     expect(letter).toMatchObject({ seat: 3, name: "지호", text: "현우 님 말투가 이상해요", t0: T + 400 });
     expect(letter?.announce).toMatchObject({ text: "지호 님이 밤사이 탈락했어요", icon: "target" });
-    expect(s.chat.visibleLines("all", T + 400 + LETTER_FOLD_AT_MS - 1)).toHaveLength(0);
-    expect(s.chat.visibleLines("all", T + 400 + LETTER_FOLD_AT_MS)).toHaveLength(1);
+    expect(s.chat.visibleLines("all", T + 400 + LETTER_CHAT_AT_MS - 1)).toHaveLength(0);
+    expect(s.chat.visibleLines("all", T + 400 + LETTER_CHAT_AT_MS)).toHaveLength(1);
   });
 
-  it("카드가 아침 view 뒤에 접힘 전에 도착해도 편지가 시작되고 유언 → 쪽지 순서로 접힘 시각에 나타난다", () => {
+  it("카드가 공개 전에 도착해도 편지가 시작되고 채팅에는 유언 → 쪽지 순서로 나타난다", () => {
     const s = setup();
     s.rerender(morning());
     expect(s.hook.result.current).toBeNull();
     s.tick(1000);
     s.give(card("will", 3, 1, "유언"));
     s.give(card("note", 3, 2, "쪽지"));
-    expect(s.hook.result.current).toMatchObject({ seat: 3, text: "유언", t0: T + 400 });
-    const foldAt = T + 400 + LETTER_FOLD_AT_MS;
-    expect(s.chat.visibleLines("all", foldAt - 1)).toHaveLength(0);
-    expect(s.chat.visibleLines("all", foldAt).map((l) => l.card).join()).toBe("will,note");
+    expect(s.hook.result.current).toMatchObject({ seat: 3, text: "유언", t0: T + 1000 });
+    const chatAt = T + 400 + LETTER_CHAT_AT_MS;
+    expect(s.chat.visibleLines("all", chatAt - 1)).toHaveLength(0);
+    expect(s.chat.visibleLines("all", chatAt).map((l) => l.card).join()).toBe("will,note");
   });
 
-  it("T0 + 5420 에 null 로 돌아간다", () => {
+  it("채팅 공개 뒤와 토론 중에는 같은 편지를 유지하고 게임이 끝나면 비운다", () => {
     const s = setup();
     s.give(card("will", 3, 1, "유언"));
     s.rerender(morning());
-    s.tick(400 + LETTER_END_AT_MS - 1);
-    expect(s.hook.result.current).not.toBeNull();
-    s.tick(1);
+    const letter = s.hook.result.current;
+    expect(letter).not.toBeNull();
+    s.tick(400 + LETTER_CHAT_AT_MS + 10000);
+    s.rerender(viewOf("discussion"));
+    expect(s.hook.result.current).toBe(letter);
+    s.rerender(viewOf("ended"));
     expect(s.hook.result.current).toBeNull();
+  });
+
+  it("다음 아침에 새 유언이 생기면 기존 편지를 교체한다", () => {
+    const s = setup();
+    s.give(card("will", 3, 1, "첫 유언"));
+    s.rerender(morning());
+    s.rerender(night());
+    s.rerender(morning(2, { morning: { eliminated: 4 } }));
+    expect(s.hook.result.current?.text).toBe("첫 유언");
+    s.give(card("will", 4, 2, "다음 유언"));
+    expect(s.hook.result.current).toMatchObject({ seat: 4, text: "다음 유언" });
   });
 
   it("피해자 본인은 T0 700, 경찰 본인은 T0 2600", () => {
@@ -102,7 +116,7 @@ describe("useWillLetter", () => {
   it("카드가 T0 + 5초 뒤에 오면 편지를 만들지 않고 카드는 기본 보류(2.8초)다", () => {
     const s = setup();
     s.rerender(morning());
-    s.tick(400 + LETTER_FOLD_AT_MS + 100);
+    s.tick(400 + LETTER_CHAT_AT_MS + 100);
     s.give(card("will", 3, 1, "늦은 유언"));
     expect(s.hook.result.current).toBeNull();
     expect(s.chat.nextCardReveal(Date.now())).toBe(Date.now() + 2800);

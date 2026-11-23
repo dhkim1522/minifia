@@ -1,80 +1,121 @@
-import { useEffect, useId, useState } from "react";
-import type { CSSProperties } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import type { CSSProperties, Ref } from "react";
 import "../../styles/letter.css";
-import { LETTER_END_AT_MS, LETTER_FOLD_AT_MS, LETTER_FOLD_MS, LETTER_RISE_MS, LETTER_SEAL_AT_MS, LETTER_SEAL_MS, SEAL_GLYPH } from "../../game/willLetter";
+import "../../styles/penFont.css";
+import { emitSignal } from "../../audio/signals";
+import { LETTER_FOLD_MS, LETTER_READ_MS, LETTER_RISE_MS, LETTER_SEAL_AT_MS, LETTER_SEAL_MS, SEAL_GLYPH } from "../../game/willLetter";
 import { stationeryArt } from "../../net/assets";
 import type { WillLetter as WillLetterState } from "../../net/useWillLetter";
+import { Button } from "../Button";
 
 export interface WillLetterProps {
   letter: WillLetterState;
   reducedMotion: boolean;
+  withAnnounce?: boolean;
+  ref?: Ref<HTMLDivElement>;
   onLive?: (live: boolean) => void;
 }
 
 const css = (vars: Record<string, string>): CSSProperties => vars as CSSProperties;
 
-// 편지지가 올라오면 줄을 자연스럽게 나눈 본문 전체가 보인다. 접힘과 채팅 카드는 애니메이션 종료가 아닌 같은 T0 시계를 따른다.
-export function WillLetter({ letter, reducedMotion, onLive }: WillLetterProps) {
+// 편지지가 올라오면 본문 전체가 보인다. 읽기 시간 또는 이 화면의 닫기 버튼이 편지를 접는다.
+export function WillLetter({ letter, reducedMotion, withAnnounce, ref, onLive }: WillLetterProps) {
   const { text, name, t0 } = letter;
   const [run, setRun] = useState<{ key: number; elapsed: number } | null>(null);
+  const closing = useRef(false);
+  const [folding, setFolding] = useState(false);
   const [gone, setGone] = useState(false);
+  const [scrollable, setScrollable] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const foldTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const fold = useCallback((animate: boolean) => {
+    if (closing.current) return;
+    closing.current = true;
+    if (!animate) {
+      setGone(true);
+      return;
+    }
+    emitSignal({ kind: "willClose" });
+    if (reducedMotion) {
+      setGone(true);
+      return;
+    }
+    setFolding(true);
+    foldTimer.current = setTimeout(() => setGone(true), LETTER_FOLD_MS);
+  }, [reducedMotion]);
+  useEffect(() => () => clearTimeout(foldTimer.current), []);
 
   useEffect(() => {
     const start = () => {
       const elapsed = Date.now() - t0;
-      if (elapsed >= LETTER_END_AT_MS) setGone(true);
+      if (elapsed >= LETTER_READ_MS) fold(false);
       else if (elapsed >= 0) setRun({ key: 1, elapsed });
     };
     const remaining = t0 - Date.now();
     const reveal = remaining > 0 ? setTimeout(start, remaining) : undefined;
     if (reveal === undefined) start();
-    const dismiss = setTimeout(() => setGone(true), Math.max(0, t0 + LETTER_END_AT_MS - Date.now()));
+    const expire = setTimeout(() => fold(document.visibilityState !== "hidden"), Math.max(0, remaining + LETTER_READ_MS));
     const onVisible = () => {
-      if (document.visibilityState === "hidden") return;
+      if (document.visibilityState === "hidden" || closing.current) return;
       const elapsed = Date.now() - t0;
-      if (elapsed >= LETTER_END_AT_MS) setGone(true);
+      if (elapsed >= LETTER_READ_MS) fold(false);
       else if (elapsed >= 0) setRun((previous) => ({ key: (previous?.key ?? 0) + 1, elapsed }));
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       clearTimeout(reveal);
-      clearTimeout(dismiss);
+      clearTimeout(expire);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [t0]);
+  }, [t0, fold]);
 
   const shown = run !== null && !gone && text.trim() !== "";
+  const runKey = run?.key;
   useEffect(() => {
-    onLive?.(shown);
+    const body = bodyRef.current;
+    if (body === null) return;
+    const measure = () => setScrollable(body.scrollHeight > body.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(body);
+    if (body.firstElementChild !== null) observer.observe(body.firstElementChild);
+    return () => observer.disconnect();
+  }, [shown, runKey]);
+  useEffect(() => {
+    onLive?.(shown && !folding);
     return () => onLive?.(false);
-  }, [shown, onLive]);
+  }, [shown, folding, onLive]);
 
   if (!shown || run === null) return null;
   const delay = (at: number) => String(at - run.elapsed) + "ms";
   return (
-    <div className={reducedMotion ? "mf-letter is-still" : "mf-letter"} data-will-letter="" role="status"
+    <div className={["mf-letter", reducedMotion ? "is-still" : "", folding ? "is-folding" : "", withAnnounce ? "is-morning" : ""].filter(Boolean).join(" ")} data-will-letter="" ref={ref}
       style={css({
         "--lw-rise-delay": delay(0), "--lw-rise-duration": `${LETTER_RISE_MS}ms`,
-        "--lw-fold-delay": delay(LETTER_FOLD_AT_MS), "--lw-fold-duration": `${LETTER_FOLD_MS}ms`, "--lw-read-duration": `${LETTER_FOLD_AT_MS}ms`,
+        "--lw-fold-duration": `${LETTER_FOLD_MS}ms`, "--lw-read-duration": `${LETTER_READ_MS}ms`,
       })}>
-      <span className="mf-letter__read" data-will-read="">{name} 님의 유언: {text}</span>
-      <div key={run.key} className="mf-letter__fold" aria-hidden="true">
+      <span className="mf-letter__read" data-will-read="" role="status">{name} 님의 유언: {text}</span>
+      <div key={run.key} className="mf-letter__fold">
         <div className="mf-letter__rise">
           <div className="mf-letter__paper">
-            <div className="mf-letter__heading">
-              <p className="mf-letter__head" data-will-head="">
-                <span className="mf-letter__author">{name}</span>{" "}<span>님의 유언</span>
-              </p>
-              <Seal delay={delay(LETTER_SEAL_AT_MS)} />
-            </div>
-            <div className="mf-letter__text">
+            <p className="mf-letter__head" data-will-head="" aria-hidden="true">
+              <span className="mf-letter__author">{name}</span>{" "}<span>님의 유언</span>
+            </p>
+            <div ref={bodyRef} className="mf-letter__text" aria-hidden={scrollable ? undefined : true}
+              data-will-scroll={scrollable ? "" : undefined} tabIndex={scrollable ? 0 : undefined}
+              role={scrollable ? "region" : undefined} aria-label={scrollable ? "유언 본문" : undefined}>
               <p className="mf-letter__line" data-will-line="">{text}</p>
             </div>
+            <Seal delay={delay(LETTER_SEAL_AT_MS)} />
           </div>
         </div>
         <div className="mf-letter__guide">
-          <p className="mf-letter__guide-text" data-will-guide="">채팅에도 남아요</p>
-          <div className="mf-letter__bar"><div className="mf-letter__fill" /></div>
+          <div className="mf-letter__reading" aria-hidden="true">
+            <p className="mf-letter__guide-text" data-will-guide="">채팅에도 남아요</p>
+            <div className="mf-letter__bar"><div className="mf-letter__fill" /></div>
+          </div>
+          <Button variant="secondary" className="mf-letter__close" data-will-close="" disabled={folding} onClick={() => fold(true)}>닫기</Button>
         </div>
       </div>
     </div>

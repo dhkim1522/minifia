@@ -7,7 +7,7 @@ import "../helpers/singleLineErrors";
 import type { PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
 import { WillLetter } from "../../src/components/v2/WillLetter";
 import { ResultAnnounce } from "../../src/components/ResultAnnounce";
-import { LETTER_END_AT_MS, LETTER_FOLD_AT_MS, LETTER_RISE_MS, LETTER_SEAL_AT_MS, SEAL_GLYPH } from "../../src/game/willLetter";
+import { LETTER_CHAT_AT_MS, LETTER_FOLD_MS, LETTER_READ_MS, LETTER_RISE_MS, LETTER_SEAL_AT_MS, SEAL_GLYPH } from "../../src/game/willLetter";
 import { stationeryArt } from "../../src/net/assets";
 import type { WillLetter as WillLetterState } from "../../src/net/useWillLetter";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
@@ -93,7 +93,7 @@ afterEach(() => {
 });
 
 describe("유언 편지 — 암살 아침 (0063-3, C-1·C-2)", () => {
-  it("아침 진입 + 0.4초에 편지가 하나 뜬다: 루트 role=status, 보이지 않는 한 줄 읽기, 머리글·글·인장·안내는 aria-hidden", () => {
+  it("아침 진입 + 0.4초에 편지가 하나 뜬다: 한 줄 읽기, 본문과 장식의 중복 낭독 없음", () => {
     const s = setup();
     s.show(killed());
     s.card("will", 3, 1, WILL);
@@ -102,9 +102,9 @@ describe("유언 편지 — 암살 아침 (0063-3, C-1·C-2)", () => {
     s.advance(1);
     expect(s.container.querySelectorAll("[data-will-letter]").length).toBe(1);
     const letter = letterOf(s.container)!;
-    expect(letter.getAttribute("role")).toBe("status");
     const reads = [...letter.querySelectorAll("[data-will-read]")];
     expect(reads.length).toBe(1);
+    expect(reads[0]!.getAttribute("role")).toBe("status");
     expect(reads[0]!.textContent).toBe(`지아 님의 유언: ${WILL}`);
     expect(reads[0]!.closest("[aria-hidden='true']")).toBeNull();
     const head = letter.querySelector("[data-will-head]")!;
@@ -125,18 +125,21 @@ describe("유언 편지 — 암살 아침 (0063-3, C-1·C-2)", () => {
     expect([...seal.querySelectorAll("text")].map((t) => t.textContent)).toEqual([SEAL_GLYPH, SEAL_GLYPH]);
   });
 
-  it("편지·인장·막대는 입력을 가로채지 않는다: tabindex 없음·초점 받는 요소 없음, CSS 루트 pointer-events none", () => {
+  it("편지는 비모달이며 닫기 버튼에만 키보드 초점이 간다", () => {
     const s = setup();
     s.show(killed());
     s.card("will", 3, 1, WILL);
     s.advance(400);
     const letter = letterOf(s.container)!;
-    expect(letter.querySelectorAll("[tabindex], button, a, input, textarea, select").length).toBe(0);
+    const close = s.getByRole("button", { name: "닫기" });
+    expect(close.closest("[aria-hidden='true']")).toBeNull();
+    expect([...letter.querySelectorAll("[tabindex], button, a, input, textarea, select")]).toEqual([close]);
     expect(letter.hasAttribute("tabindex")).toBe(false);
     const css = readFileSync("src/styles/letter.css", "utf8");
     const root = /\.mf-letter\s*\{[^}]*\}/.exec(css)?.[0] ?? "";
     expect(root).toMatch(/pointer-events:\s*none/);
-    expect(root).toMatch(/z-index:\s*calc\(var\(--z-overlay\)\s*\+\s*1\)/);
+    expect(letter.querySelector(".mf-letter__bar")).not.toBeNull();
+    expect(letter.style.getPropertyValue("--lw-read-duration")).toBe(`${LETTER_READ_MS}ms`);
   });
 
   it("편지 등장과 인장은 같은 시작 시각을 따르고 본문은 처음부터 한 문단에 있다", () => {
@@ -152,12 +155,12 @@ describe("유언 편지 — 암살 아침 (0063-3, C-1·C-2)", () => {
     expect(seal.style.getPropertyValue("--lw-delay")).toBe(String(LETTER_SEAL_AT_MS) + "ms");
   });
 
-  it("카드는 편지가 접힐 때(아침 + 0.4 + 5.0초) 유언 → 쪽지 순서로 채팅에 나타나고 5.42초에 편지가 사라진다", () => {
+  it("채팅에 유언 → 쪽지 순서로 공개되고, 토론에서도 읽기 시간이 남은 편지를 일찍 닫을 수 있다", () => {
     const s = setup();
     s.show(killed());
     s.card("will", 3, 1, WILL);
     s.card("note", 3, 2, "쪽지 글");
-    s.advance(400 + LETTER_FOLD_AT_MS - 1);
+    s.advance(400 + LETTER_CHAT_AT_MS - 1);
     expect(letterOf(s.container)).not.toBeNull();
     expect(cardsOf(s.container, "will").length).toBe(0);
     expect(cardsOf(s.container, "note").length).toBe(0);
@@ -168,9 +171,29 @@ describe("유언 편지 — 암살 아침 (0063-3, C-1·C-2)", () => {
     expect(note.length).toBe(1);
     expect(will[0]!.compareDocumentPosition(note[0]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(will[0]!.textContent).toContain(WILL);
-    s.advance(LETTER_END_AT_MS - LETTER_FOLD_AT_MS - 1);
+    s.show(viewOf("discussion"));
+    s.advance(2000);
     expect(letterOf(s.container)).not.toBeNull();
+    fireEvent.click(s.getByRole("button", { name: "닫기" }));
+    s.advance(LETTER_FOLD_MS - 1);
+    expect(letterOf(s.container)?.classList.contains("is-folding")).toBe(true);
     s.advance(1);
+    expect(letterOf(s.container)).toBeNull();
+    s.show(night());
+    expect(letterOf(s.container)).toBeNull();
+  });
+
+  it("닫기를 누르지 않은 편지는 10초를 채운 뒤 다음 단계에서도 자동으로 접힌다", () => {
+    const s = setup();
+    s.show(killed());
+    s.card("will", 3, 1, WILL);
+    s.advance(400 + LETTER_CHAT_AT_MS);
+    s.show(viewOf("discussion"));
+    s.advance(LETTER_READ_MS - LETTER_CHAT_AT_MS - 1);
+    expect(letterOf(s.container)?.classList.contains("is-folding")).toBe(false);
+    s.advance(1);
+    expect(letterOf(s.container)?.classList.contains("is-folding")).toBe(true);
+    s.advance(LETTER_FOLD_MS);
     expect(letterOf(s.container)).toBeNull();
   });
 
@@ -226,7 +249,6 @@ describe("유언 편지 — 암살 아침 (0063-3, C-1·C-2)", () => {
     for (const [name, value] of [
       ["--letter-paper", "#f3efe4"],
       ["--letter-ink", "#1c2a4d"],
-      ["--letter-label", "#5f687b"],
       ["--letter-wax-1", "#e0485c"],
       ["--letter-wax-2", "#a3132a"],
       ["--letter-wax-3", "#650a18"],
@@ -237,7 +259,7 @@ describe("유언 편지 — 암살 아침 (0063-3, C-1·C-2)", () => {
     expect(css).toMatch(/--letter-wax-hi/);
     // :root 나 전역 선택자에 편지 변수를 선언하지 않는다
     expect(/:root\s*\{[^}]*--letter-/.test(css)).toBe(false);
-    expect(css).toContain("text-align: start");
+    expect(css).toContain("text-align: center");
   });
 });
 
@@ -260,7 +282,7 @@ describe("공개 유언 본문과 시간표", () => {
   beforeEach(() => vi.setSystemTime(T));
   afterEach(() => Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true }));
 
-  it("긴 이름과 50글자 전체를 묶어 표시하고 인장은 제목 옆 칸에 둔다", () => {
+  it("긴 이름과 50글자 전체를 표시하고 인장은 편지지의 장식으로 둔다", () => {
     const name = "아주긴이름가나다";
     const text = "남은 사람들을 믿어요".repeat(5).slice(0, 50);
     const r = render(<WillLetter letter={letterOf2({ name, text })} reducedMotion={false} />);
@@ -273,7 +295,6 @@ describe("공개 유언 본문과 시간표", () => {
     expect(letter.querySelectorAll("[data-will-line]")).toHaveLength(1);
     expect(letter.querySelector("[data-will-head]")!.textContent).toBe(name + " 님의 유언");
     expect(letter.querySelector("[data-will-seal]")!.parentElement).toBe(letter.querySelector("[data-will-head]")!.parentElement);
-    expect(body.closest(".mf-letter__heading")).toBeNull();
     expect(body.hasAttribute("data-write-at")).toBe(false);
   });
 
@@ -286,24 +307,28 @@ describe("공개 유언 본문과 시간표", () => {
     visibility("visible");
     const letter = letterOf(r.container)!;
     expect(letter.style.getPropertyValue("--lw-rise-delay")).toBe("-3500ms");
-    expect(letter.style.getPropertyValue("--lw-fold-delay")).toBe("1500ms");
-    tick(1700);
-    visibility("visible");
-    expect(letter.style.getPropertyValue("--lw-fold-delay")).toBe("-200ms");
-    tick(LETTER_END_AT_MS - 5200);
-    expect(letterOf(r.container)).toBeNull();
+    expect(letter.classList.contains("is-folding")).toBe(false);
   });
 
-  it("탭을 5.42초 넘게 가렸다 돌아오면 바로 사라진다", () => {
+  it("탭을 가렸다가 10초 전에 돌아오면 남은 읽기 시간 동안 보인다", () => {
     const r = render(<WillLetter letter={letterOf2()} reducedMotion={false} />);
     tick(400);
     visibility("hidden");
     vi.setSystemTime(T + 400 + 6000);
     visibility("visible");
+    expect(letterOf(r.container)).not.toBeNull();
+  });
+
+  it("탭을 10초 넘게 가렸다 돌아오면 편지를 다시 읽게 하지 않는다", () => {
+    const r = render(<WillLetter letter={letterOf2()} reducedMotion={false} />);
+    tick(400);
+    visibility("hidden");
+    vi.setSystemTime(T + 400 + LETTER_READ_MS);
+    visibility("visible");
     expect(letterOf(r.container)).toBeNull();
   });
 
-  it("모션 줄이기는 시작부터 본문과 인장을 보이고 같은 시각에 닫힌다", () => {
+  it("모션 줄이기는 시작부터 본문과 인장을 보이고 누르는 즉시 닫힌다", () => {
     const live = vi.fn();
     const r = render(<WillLetter letter={letterOf2()} reducedMotion onLive={live} />);
     tick(399);
@@ -316,9 +341,10 @@ describe("공개 유언 본문과 시간표", () => {
     expect(live).toHaveBeenLastCalledWith(true);
     const css = readFileSync("src/styles/letter.css", "utf8");
     expect(css).toMatch(/\.mf-letter\.is-still[^{]*\{[^}]*animation:\s*none/);
-    tick(LETTER_END_AT_MS - 1);
+    expect(css).toContain(".mf-letter.is-still .mf-letter__fill { animation-timing-function: steps(10, end); }");
+    tick(6000);
     expect(letterOf(r.container)).not.toBeNull();
-    tick(1);
+    fireEvent.click(r.getByRole("button", { name: "닫기" }));
     expect(letterOf(r.container)).toBeNull();
     expect(live).toHaveBeenLastCalledWith(false);
   });
@@ -326,14 +352,14 @@ describe("공개 유언 본문과 시간표", () => {
 
 describe("아침 알림 위치: 큰 글은 띠 아래에서 시작한다 (C-2, 0083-10)", () => {
   const rule = (css: string, sel: string): string => css.split("\n").find((l) => l.startsWith(sel)) ?? "";
-  it("편지를 표시할 때만 알림을 위로 보내고 아이콘을 18px로 작게 한다", () => {
+  it("편지를 표시할 때만 알림을 위로 보내고 기존 큰 아이콘을 쓴다", () => {
     const a = render(<ResultAnnounce text="알림" icon="ghost" />);
     expect(a.container.querySelector(".mf-announce")!.classList.contains("is-top")).toBe(false);
     expect(a.container.querySelector(".mf-announce__icon")!.getAttribute("width")).toBe("56");
     a.unmount();
     const b = render(<ResultAnnounce text="알림" icon="ghost" withLetter />);
     expect(b.container.querySelector(".mf-announce")!.classList.contains("is-top")).toBe(true);
-    expect(b.container.querySelector(".mf-announce__icon")!.getAttribute("width")).toBe("18");
+    expect(b.container.querySelector(".mf-announce__icon")!.getAttribute("width")).toBe("56");
   });
 
   it("game.css: .mf-announce.is-top 의 위 여백은 헤더 아랫변(--mf-host-bottom, 기본 62) + space-md 이고 고정 72 가 아니다", () => {
@@ -353,11 +379,11 @@ describe("아침 알림 위치: 큰 글은 띠 아래에서 시작한다 (C-2, 0
 
   it("편지는 헤더와 모달을 제외한 하단 조작부 높이를 상속한다", () => {
     const css = readFileSync("src/styles/letter.css", "utf8");
-    expect(css).toContain("inset-block-start: calc(var(--mf-host-bottom, 62px) + 56px)");
-    expect(css).toContain("inset-block-end: calc(var(--mf-panel-h, 0px) + 8px)");
+    expect(css).toContain("inset-block-start: calc(var(--mf-host-bottom, 62px) + var(--mf-vv-top, 0px) + 8px)");
+    expect(css).toContain("inset-block-end: calc(var(--mf-panel-h, 0px) + var(--mf-kb-lift, 0px) + 8px)");
   });
 
-  it("방 화면: 편지가 있는 아침의 알림은 is-top 으로 올라가 편지와 함께 걷히고, 편지가 없는 아침은 무대 가운데에 있다", () => {
+  it("방 화면: 편지가 있는 아침의 알림은 위로 올라가고, 토론에는 편지만 남는다", () => {
     const s = setup();
     s.show(killed());
     s.card("will", 3, 1, WILL);
@@ -368,10 +394,10 @@ describe("아침 알림 위치: 큰 글은 띠 아래에서 시작한다 (C-2, 0
     expect(announce.classList.contains("is-top")).toBe(true);
     expect(announce.classList.contains("is-with-letter")).toBe(true);
     expect(announce.textContent).toContain("지아");
-    s.advance(LETTER_END_AT_MS - 1);
+    s.advance(6000);
     expect(s.container.querySelector(".mf-announce")).not.toBeNull();
-    s.advance(1);
-    expect(letterOf(s.container)).toBeNull();
+    s.show(viewOf("discussion"));
+    expect(letterOf(s.container)).not.toBeNull();
     expect(s.container.querySelector(".mf-announce")).toBeNull();
     s.unmount();
 

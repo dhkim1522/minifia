@@ -370,6 +370,10 @@ export function directSignal(signal: LocalSignal, cur: AudioView | null, ctx: Si
     case "tap":
       out.now.push({ id: "ui.tap" });
       break;
+    case "willClose":
+      if (cur.phase === "morning") out.cancel.push(letterKey(cur));
+      out.now.push({ id: "will.fold" });
+      break;
     case "card": {
       // 카드가 화면에 보이는 시각에 ui.card 한 번 — 카드 종류·글은 신호에 없다(LS-5)
       const d = Number.isFinite(signal.delayMs) ? Math.max(0, Math.round(signal.delayMs)) : 0;
@@ -412,7 +416,7 @@ export function directEmote(signal: EmoteSignal, cur: AudioView | null, gate: Em
 /**
  * 숫자뿐인 개인 사건(12-09). 글·결과·좌석은 받지 않는다 — 시각은 로컬 시계의 함수다.
  *   kill: killFx 가 선 본인의 화면에서만 들어온다(의사가 살린 사람·남의 화면·재접속에는 입력이 없다, LS-8). killFx.at(로컬 ms) + 50ms 에 한 번.
- *   letter: 편지 시작 t0(로컬 ms)에 맞춰 인장과 접힘 소리를 재생한다. 이미 지난 소리는 건너뛴다.
+ *   letter: 편지 시작 t0(로컬 ms)에 맞춰 인장 소리를 재생한다. 이미 지난 소리는 건너뛴다.
  *   policeCard: 경찰 카드 도착 — POLICE_CARD_AT 에 ui.card 한 번(모든 카드가 같은 소리, LS-5).
  * 아침 단계가 아니면 모두 무음이다(밤 중 암살음 0).
  */

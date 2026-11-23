@@ -122,8 +122,9 @@ import {
   announceChecks,
   ghostDomChecks,
   verdictPanelChecks,
-  LETTER_END_AT_MS,
-  LETTER_FOLD_AT_MS,
+  LETTER_CHAT_AT_MS,
+  LETTER_READ_MS,
+  LETTER_FOLD_MS,
   ANNOUNCE_MORNING_AT,
   SEAL_GLYPH,
   contrastRatio,
@@ -2171,8 +2172,9 @@ const goodLetter = (over = {}) => ({
 const letterOk = (m) => Object.fromEntries(letterChecks(m).map((l) => [l.id, l.ok]));
 
 test("편지 시간 상수 사본: 접힘 5000·제거 5420·일반 알림 400·인장 글자 M", () => {
-  assert.equal(LETTER_FOLD_AT_MS, 5000);
-  assert.equal(LETTER_END_AT_MS, 5420);
+  assert.equal(LETTER_CHAT_AT_MS, 5000);
+  assert.equal(LETTER_READ_MS, 10000);
+  assert.equal(LETTER_FOLD_MS, 420);
   assert.equal(ANNOUNCE_MORNING_AT, 400);
   assert.equal(SEAL_GLYPH, "M");
 });
