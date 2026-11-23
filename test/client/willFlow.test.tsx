@@ -503,12 +503,12 @@ describe("마피아 [쪽지] (NIGHT-12, E2 #18·#19)", () => {
     expect(area(m.container).value).toBe("조용히 끝냈다");
   });
 
-  it("글자 수 상한: 유언 시트는 50(유언 상한), 쪽지 시트는 채팅과 같은 100 그대로다(사용자 결정 2026-11-05)", () => {
+  it("글자 수 상한: 유언은 20, 쪽지는 100 그래핌이다", () => {
     const w = mount(makeView());
     fireEvent.click(willBtn(w.container)!);
     fireEvent.change(area(w.container), { target: { value: "가".repeat(60) } });
-    expect(area(w.container).value).toBe("가".repeat(50));
-    expect(w.container.querySelector(".mv-will__count")?.textContent).toBe("50/50");
+    expect(area(w.container).value).toBe("가".repeat(20));
+    expect(w.container.querySelector(".mv-will__count")?.textContent).toBe("20/20");
     cleanup();
     const m = mount(makeView({ mySeat: 0, nightSure: 2 }));
     fireEvent.click(noteBtn(m.container)!);
@@ -726,6 +726,20 @@ describe("유언 단계 — 처형자 화면 (22-11 P22-6~8)", () => {
     const m = mount(defenseOf({ endsIn: 4_200 }));
     expect(gauge(m.container)?.getAttribute("aria-label")).toBe("남은 시간 5초");
     expect(gauge(m.container)?.getAttribute("data-tone")).toBe("urgent");
+  });
+
+  it("기존 50자 유언은 원문을 보여 주고 닫거나 그대로 남겨도 잘리지 않는다", () => {
+    clock();
+    const old = "가".repeat(50);
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const m = mount(defenseOf({ will: old }), { send });
+    expect(area(m.container).value).toBe(old);
+    fireEvent.click(closeBtn(m.container));
+    expect(willMsgs(send)).toEqual([]);
+    fireEvent.click(willBtn(m.container)!);
+    expect(area(m.container).value).toBe(old);
+    fireEvent.click(saveBtn(m.container));
+    expect(willMsgs(send)).toEqual([{ t: "will", text: old, final: true }]);
   });
 
   it("[남기기] → {t:'will', text, final:true} 한 번, 곧바로 '남김' 비활성이고 3초가 지나도 보내지 못했다는 알림이 없다(서버 응답 대기 표시 없음)", () => {

@@ -590,18 +590,21 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
         if (!observer) throw new Error("발표자가 아닌 테스트 화면 없음");
         const suspectButton = observer.page.locator("[data-answer-suspect]");
         const readyCopy = await suspectButton.textContent({ timeout: 1200 });
-        const readyColor = await suspectButton.evaluate(b => getComputedStyle(b).backgroundColor);
+        const readyColor = await suspectButton.evaluate(b => {
+          const style = getComputedStyle(b);
+          return { background: style.backgroundColor, border: style.borderTopColor, text: style.color };
+        });
         await suspectButton.click({ timeout: 1200 });
         await Promise.all(pages.map(p => p.tracker.waitFor(v => v.day?.suspects?.some(note => note.to === current.seat), 2500, "현재 발표자 의심 표시")));
         const pressedButton = observer.page.locator('[data-answer-suspect][aria-pressed="true"]');
         const markedCopy = await pressedButton.textContent({ timeout: 1200 }).catch(() => null);
         const markedColor = await pressedButton.evaluate(b => getComputedStyle(b).backgroundColor);
         suspectCopyMatches = readyCopy?.trim() === "의심!" && markedCopy?.trim() === "의심 해제";
-        const [red, green, blue] = readyColor.match(/\d+/g)?.map(Number) ?? [];
         const [neutralRed, neutralGreen, neutralBlue] = markedColor.match(/\d+/g)?.map(Number) ?? [];
         const enabled = await observer.page.locator('[data-answer-suspect][aria-pressed="true"]:enabled').waitFor({ timeout: 1200 }).then(() => true, () => false);
-        rec(`${id}/answers`, "KW8-COLOR", "붙이기는 적색, 해제는 누를 수 있는 중립색이다",
-          red === 242 && green === 85 && blue === 106 && Math.max(neutralRed, neutralGreen, neutralBlue) - Math.min(neutralRed, neutralGreen, neutralBlue) <= 24 && enabled,
+        rec(`${id}/answers`, "KW8-COLOR", "붙이기는 남색 바탕에 적색 테두리와 글자, 해제는 누를 수 있는 중립색이다",
+          readyColor.background === "rgb(16, 25, 39)" && readyColor.border === "rgb(242, 85, 106)" && readyColor.text === "rgb(242, 85, 106)"
+          && Math.max(neutralRed, neutralGreen, neutralBlue) - Math.min(neutralRed, neutralGreen, neutralBlue) <= 24 && enabled,
           JSON.stringify({ readyColor, markedColor }));
         markedSeat = current.seat;
         markedBy = observer;
@@ -633,10 +636,9 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       const sharedTarget = first.players.find(p => p.seat !== markedSeat && pages.every(x => x.tracker.last().me.seat !== p.seat))?.seat;
       if (!markedBy || !other || sharedTarget === undefined) throw new Error("첫 토론 고깔 조작을 검사할 대상이 없음");
       const chooseHat = async (actor, target, acceptedTarget) => {
-        await openTableDockPane(actor.page, "tools");
-        await actor.page.locator("[data-suspect-btn]").click({ timeout: 4000 });
-        await actor.page.getByRole("region", { name: "딱지 붙이기" }).waitFor({ timeout: 3000 });
-        await (await showPeopleTarget(actor.page, `[data-table-seat="${target}"][data-suspect-tag]`)).click({ timeout: 3000 });
+        await openTableDockPane(actor.page, "people");
+        const card = await showPeopleTarget(actor.page, `[data-table-seat="${target}"][data-suspect-holdable]`);
+        await card.press("Shift+Enter", { timeout: 3000 });
         await actor.tracker.waitFor(v => v.me.suspectTo === acceptedTarget, 3000, "내 고깔 변경");
       };
       await chooseHat(markedBy, sharedTarget, sharedTarget);

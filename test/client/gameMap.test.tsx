@@ -1280,10 +1280,12 @@ describe("GameMap — 순차 지목 이름표 (22-10, D-12)", () => {
     const unread = () => container.querySelector("[data-dock-unread]")?.textContent;
     expect(mode()).toBe("chat");
     expect(tab("people").textContent).toBe("");
+    expect(tab("tools").getAttribute("aria-label")).toBe("더 보기");
     fireEvent.click(tab("tools"));
     expect(mode()).toBe("tools");
     expect(container.querySelectorAll("[data-dock-pane]")).toHaveLength(1);
-    expect(container.querySelector("[data-suspect-btn]")).not.toBeNull();
+    expect(Array.from(container.querySelectorAll('[data-dock-pane="tools"] .mf-room-toolbar > button'), (button) => button.textContent)).toEqual(["감정 표현", "유언"]);
+    expect(container.querySelector("[data-suspect-btn], [data-note-button]")).toBeNull();
     expect(container.querySelector("[data-chat-input]")).toBeNull();
     act(() => {
       chat.apply({ t: "chat", ch: "all", seq: 1, at: NOW, seat: 1, text: "읽지 않은 단서" }, 1, NOW);

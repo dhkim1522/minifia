@@ -342,23 +342,27 @@ export function makeTableDockFlow({ recorder, openGame, closeGame, writeSheet, g
       await input.fill(draft);
       await openTableDockPane(hp, "tools");
       const tools = hp.locator('[data-dock-pane="tools"]');
-      rec(sc, "TD7", "도구 탭에 반응과 의심 딱지, 유언이 모여 있다",
-        await tools.locator('[data-playtest-action="reaction"]').count() > 0
-        && await tools.locator("[data-suspect-btn]").count() === 1
-        && await tools.locator("[data-will-button]").count() === 1);
-      await tools.locator("[data-suspect-btn]").click();
-      await hp.getByRole("region", { name: "딱지 붙이기" }).waitFor({ timeout: 3500 });
-      rec(sc, "TD8A", "딱지 도구를 선택하면 참가자 판이 바로 열리고 무대 이름표는 대상 버튼이 되지 않는다",
-        await roster.locator("[data-suspect-tag]").count() === 3 && await hp.locator("[data-world-stage] [data-suspect-tag]").count() === 0);
+      const emote = tools.locator('[data-playtest-action="reaction"]');
+      const willButton = tools.locator("[data-will-button]");
+      const [emoteBox, willBox] = await Promise.all([emote.boundingBox(), willButton.boundingBox()]);
+      rec(sc, "TD7", "더 보기에는 왼쪽 감정 표현과 오른쪽 유언만 있다",
+        await hp.getByRole("button", { name: "더 보기", exact: true }).getAttribute("aria-expanded") === "true"
+        && await tools.locator('.mf-room-toolbar > button').count() === 2
+        && !!emoteBox && !!willBox && emoteBox.y === willBox.y && emoteBox.x < willBox.x);
+      await openTableDockPane(hp, "people");
+      const firstCard = roster.locator(`[data-table-seat="${first.seat}"]`);
+      rec(sc, "TD8A", "참가자 카드에서만 의심 편집 단축키를 제공한다",
+        await roster.locator("[data-suspect-holdable]").count() === 3
+        && await firstCard.getAttribute("aria-keyshortcuts") === "Shift+Enter"
+        && await hp.locator("[data-world-stage] [data-suspect-tag]").count() === 0);
       await roster.locator("[data-dock-handle]").click();
       await dockMode(hp, "closed").waitFor({ timeout: 3500 });
-      rec(sc, "TD8C", "딱지 대상 패널을 닫으면 보내지 않고 취소한다",
+      rec(sc, "TD8C", "참가자 판을 열고 닫는 동안 의심 표시를 보내지 않는다",
         ht.last().me.suspectTo === undefined && await hp.locator('[data-suspect-mode="off"]').count() === 1);
-      await openTableDockPane(hp, "tools");
-      await tools.locator("[data-suspect-btn]").click();
-      await roster.locator(`[data-table-seat="${first.seat}"][data-suspect-tag]`).click();
+      await openTableDockPane(hp, "people");
+      await firstCard.press("Shift+Enter");
       await ht.waitFor((view) => view.me.suspectTo === first.seat, 4000, "의심 딱지 서버 반영");
-      rec(sc, "TD8", "도구에서 의심 대상을 골라 서버에 반영한다", ht.last().me.suspectTo === first.seat);
+      rec(sc, "TD8", "참가자 카드의 Shift+Enter 의심 조작을 서버에 반영한다", ht.last().me.suspectTo === first.seat);
       await openRoleCard(hp);
       const recordsTab = ht.last().day?.keyword?.answer === undefined ? "의심 기록" : "답과 의심";
       await selectRoleCardTab(hp, recordsTab);
@@ -373,7 +377,6 @@ export function makeTableDockFlow({ recorder, openGame, closeGame, writeSheet, g
         JSON.stringify({ peopleColors, worldColors, chatColors, recordColor }));
       await closeSheet(hp, recordsTab);
       await openTableDockPane(hp, "people");
-      const firstCard = roster.locator(`[data-table-seat="${first.seat}"]`);
       const secondCard = roster.locator(`[data-table-seat="${second.seat}"]`);
       const mobile = ctx.size.mobile !== false;
       if (mobile) await secondCard.tap();
@@ -398,7 +401,7 @@ export function makeTableDockFlow({ recorder, openGame, closeGame, writeSheet, g
       await secondCard.locator("[data-suspect-mine]").waitFor({ state: "detached", timeout: 3500 });
       rec(sc, "TD-HOLD-CLEAR", "같은 카드에서 다시 길게 누르고 손을 떼면 내 딱지가 사라진다", ht.last().me.suspectTo === undefined);
       await openTableDockPane(hp, "tools");
-      await tools.locator("[data-will-button]").click();
+      await willButton.click();
       await writeSheet(hp, ht, "will", "제 유언을 전해 주세요");
       await openTableDockPane(hp, "chat");
       rec(sc, "TD9", "유언을 서버에 저장하고 도구 사용 뒤 채팅 초안을 이어 쓸 수 있다",

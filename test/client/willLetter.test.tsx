@@ -342,6 +342,7 @@ describe("공개 유언 본문과 시간표", () => {
     const css = readFileSync("src/styles/letter.css", "utf8");
     expect(css).toMatch(/\.mf-letter\.is-still[^{]*\{[^}]*animation:\s*none/);
     expect(css).toContain(".mf-letter.is-still .mf-letter__fill { animation-timing-function: steps(10, end); }");
+    expect(css).toMatch(/\.mf-letter__fill\s*\{[^}]*animation-duration: var\(--lw-read-duration\) !important;[^}]*animation-timing-function: steps\(10, end\);/);
     tick(6000);
     expect(letterOf(r.container)).not.toBeNull();
     fireEvent.click(r.getByRole("button", { name: "닫기" }));

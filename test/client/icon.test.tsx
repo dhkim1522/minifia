@@ -45,7 +45,7 @@ describe("V2Icon 새 아이콘 (09.1.1-08)", () => {
 });
 
 it("게임 메뉴와 하단 패널의 아이콘은 서로 구분되는 24px 선 아이콘이다", () => {
-  const names = ["menu", "chat", "users", "toolbox"] as const;
+  const names = ["menu", "chat", "users", "more"] as const;
   const { container } = render(<>{names.map((name) => <V2Icon key={name} name={name} />)}</>);
   const icons = [...container.querySelectorAll("svg")];
   expect(icons).toHaveLength(names.length);
@@ -57,6 +57,7 @@ it("게임 메뉴와 하단 패널의 아이콘은 서로 구분되는 24px 선 
     expect(svg.children.length).toBeGreaterThan(0);
   }
   expect(new Set(icons.map((svg) => svg.innerHTML)).size).toBe(names.length);
+  expect(icons[3]?.querySelectorAll('circle[cy="12"][fill="currentColor"]')).toHaveLength(3);
 });
 
 // 10-05: 동작 판과 입력줄 버튼이 쓰는 아홉 아이콘(face·throat·deny·clap·cry·handshake·praise·surprise·dance).

@@ -1833,6 +1833,7 @@ export function readLetter(page) {
       gaugeDuration: gauge ? Number.parseFloat(getComputedStyle(gauge).animationDuration) * 1000 : null,
       closeHeight: close?.offsetHeight ?? null,
       scrollGap: text ? text.scrollHeight - text.clientHeight : null,
+      canReadByScrolling: text?.hasAttribute("data-will-scroll") && text.tabIndex === 0 && getComputedStyle(text).overflowY === "auto",
       lineFontPx: lineCs ? parseFloat(lineCs.fontSize) : null,
       lineHeightPx: lineCs ? parseFloat(lineCs.lineHeight) : null,
       align: lineCs?.textAlign ?? null,

@@ -46,7 +46,7 @@ export const ChatMessageSchema = z.strictObject({
 }) satisfies z.ZodType<ChatSendMessage>;
 
 // 유언·쪽지(09-12, 결정 0061-9·10): 본문뿐이다. 행위자는 소켓 첨부 playerId 로만 정해지므로 seat·id·ch·pk 가 덧붙으면 거부한다(T-09-28, ASVS V5).
-// 상한은 UTF-16 300(프레임 1024B 안). 제품 규칙(유언 자소 50·쪽지 자소 100, 정리는 sanitizeChatText)은 saveWill·saveNote 안에서 판정한다.
+// 상한은 UTF-16 300(프레임 1024B 안). 제품 규칙(유언 20·쪽지 100 그래핌, 정리는 sanitizeChatText)은 saveWill·saveNote 안에서 판정한다.
 // ClientMessageSchema 의 멤버다 — 이 값이 먼저 선언되어야 유니온이 쓸 수 있다(TDZ).
 export const WillMessageSchema = z.strictObject({
   t: z.literal("will"),

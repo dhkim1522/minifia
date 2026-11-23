@@ -17,7 +17,7 @@ import { V2Icon } from "./V2Icon";
 // - 시트는 서버로 가는 길(채팅 보내기·입력 중 신호)을 갖지 않는다. 콜백은 onChange·onSave·onClose 뿐이고, 쓰는 동안 다른 사람에게
 //   가는 신호가 없다(WILL-01, L7). 저장·닫기의 실제 전송은 부르는 쪽(09-17)이 한다.
 // - 글자 수는 그래핌으로 세고(닉네임 8자와 같은 세기, 가정 A1) max 를 넘는 입력은 앞에서 max 그래핌까지 자른다. 빈 값도 저장한다.
-// - 본문은 textarea value(React)로만 다룬다 — HTML 주입 없음(T-09-15). 서버가 같은 정리 함수로 한 번 더 자른다.
+// - 본문은 textarea value(React)로만 다룬다 — HTML 주입 없음(T-09-15). 서버도 새로 저장하는 글의 상한을 확인한다.
 // - 위치(아래 패널 위 8, 키보드 위)는 부르는 쪽이 정한다(가정 A2). 부품은 폭(부모 − 20)과 안쪽 모양만 갖는다.
 // - 버튼 mousedown 의 기본 동작을 막아 키보드(포커스)를 유지한다.
 
@@ -30,11 +30,11 @@ export interface WillSheetProps {
   tone?: "mafia";
   value: string;
   onChange(value: string): void;
-  /** 조합이 끝난 확정 값(max 그래핌 이내) */
+  /** 조합이 끝난 확정 값(max 그래핌 이내 또는 이미 저장한 원문) */
   onSave(text: string): void;
   /** true 면 [저장] 이 "저장됨" 비활성. 저장 실패는 부르는 쪽이 false 로 둔다 */
   saved?: boolean;
-  /** 글자 수 상한(그래핌). 기본은 유언 상한 WILL_MAX_GRAPHEMES(50). 쪽지는 CHAT_MAX_GRAPHEMES(100) */
+  /** 글자 수 상한(그래핌). 기본은 WILL_MAX_GRAPHEMES, 쪽지는 CHAT_MAX_GRAPHEMES */
   max?: number;
   placeholder?: string;
   onClose(text: string): void;
@@ -51,7 +51,7 @@ export interface WillSheetProps {
 }
 
 const WILL_TEXT = { title: "유언", placeholder: "죽으면 모두에게 보여요", close: "닫기", save: "저장", saved: "저장됨" } as const;
-/** 기본은 유언 상한(서버 saveWill 과 같은 값, 50). 쪽지는 부르는 쪽이 채팅 상한(100)을 준다 */
+/** 기본은 유언 상한(서버 saveWill 과 같은 값). 쪽지는 부르는 쪽이 채팅 상한을 준다. */
 const DEFAULT_MAX = WILL_MAX_GRAPHEMES;
 
 const segmenter = new Intl.Segmenter("ko", { granularity: "grapheme" });
@@ -73,6 +73,7 @@ export function clampGraphemes(s: string, max: number): string {
 export function WillSheet(props: WillSheetProps) {
   const { title = WILL_TEXT.title, icon = "quill", tone, value, onChange, onSave, saved, max = DEFAULT_MAX, placeholder = WILL_TEXT.placeholder, onClose, compact, disabled, saveLabel, savedLabel, secondsLeft } = props;
   const areaRef = useRef<HTMLTextAreaElement | null>(null);
+  const openedText = useRef(value);
   const composed = useComposedText(areaRef);
   const inputId = useId();
 
@@ -81,7 +82,8 @@ export function WillSheet(props: WillSheetProps) {
     areaRef.current?.focus({ preventScroll: true });
   }, []);
 
-  const confirmed = (raw: string) => clampGraphemes(raw, max);
+  // 이전 상한으로 저장된 유언은 열거나 그대로 닫을 때 원문을 유지한다. 새 입력에만 현재 상한을 적용한다.
+  const confirmed = (raw: string) => raw === openedText.current ? raw : clampGraphemes(raw, max);
 
   const onInput = (raw: string) => {
     // 조합 중에는 값을 가공하지 않는다(조합이 깨진다). 조합이 끝날 때 자른다.
@@ -124,7 +126,7 @@ export function WillSheet(props: WillSheetProps) {
         ref={areaRef}
         id={inputId}
         className="mv-will__text"
-        value={shown}
+        value={composed.composing() ? value : shown}
         rows={compact ? 2 : 3}
         placeholder={placeholder}
         onChange={(e) => onInput(e.target.value)}

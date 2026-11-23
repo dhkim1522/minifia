@@ -6,7 +6,11 @@
 .mf-story__summary { font: var(--type-body-strong); }
 .mf-story__tally { padding: 0; list-style: none; font: var(--type-label); }
 
-.mf-phase-event[data-phase-event="execution"] .mv-quote--will { width: 100%; max-width: none; }
+.mf-phase-event[data-phase-event="execution"] .mf-phase-event__card:has(> .mv-quote--will) { overflow: hidden; }
+.mf-phase-event[data-phase-event="execution"] .mf-phase-event__card > .mv-quote--will {
+  flex: 0 1 auto;
+  min-block-size: 0;
+}
 .mf-announce.is-embedded {
   position: static;
   padding: 0;

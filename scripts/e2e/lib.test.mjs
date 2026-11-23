@@ -1456,14 +1456,13 @@ test("꺼진 장치 흐름 6개(배지·귓속말·결선 둘·결전 둘)는 sk
   assert.deepEqual(selectFlows(all, ["politics-badge"]).map((f) => f.id), ["politics-badge"]);
 });
 
-test("flows.mjs night-sizes 편지 시험 유언 WILL50 은 서버 유언 상한(WILL_MAX_GRAPHEMES)과 같은 자소 수이고, 공백 없는 긴 단어(10~15자)를 섞는다(사용자 결정 2026-11-05)", () => {
+test("flows.mjs night-sizes 편지 시험 유언은 서버 유언 상한(WILL_MAX_GRAPHEMES)과 같은 그래핌 수이고 공백 없는 긴 단어(10~15자)를 섞는다", () => {
   const will = readFileSync(new URL("../../shared/game/will.ts", import.meta.url), "utf8");
   const max = Number(will.match(/export const WILL_MAX_GRAPHEMES = (\d+);/)?.[1]);
-  assert.equal(max, 50);
+  assert.equal(max, 20);
   const flows = readFileSync(new URL("./flows.mjs", import.meta.url), "utf8");
-  assert.doesNotMatch(flows, /WILL100/);
-  const text = flows.match(/const WILL50 = "([^"]+)";/)?.[1];
-  assert.ok(text, "WILL50 문자열 상수");
+  const text = flows.match(/const WILL_AT_LIMIT = "([^"]+)";/)?.[1];
+  assert.ok(text, "상한과 같은 길이의 시험 유언");
   assert.equal(graphemeCount(text), max);
   const longest = Math.max(...text.split(" ").map((w) => graphemeCount(w)));
   assert.ok(longest >= 10 && longest <= 15, `가장 긴 단어 ${longest}자`);

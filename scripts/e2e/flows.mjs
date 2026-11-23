@@ -2613,9 +2613,9 @@ async function morningLetterChecks(ctx, sc, rec, game, { appearMaxMs, announceRe
   }
   if (snap) {
     rec(sc, "LT12", "머리글이 '{이름} 님의 유언' 이고 글 줄을 이으면 저장한 유언과 같다(줄이 잘리지 않았다)", snap.head?.text === `${name} 님의 유언` && snap.lines.length > 0 && wills.some((w) => (snap.lineTexts ?? []).join("").replace(/\s/g, "") === w.replace(/\s/g, "")), `머리글 ${snap.head?.text}, 줄 ${JSON.stringify(snap.lineTexts)}`);
-    rec(sc, "LT13", "편지 본문 전체가 30px 이상의 손글씨로 가운데 정렬되어 보인다",
-      snap.lineFontPx >= 30 && snap.scrollGap <= 1 && snap.align === "center" && snap.penLoaded,
-      `글꼴 ${snap.family}, ${snap.lineFontPx}px/${snap.lineHeightPx}px, ${snap.align}`);
+    rec(sc, "LT13", "편지 본문은 30px 이상의 손글씨로 가운데 정렬되며 넘칠 때 스크롤할 수 있다",
+      snap.lineFontPx >= 30 && (snap.scrollGap <= 1 || snap.canReadByScrolling) && snap.align === "center" && snap.penLoaded,
+      `글꼴 ${snap.family}, ${snap.lineFontPx}px/${snap.lineHeightPx}px, 로드 ${snap.penLoaded}, ${snap.align}, 넘침 ${snap.scrollGap}px, 스크롤 ${snap.canReadByScrolling}`);
     rec(sc, "LT15", "유언 게이지는 10초이며 닫기 버튼의 높이는 44px 이상이다",
       snap.gaugeDuration === LETTER_READ_MS && snap.closeHeight >= 44, `게이지 ${snap.gaugeDuration}ms, 버튼 ${snap.closeHeight}px`);
   }
@@ -2665,7 +2665,7 @@ async function openNight(ctx, flowId, opts) {
 
 const nickOf = (view, seat) => view.players.find((p) => p.seat === seat)?.nickname ?? "";
 
-/** 첫 밤 암살 한 번(트레이서): 마피아 방장이 다가가 봇 마피아와 확정 → 쪽지 → 아침 분필·알림·유언 카드·쪽지 카드 (NIGHT-08, NIGHT-12, MORN-01, MORN-02) */
+/** 첫 밤 마피아가 봇 동료와 대상을 확정 → 아침 분필·알림·희생자 유언 (NIGHT-08, MORN-01, MORN-02) */
 async function nightAssassin(ctx) {
   const id = "night";
   const sc = `${id}/assassin`;
@@ -2681,7 +2681,7 @@ async function nightAssassin(ctx) {
     const n0 = await readNightWithTools(hp);
     rec(sc, "NA2", "밤 마피아 선택 영역에 얼굴 목록이 있고 채팅 입력은 없다", n0?.faceList === true && !!n0.faceCard && (!n0.tableNight || n0.dockTargets) && g.hasInput === false, `얼굴 목록 ${n0?.faceList}, 입력 ${g.hasInput}`);
     rec(sc, "NA3", `이름표 선택 버튼은 없고 얼굴 칸은 나 포함 산 사람 ${alive}개`, g.picks.length === 0 && n0?.faces?.length === alive, `버튼 ${g.picks.length}개, 칸 ${n0?.faces?.length}개`);
-    rec(sc, "NA4", "확정 전에는 [쪽지] 가 있고 비활성(aria-disabled)이다", n0?.noteButton?.disabled === true, `쪽지 버튼 ${JSON.stringify(n0?.noteButton)}`);
+    rec(sc, "NA4", "확정 전 더 보기에 자기 유언만 제공한다", n0?.willButton === true && n0?.noteButton === null, `유언 ${n0?.willButton}, 쪽지 ${JSON.stringify(n0?.noteButton)}`);
     rec(sc, "NA5", "밤 마피아 화면에는 개인용 어둠·맥박 효과가 없다", n0?.nightDark === null && n0?.tensionPulse === 0, `어둠 ${n0?.nightDark}, 맥박 ${n0?.tensionPulse}`);
     await gameGH(ctx, id, "night-mafia", host);
     const aim0 = (await readAim(hp)).filter((t) => t.aim !== null || t.mark);
@@ -2707,18 +2707,16 @@ async function nightAssassin(ctx) {
     await openTableDockPane(hp, "tools");
     const nSure = await readNight(hp);
     rec(sc, "NA9", "확정 표시의 접근성 이름이 '확정' 이다", sureLabel === "확정", `이름 ${sureLabel}`);
-    rec(sc, "NA10", "확정 뒤 [쪽지] 가 활성이다", nSure?.noteButton?.disabled === false, `쪽지 버튼 ${JSON.stringify(nSure?.noteButton)}`);
+    rec(sc, "NA10", "확정 뒤에도 더 보기의 유언은 같은 자리에 있고 쪽지 버튼은 없다", nSure?.willButton === true && nSure?.noteButton === null, `유언 ${nSure?.willButton}, 쪽지 ${JSON.stringify(nSure?.noteButton)}`);
     rec(sc, "NA11", "서버 확정(me.nightSure)이 대상과 같다", ht.last().me.nightSure === target, `nightSure ${ht.last().me.nightSure}`);
 
-    // 쪽지: 열어 쓰고 저장한다
-    const NOTE = "첫 밤에는 이 사람입니다";
-    const noted = await attempt(async () => {
-      await hp.locator("[data-note-button]").click();
-      await writeSheet(hp, ht, "note", NOTE);
+    const wroteWill = await attempt(async () => {
+      await hp.locator("[data-will-button]").click();
+      await writeSheet(hp, ht, "will", "제 유언을 전해 주세요");
     });
-    rec(sc, "NA12", "[쪽지] 로 시트를 열어 쓰고 저장하면 서버가 같은 글을 돌려준다", noted.ok, noted.detail);
+    rec(sc, "NA12", "밤의 [유언]에서 본인 유언을 쓰고 저장할 수 있다", wroteWill.ok, wroteWill.detail);
 
-    // 아침: 분필·알림·유언 카드·쪽지 카드
+    // 아침: 분필·알림·유언 카드
     const victim = nickOf(ht.last(), target);
     // 밤은 30초다 — 부하로 검사가 길어져 서버 타이머가 밤을 먼저 끝냈으면 이 판은 아침을 볼 수 없다(새 방으로 다시 돈다)
     if (ht.last().phase !== "night") throw new SetupError(`밤 검사가 길어져 서버가 밤을 먼저 끝냄 (지금 ${ht.last().phase})`);
@@ -2736,10 +2734,10 @@ async function nightAssassin(ctx) {
     if (morning) recMany(rec, sc, announceChecks(morning, { maxLines: 3 }), " (아침)");
     // 유언 편지(09.1-11): 일반 화면은 아침 0.4초에 편지가 뜨고 T0 + 5.0초에 접히며 카드가 채팅에 나온다. 편지가 걷힌 뒤에 아래 카드·G 검사를 본다.
     await morningLetterChecks(ctx, sc, rec, game, { appearMaxMs: ANNOUNCE_MORNING_AT + 600, announceRe: /님이 밤사이 탈락했어요$/, wills: BOT_WILL_TEXTS, name: victim });
-    const cards = await nightUntil(hp, (x) => x.cards.some((c) => c.kind === "will") && x.cards.some((c) => c.kind === "note"), 7000);
+    const cards = await nightUntil(hp, (x) => x.cards.some((c) => c.kind === "will"), 7000);
     const kinds = (cards ?? (await readNight(hp)))?.cards.map((c) => c.kind) ?? [];
-    rec(sc, "MA3", "편지가 접힌 뒤(아침 약 5.4초) 채팅에 유언 카드와 쪽지 카드가 순서대로(유언 → 쪽지) 나온다", !!cards && kinds.indexOf("will") >= 0 && kinds.indexOf("note") > kinds.indexOf("will"), `카드 ${kinds.join(",") || "없음"}`);
-    rec(sc, "MA4", "쪽지 카드에 쓴 글이 있고 유언 카드에 봇 유언이 있다", !!cards && cards.cards.some((c) => c.kind === "note" && c.text.includes(NOTE)) && cards.cards.some((c) => c.kind === "will" && BOT_WILL_TEXTS.some((t) => c.text.includes(t))), `카드 ${JSON.stringify(cards?.cards ?? null)}`);
+    rec(sc, "MA3", "편지가 접힌 뒤 채팅에 유언 카드가 나온다", !!cards && kinds.includes("will"), `카드 ${kinds.join(",") || "없음"}`);
+    rec(sc, "MA4", "유언 카드에 희생자의 봇 유언이 있고 쪽지 카드는 없다", !!cards && !kinds.includes("note") && cards.cards.some((c) => c.kind === "will" && BOT_WILL_TEXTS.some((t) => c.text.includes(t))), `카드 ${JSON.stringify(cards?.cards ?? null)}`);
     await gameGH(ctx, id, "morning", host);
   } finally {
     await closeGame(game);
@@ -2922,7 +2920,7 @@ async function nightMismatch(ctx) {
     await ht.waitFor((v) => (v.me.nightTally ?? []).filter((t) => t.n >= 1).length >= 2, 3000, "갈린 선택").catch(() => {});
     await sleep(300);
     const n = await readNightWithTools(hp);
-    rec(sc, "MM3", "선택이 갈리면 확정 도장이 없고 [쪽지] 도 잠겨 있다", n?.sure === null && n?.noteButton?.disabled === true && ht.last().me.nightSure === undefined, `도장 ${JSON.stringify(n?.sure)}, 쪽지 ${JSON.stringify(n?.noteButton)}, nightSure ${ht.last().me.nightSure}`);
+    rec(sc, "MM3", "선택이 갈리면 확정 도장이 없고 더 보기에는 유언만 있다", n?.sure === null && n?.willButton === true && n?.noteButton === null && ht.last().me.nightSure === undefined, `도장 ${JSON.stringify(n?.sure)}, 유언 ${n?.willButton}, 쪽지 ${JSON.stringify(n?.noteButton)}, nightSure ${ht.last().me.nightSure}`);
     assertStillNight(ht);
     await armAnnounceWatch(hp);
     await skipTo(hp, ht, "morning");
@@ -3061,7 +3059,7 @@ async function nightVictim(ctx, shared) {
     sideChecks(rec, sc, "시민", n, g);
     faceListChecks(rec, sc, "시민", n, aliveOf(ht.last()).length); // 15-08: 시민도 같은 얼굴 목록(88 고정 빈 패널은 없어졌다)
     recTagInStageFaces(rec, sc, "VC4", "시민", n);
-    rec(sc, "VC5", "시민 밤 화면에는 얼굴 목록이 있고 쪽지 버튼은 없다(쪽지는 마피아 전용)", n.faceList === true && n.noteButton === null, `얼굴 목록 ${n.faceList}, 쪽지 ${JSON.stringify(n.noteButton)}`);
+    rec(sc, "VC5", "시민 밤 화면에는 얼굴 목록이 있고 쪽지 버튼은 없다", n.faceList === true && n.noteButton === null, `얼굴 목록 ${n.faceList}, 쪽지 ${JSON.stringify(n.noteButton)}`);
     await gameGH(ctx, id, "night-citizen", host);
     // 봇 마피아가 알람으로 방장(가장 낮은 seat)을 고른다. 밤 30초가 자연스럽게 끝나기를 기다린다
     const morningView = await ht.waitFor((v) => v.phase === "morning", 40_000, "밤 뒤 아침(서버 타이머)");
@@ -3123,10 +3121,10 @@ async function nightFlow(ctx) {
 // ---- night-sizes: 폰 크기 6종에서 밤마다 내 이름표가 스테이지 안에 완전히 들어오고 마피아 이름표 버튼이 44×44 이상이다 (NIGHT-07, NIGHT-09, L10) ----
 // 한 판의 밤 한 장씩만 읽는다(크기마다 마피아·경찰·시민 세 판). 흐름 본체(night)가 시나리오를 보고 이 흐름은 기하만 본다. 문턱은 낮추지 않는다.
 
-/** 50자 유언(유언 상한 WILL_MAX_GRAPHEMES, 사용자 결정 2026-11-05). 공백 없는 긴 단어(13·15자)를 섞어 실제 쓰는 모양에 맞춘다. 정확히 50 글자(lib.test.mjs 계약) */
-const WILL50 = "도윤님이마피아라고확신해요 어젯밤발소리를제가직접들었어요 끝까지꼭이겨주세요 모두조심하세요 안녕";
+/** 20자 유언(유언 상한 WILL_MAX_GRAPHEMES). 공백 없는 긴 단어를 포함한다(lib.test.mjs 계약). */
+const WILL_AT_LIMIT = "도윤님이마피아라고확신해요 꼭이겨주세요";
 
-/** 폰 크기마다: 방장 시민이 토론에서 50자(유언 상한) 유언을 저장하고 봇 마피아에게 당해 아침에 편지가 뜨면 편지지 맞춤(LT4~LT8)·유언 전체 표시(LT12)·글꼴 외부 요청 0(LT11)을 본다 (09.1-11, UI-SPEC C-3) */
+/** 폰 크기마다: 방장 시민이 토론에서 20자(유언 상한) 유언을 저장하고 봇 마피아에게 당해 아침에 편지가 뜨면 편지지 맞춤(LT4~LT8)·유언 전체 표시(LT12)·글꼴 외부 요청 0(LT11)을 본다 (09.1-11, UI-SPEC C-3) */
 async function nightSizesLetter(ctx, rec) {
   const id = "night-sizes";
   const sc = `${id}/letter`;
@@ -3134,13 +3132,13 @@ async function nightSizesLetter(ctx, rec) {
   try {
     const { hp, ht, hostSeat } = game;
     if (hostSeat !== 0) throw new SetupError(`방장 자리가 0 이 아님 (${hostSeat})`);
-    if (graphemeCount(WILL50) !== 50) throw new Error(`시험 유언이 50자가 아님 (${graphemeCount(WILL50)}자)`);
+    if (graphemeCount(WILL_AT_LIMIT) !== 20) throw new Error(`시험 유언이 20자가 아님 (${graphemeCount(WILL_AT_LIMIT)}자)`);
     const wrote = await attempt(async () => {
       await openTableDockPane(hp, "tools");
       await hp.locator("[data-will-button]").click({ timeout: 4000 });
-      await writeSheet(hp, ht, "will", WILL50);
+      await writeSheet(hp, ht, "will", WILL_AT_LIMIT);
     });
-    rec(sc, "LT0", "토론에서 50자(상한) 유언을 쓰고 저장하면 서버가 같은 글을 돌려준다", wrote.ok, wrote.detail);
+    rec(sc, "LT0", "토론에서 20자(상한) 유언을 쓰고 저장하면 서버가 같은 글을 돌려준다", wrote.ok, wrote.detail);
     await skipTo(hp, ht, "night");
     await untilGame(hp, (x) => x.phase === "night", 9000, "밤 도착");
     // 봇 마피아는 밤 시작 1~6초 사이에 방장을 고른다 — 그 뒤에 아침으로 넘긴다
@@ -3150,7 +3148,7 @@ async function nightSizesLetter(ctx, rec) {
     await skipTo(hp, ht, "morning");
     await untilGame(hp, (x) => x.phase === "morning", 6000, "아침 도착");
     if (aliveOf(ht.last()).includes(hostSeat)) throw new SetupError("방장이 이번 밤에 당하지 않음");
-    await morningLetterChecks(ctx, sc, rec, game, { appearMaxMs: 700 + 600, announceRe: /^암살당했습니다$/, wills: [WILL50], name: nickOf(ht.last(), hostSeat), earlyClose: true });
+    await morningLetterChecks(ctx, sc, rec, game, { appearMaxMs: 700 + 600, announceRe: /^암살당했습니다$/, wills: [WILL_AT_LIMIT], name: nickOf(ht.last(), hostSeat), earlyClose: true });
   } finally {
     await closeGame(game);
   }

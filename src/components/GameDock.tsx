@@ -16,7 +16,7 @@ type DockPane = Pane | "closed";
 const TABS = [
   { id: "chat", label: "채팅", icon: "chat" },
   { id: "people", label: "참가자", icon: "users" },
-  { id: "tools", label: "도구", icon: "toolbox" },
+  { id: "tools", label: "더 보기", icon: "more" },
 ] as const;
 
 const SWIPE_DISTANCE = 32;
@@ -250,7 +250,7 @@ export function GameDock({ scope, initialPane, peopleAction, preserveWriting, ke
       ) : null}
       {pane !== "closed" ? (
         <div ref={paneRef} id={id} className="mf-game-dock__pane" data-dock-pane={pane} role="region" inert={paused && pane !== "people"}
-          aria-label={pane === "chat" ? "채팅" : pane === "people" ? title : "도구"}>
+          aria-label={pane === "chat" ? "채팅" : pane === "people" ? title : "더 보기"}>
           <button type="button" className="mf-game-dock__handle" data-dock-handle="" aria-label="하단 패널 닫기"
             onPointerDown={startSwipe} onPointerUp={(event) => endSwipe(event, 1, close)}
             onPointerCancel={() => { gesture.current = undefined; }} onClick={(event) => afterSwipe(event, close)}>

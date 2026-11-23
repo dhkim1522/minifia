@@ -13,11 +13,11 @@ import type { Player, RoomState } from "./room";
 export const WILL_MIN_GAP_MS = 500;
 
 /**
- * 유언 상한(자소, 사용자 결정 2026-11-05 — 결정 0061-10 개정). 채팅·쪽지는 CHAT_MAX_GRAPHEMES(100) 그대로다.
+ * 유언 상한(그래핌). 채팅·쪽지는 CHAT_MAX_GRAPHEMES(100) 그대로다.
  * 서버(saveWill)와 시트(WillSheet 기본 max·카운터)가 이 한 값을 쓴다. 넘는 글은 채팅 100 초과처럼 자르지 않고 거절한다(BAD_MESSAGE).
- * 옛 상한(100)으로 이미 저장된 긴 유언은 정규화가 건드리지 않는다 — 쓴 사람의 글을 몰래 자르지 않고, 편지 3단 맞춤은 100자까지 견딘다.
+ * 이미 저장한 긴 유언은 원문을 유지하며, 같은 글을 다시 보내면 변경 없는 저장으로 처리한다.
  */
-export const WILL_MAX_GRAPHEMES = 50;
+export const WILL_MAX_GRAPHEMES = 20;
 
 export type WillError = "WRONG_PHASE" | "BAD_MESSAGE";
 
@@ -34,7 +34,8 @@ function readBody(raw: string, max: number): { erase: true } | { erase: false; t
 /**
  * 유언 저장(WILL-01). 검사 순서가 계약이다: 단계(지도 단계 dayAnnounce~morning 이 아니면 WRONG_PHASE) → 행위자(방에 있고 산 사람, 아니면 BAD_MESSAGE)
  * → 유언 단계(defense)면 처형자(verdict.candidate)가 아닌 사람은 WRONG_PHASE(22-11 D-16)
- * → 본문(공백뿐이면 지움, 아니면 sanitizeChatText 뒤 WILL_MAX_GRAPHEMES(50) 자소, 실패면 BAD_MESSAGE) → 같은 값이면 입력 객체 그대로 → 그 사람의 will 만 바뀐 새 상태(지움은 키째 삭제).
+ * → 저장된 글 원문과 같으면 입력 객체 그대로 → 본문(공백뿐이면 지움, 아니면 sanitizeChatText 뒤 WILL_MAX_GRAPHEMES 이내, 실패면 BAD_MESSAGE)
+ * → 정리 후 같은 값이면 입력 객체 그대로 → 그 사람의 will 만 바뀐 새 상태(지움은 키째 삭제).
  * 죽은 사람은 고칠 수 없다(E7 #36). 로비·역할 확인·종료는 받지 않는다.
  */
 export function saveWill(
@@ -49,6 +50,7 @@ export function saveWill(
   if (state.phase === "defense" && (state.verdict?.candidate === undefined || actor.seat !== state.verdict.candidate)) {
     return { ok: false, error: "WRONG_PHASE" };
   }
+  if (actor.will === text) return { ok: true, state };
   const body = readBody(text, WILL_MAX_GRAPHEMES);
   if (body === null) return { ok: false, error: "BAD_MESSAGE" };
   if (body.erase) {

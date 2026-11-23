@@ -386,8 +386,11 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-quote { margin: 0; width: 100%; box-sizing: border-box; padding: var(--space-sm) var(--space-md); border-radius: var(--noir-control-radius); background: color-mix(in srgb, var(--noir-inset) 96%, transparent); border: 1.5px solid var(--gray-100); font: var(--type-body); color: var(--gray-50); text-align: center; word-break: keep-all; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; opacity: 0; transition: opacity var(--dur-med) var(--ease-out); pointer-events: none; border-color: var(--noir-silver); }
 .mv-quote.is-on { opacity: 1; }
 .mv-quote.is-still { transition: none; }
-/* 공개 유언은 50자 전체를 큰 손글씨로 읽을 수 있게 표시한다. */
-.mv-quote--will { display: block; -webkit-line-clamp: unset; line-clamp: none; background: var(--stationery-paper, none) center / cover no-repeat, var(--noir-paper); color: var(--noir-ink); box-shadow: inset 0 0 0 1px var(--noir-paper-line), inset 0 0 0 3px var(--noir-paper); border-color: var(--noir-paper-line); font: 400 clamp(30px, 8.3vw, 32px)/1.25 var(--font-hand); }
+/* 공개 유언은 큰 손글씨와 규격 높이를 유지하고, 과거의 긴 유언도 읽을 수 있다. */
+.mv-quote--will { display: grid; grid-template-rows: minmax(0, 1fr); block-size: clamp(132px, 24vh, 176px); -webkit-line-clamp: unset; line-clamp: none; background: var(--stationery-paper, none) center / cover no-repeat, var(--noir-paper); color: var(--noir-ink); box-shadow: inset 0 0 0 1px var(--noir-paper-line), inset 0 0 0 3px var(--noir-paper); border-color: var(--noir-paper-line); font: 400 clamp(30px, 8.3vw, 32px)/1.25 var(--font-hand); }
+.mv-quote__will-text { align-content: safe center; overflow: auto; overscroll-behavior: contain; }
+.mv-quote__will-text > span { display: block; }
+.mv-quote__will-text[data-will-scroll] { pointer-events: auto; }
 /* 카드 자리: 독 아랫변 + 8(위 알림 .mv-toast--top 과 같은 윗변), 폭 = 화면 − 32. 누를 수 없다 */
 @media (prefers-reduced-motion: reduce) { .mv-quote { transition: none; } }
 

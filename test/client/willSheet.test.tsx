@@ -49,29 +49,29 @@ describe("WillSheet — 유언 한 번 쓰기 (WILL-01, 트레이서)", () => {
     expect(root.getAttribute("data-will-sheet")).toBe("will");
     expect(document.activeElement).toBe(area(container));
     expect(area(container).getAttribute("placeholder")).toBe("죽으면 모두에게 보여요");
-    expect(count(container)).toBe("0/50");
+    expect(count(container)).toBe("0/20");
   });
 
-  it("'안녕' 입력 → 카운터 2/50, [저장] → onSave('안녕') 한 번", () => {
+  it("'안녕' 입력 → 카운터 2/20, [저장] → onSave('안녕') 한 번", () => {
     const onSave = vi.fn();
     const { container } = render(<Harness onSave={onSave} />);
     fireEvent.change(area(container), { target: { value: "안녕" } });
-    expect(count(container)).toBe("2/50");
+    expect(count(container)).toBe("2/20");
     fireEvent.click(saveBtn(container));
     expect(onSave).toHaveBeenCalledTimes(1);
     expect(onSave).toHaveBeenCalledWith("안녕");
   });
 
-  it("51 그래핌 붙여넣기 → 50 그래핌까지 잘리고 카운터 50/50 (그래핌으로 센다, 서버 WILL_MAX_GRAPHEMES 와 같은 값)", () => {
-    expect(WILL_MAX_GRAPHEMES).toBe(50);
+  it("21 그래핌 붙여넣기 → 20 그래핌까지 잘리고 카운터 20/20", () => {
+    expect(WILL_MAX_GRAPHEMES).toBe(20);
     const { container } = render(<Harness />);
     const family = "👨‍👩‍👧"; // 여러 코드 포인트지만 그래핌 하나
-    fireEvent.change(area(container), { target: { value: "가".repeat(49) + family + "나" } });
-    expect(count(container)).toBe("50/50");
-    expect(area(container).value).toBe("가".repeat(49) + family);
-    fireEvent.change(area(container), { target: { value: "다".repeat(51) } });
-    expect(area(container).value).toBe("다".repeat(50));
-    expect(count(container)).toBe("50/50");
+    fireEvent.change(area(container), { target: { value: "가".repeat(19) + family + "나" } });
+    expect(count(container)).toBe("20/20");
+    expect(area(container).value).toBe("가".repeat(19) + family);
+    fireEvent.change(area(container), { target: { value: "다".repeat(21) } });
+    expect(area(container).value).toBe("다".repeat(20));
+    expect(count(container)).toBe("20/20");
   });
 
   it("max 를 주면(쪽지 100) 그 값으로 자르고 센다", () => {
@@ -135,6 +135,21 @@ describe("WillSheet — 유언 한 번 쓰기 (WILL-01, 트레이서)", () => {
 });
 
 describe("WillSheet — 한글 조합 중 저장·닫기 (연구 Pitfall 11)", () => {
+  it("20자 경계에서 조합 중인 글자를 유지하고 조합이 끝나면 상한을 적용한다", () => {
+    const prefix = "가".repeat(19);
+    const onSave = vi.fn();
+    const { container } = render(<Harness initial={prefix} onSave={onSave} />);
+    const ta = area(container);
+    fireEvent.compositionStart(ta);
+    fireEvent.change(ta, { target: { value: prefix + "한ㄱ" } });
+    expect(ta.value).toBe(prefix + "한ㄱ");
+    expect(count(container)).toBe("20/20");
+    fireEvent.compositionEnd(ta);
+    expect(ta.value).toBe(prefix + "한");
+    fireEvent.click(saveBtn(container));
+    expect(onSave).toHaveBeenCalledWith(prefix + "한");
+  });
+
   it("조합 중 [저장] → compositionend 전에는 0회, 끝난 뒤 확정 값으로 1회", () => {
     vi.useFakeTimers();
     const onSave = vi.fn();
@@ -325,7 +340,7 @@ describe("WillSheet — 유언 단계 [남기기]·남은 초 (22-11 P22-7·8)",
     const { container } = render(<Harness initial="안녕" saveLabel="남기기" savedLabel="남김" secondsLeft={7} />);
     const foot = container.querySelector(".mv-will__foot")!;
     expect([...foot.children].map((e) => e.classList[0]).join(",")).toBe("mv-will__count,mv-will__secs,mv-will__save");
-    expect(count(container)).toBe("2/50");
+    expect(count(container)).toBe("2/20");
     const secs = container.querySelector(".mv-will__secs") as HTMLElement;
     expect(secs.textContent).toBe("7초");
     expect(secs.getAttribute("aria-hidden")).toBe("true");

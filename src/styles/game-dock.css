@@ -205,8 +205,10 @@
 .mf-game-dock__pane .mf-room-chat .mv-chat__form::before { inset-inline: 1px; }
 .mf-game-dock__pane .mf-room-chat .mv-chat__log { padding-inline: 2px; }
 .mf-game-dock__pane .mf-room-toolbar { padding: 0; }
-.mf-game-dock__pane[data-dock-pane="tools"] .mf-room-toolbar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.mf-game-dock__pane[data-dock-pane="tools"] .mf-room-toolbar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .mf-game-dock__pane[data-dock-pane="tools"] .mf-room-tool { flex-direction: column; gap: 2px; min-height: 52px; height: auto; }
+.mf-game-dock__pane[data-dock-pane="tools"] [data-emote-button] { grid-area: 1 / 1; }
+.mf-game-dock__pane[data-dock-pane="tools"] [data-will-button] { grid-area: 1 / 2; }
 .mf-game-dock__pane .mf-room-chat__surface {
   position: static;
   margin-top: var(--space-xs);

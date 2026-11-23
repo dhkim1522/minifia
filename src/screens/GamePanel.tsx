@@ -164,7 +164,7 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
     },
   } : undefined;
 
-  // 밤 산 사람은 입력줄이 없어 아래 행동 줄의 [쪽지]·[유언] 이 대신한다(UI-SPEC 237행). 마피아 [쪽지], 그 밖 [유언] — 역할을 읽는 곳은 이 줄뿐이다.
+  // 재즈 바의 밤에는 하단 더 보기에서 유언을 연다. 독립 패널은 기존의 역할별 방식을 사용한다.
   // 채팅 입력줄이 있는 화면(낮·아침)은 깃펜, 산 사람 + 지도 단계에만(유령·로비·역할 확인에는 없다, UI-SPEC 281·286행)
   // 유언 단계에는 입력줄이 잠기고 마지막 유언을 중앙에서 쓴다.
   // 정답 공개(answerReveal, 23-07 P23-21): 3초 동안 큰 글을 보는 단계라 유언 단계와 같은 잠긴 입력줄을 쓴다(패널 높이 그대로) — 서버도 채팅을 받지 않는다(CHAT_PHASES 미가입).
@@ -174,14 +174,13 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
   const chatLocked = defense || answerReveal;
   const discussion = view.phase === "discussion";
   const penOn = !playtest && meAlive && MAP_PHASES.has(view.phase) && onOpenWill !== undefined && !chatLocked;
-  const showNoteRow = !playtest && nightFaces && myRole === "mafia" && onOpenNote !== undefined;
+  const showNoteRow = dock === undefined && !playtest && nightFaces && myRole === "mafia" && onOpenNote !== undefined;
   const noteHintId = useId();
-  const showWillRow = !playtest && nightFaces && myRole !== "mafia" && onOpenWill !== undefined;
   const selectionChat = dock !== undefined && (view.phase === "nomination" || firstBallotAtTable) && view.me.chat !== undefined;
   const playtestChat = discussion || selectionChat || (!chatLocked && view.me.chat === "ghost");
   const showChat = !presenting && chatChannelOk && (!playtest || playtestChat);
   const canReact = !chatLocked && (!playtest || discussion);
-  const showRoleTool = !presenting && (showNoteRow || showWillRow || penOn);
+  const showRoleTool = !presenting && (showNoteRow || penOn);
   const panelEmpty = !presenting && !showChat && !showRoleTool && !notice && !tableControls;
 
   const sendChat = (text: string): void => {
@@ -203,7 +202,7 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
       inputRef={inputRef}
       callInput={call?.chat}
       onInputFocus={onCallUsed}
-      suspect={suspect}
+      suspect={part === undefined ? suspect : undefined}
       will={showChat && penOn ? { open: willOpen, saved: willSaved, call: call?.will === true, request: openWillFrom } : undefined}
       actions={actions}
     />
@@ -215,7 +214,6 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
         if (noteReady && canSend) onOpenNote?.(event.currentTarget);
       }}>
       <V2Icon name="note" size={22} />
-      {dock ? <span>쪽지</span> : null}
     </button>
   ) : (
     <button type="button" className={call?.will ? "mf-room-tool is-call" : "mf-room-tool"}
@@ -235,7 +233,7 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
     ? [...binding.messages].reverse().find((message) => message.kind === "player" && message.ch === channel)
     : undefined;
   const firstBallotCount = firstBallotAtTable ? <PlaytestBallotCount view={view} count={firstBallot.count} /> : null;
-  const dockTools = !presenting && (chatTools || suspect !== undefined || roleTool)
+  const dockTools = !presenting && (chatTools || roleTool)
     ? roomChat("tools", showChat ? undefined : roleTool)
     : null;
 

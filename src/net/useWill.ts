@@ -18,6 +18,8 @@ import type { MutableRefObject } from "react";
 import { isAlive } from "../../shared/game/alive";
 import { sanitizeChatText } from "../../shared/game/chatRules";
 import { MAP_PHASES } from "../../shared/game/movement";
+import { WILL_MAX_GRAPHEMES } from "../../shared/game/will";
+import { countGraphemes } from "../../shared/nickname";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 
 /** 보낸 뒤 이 시간 안에 서버 값이 바뀌지 않으면 저장 실패로 본다 */
@@ -214,6 +216,8 @@ export function useWill({ view, send, canSend = true, offset = 0, rejected = 0, 
     (text: string) => {
       const n = normalized(text);
       if (n === (lastSent.current ?? (serverWill ?? ""))) return;
+      // 한글 조합 중에는 시트 상한을 아직 적용하지 않은 값이 잠시 초안에 있을 수 있다.
+      if (n.length > WILL_MAX_GRAPHEMES && countGraphemes(n) > WILL_MAX_GRAPHEMES) return;
       if (send({ t: "will", text }) === false) return;
       lastSent.current = n;
       quiet.current = true;
