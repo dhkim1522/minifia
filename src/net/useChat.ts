@@ -89,24 +89,29 @@ export function useChat({ store, connection, view, motion }: { store: ChatStore;
       if (line.to !== undefined && (line.kind === "whisper" || line.icon === "whisper")) {
         const w = whisperLine(line, mySeat, nameOf);
         if (w === null) return [];
-        const m: ChatPanelMessage = { key: line.key, kind: w.kind, whisper: w.whisper, icon: w.icon, text: w.text };
-        if (w.title !== undefined) m.title = w.title;
-        return [m];
+        return [{ key: line.key, ...w }];
       }
       if (line.kind === "card" && line.card) {
         // 카드는 서버 k 줄과 이 화면의 경찰 카드뿐이다. 서버 카드의 제목은 좌석 닉네임으로 만든다(UI-SPEC 427행).
         const m: ChatPanelMessage = { key: line.key, kind: "card", card: line.card, text: line.text, icon: line.card === "will" ? "quill" : line.card === "note" ? "note" : "eye" };
-        if (line.card === "will") m.title = CHAT_TEXT.cardWill(line.seat === undefined ? "" : personOf(line.key, line.seat)?.nickname ?? "");
-        else if (line.card === "note") {
+        if (line.card === "will") {
+          const name = line.seat === undefined ? "" : personOf(line.key, line.seat)?.nickname ?? "";
+          m.title = CHAT_TEXT.cardWill(name);
+          if (name && line.seat !== undefined) m.titleParts = [{ seat: line.seat, name }, CHAT_TEXT.cardWill("")];
+        } else if (line.card === "note") {
           m.title = CHAT_TEXT.cardNote;
           m.tone = "mafia";
-        } else m.title = line.title ?? "";
+        } else {
+          m.title = line.title ?? "";
+          if (m.title && line.seat !== undefined) m.titleParts = [{ seat: line.seat, name: m.title }];
+        }
         return [m];
       }
       if (line.kind === "whisper") return []; // 받는 사람 없는 귓속말 본문은 그리지 않는다
       if (line.kind !== "player") {
         const m: ChatPanelMessage = { key: line.key, kind: line.kind === "card" ? "system" : line.kind, text: line.text };
         if (line.icon) m.icon = line.icon;
+        if (line.textParts) m.textParts = line.textParts;
         return [m];
       }
       const m: ChatPanelMessage = { key: line.key, kind: "player", text: line.text };

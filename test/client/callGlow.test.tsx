@@ -41,10 +41,10 @@ const face = (seat: number) => ({ seat, name: `이름${seat}`, img: `/characters
 
 describe("빛남 부품 (HOST-03·04)", () => {
   it("NameTag call → 이름표에 is-call, call 없으면 없다", () => {
-    const on = render(<HeadStack name="민준" color="var(--seat-1)" call />);
+    const on = render(<HeadStack name="민준" seat={0} call />);
     expect(on.container.querySelector(".mv-tag.is-call")).not.toBeNull();
     on.unmount();
-    const off = render(<HeadStack name="민준" color="var(--seat-1)" />);
+    const off = render(<HeadStack name="민준" seat={0} />);
     expect(off.container.querySelector(".is-call")).toBeNull();
   });
 

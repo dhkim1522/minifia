@@ -16,10 +16,10 @@
 /* 이름표 한 개: 런타임이 transform(translate + translate(-50%, -100%))·opacity·z-index(순위)·data-front 를 매 프레임 쓴다. */
 .mf-world__tag { position: absolute; left: 0; top: 0; will-change: transform; }
 
-/* 겹친 맨 앞 이름표의 어두운 면은 불투명하게 한다. 지목한 이름표의 종이 면은 그대로 쓴다. */
+/* 겹친 맨 앞 이름표의 어두운 면은 불투명하게 한다. */
 .mf-world__tag[data-front="true"] .mv-tag:not(.is-mine) { background: var(--overlay-ink-strong); }
 
-/* 모든 맵에서 공유하는 A안 이름표. 자신의 이름은 밝은 면으로 구분하고 전체 이름과 선택 상태를 보존한다. */
+/* 모든 맵에서 공유하는 이름표. 자신의 이름은 밝은 테두리로 구분한다. */
 [data-game-stage][data-phase="discussion"] { --mf-discussion-header-height: 61px; }
 [data-game-stage][data-phase="discussion"] .mf-world__tags {
   clip-path: inset(calc(var(--mf-discussion-header-height) + var(--mf-vv-top, 0px)) 0 0);
@@ -37,11 +37,9 @@
 }
 .mf-world .mf-world__tag[data-front="true"] .mv-tag:not(.is-mine, .is-me) { background: #172234; }
 .mf-world .mv-tag.is-me:not(.is-mine) {
-  background: #e2edf9;
-  color: #273854;
-  box-shadow: 0 2px 8px #11162565;
+  background: #172234;
+  box-shadow: inset 0 0 0 1.5px var(--noir-paper), 0 2px 8px #11162565;
 }
-.mf-world .mv-tag__dot { display: none; }
 .mf-world .mv-tag__self { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 @media (prefers-reduced-motion: reduce) {
   .mf-world .mv-tag.is-blink { outline: 2px solid var(--gray-100); }

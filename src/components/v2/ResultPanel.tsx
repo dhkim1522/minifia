@@ -9,7 +9,6 @@ import type { ResultLogChatLine, ResultLogWhisperLine } from "../../../shared/pr
 import type { AnimalId } from "../../../shared/game/animals";
 import type { ResultLogSnapshot } from "../../net/resultLogStore";
 import { PlayerPortrait } from "../PlayerPortrait";
-import { playerColor } from "../../game/playerIdentity";
 import { V2Icon } from "./V2Icon";
 import type { V2IconName } from "./V2Icon";
 
@@ -18,7 +17,7 @@ import type { V2IconName } from "./V2Icon";
 // 마피아·유령·귓속말 탭은 resultLog 프레임으로 받은 값만 읽는다 — 탭을 열기 전에는 본문이 DOM 에 없다(T-11-23). 기록 탭 몸통은 logSlot 이 채운다(22-12: 일차 카드 띠·하루 상세·지목·찬반 줄은 지웠다, D-14).
 // 확장(expanded)이면 패널이 위로 자라고(높이 expandedHeight) 입력줄(allSlot)은 DOM 에서 빠지며 알약 자리(pill, 11-12)만 폭 전체로 남는다.
 // 18.1(P181-7): 보이는 탭이 하나(전체)뿐이면 탭 행을 그리지 않는다 — 결과 화면은 RESULT_TABS_SHOWN 이 전체 하나라 탭 행·확장·기록 본문이 마운트되지 않는다.
-// 줄 모양은 게임 중 채팅 줄과 같은 클래스(mv-chat__msg·dot·name·text)를 쓴다. 닉네임·본문은 React 텍스트 노드로만 그린다(T-11-22).
+// 줄 모양은 게임 중 채팅 줄과 같은 클래스(mv-chat__msg·name·text)를 쓴다. 닉네임·본문은 React 텍스트 노드로만 그린다(T-11-22).
 
 export type ResultTab = ResultTabId;
 
@@ -114,7 +113,6 @@ function WhisperRows({ lines, contacts, animals }: ResultIdentities & { lines: r
       {withDividers(lines, dayDivider, (l, i) => (
         <div key={`l${i}`} className="mf-result__whisper" data-result-whisper="" data-seat={l.seat} data-to={l.to}>
           <span className="mf-result__whisper-head">
-            <span className="mf-result__whisper-dot" style={{ background: playerColor(l.seat, animals?.get(l.seat)) }} />
             <PlayerPortrait className="mf-result__face" seat={l.seat} animal={animals?.get(l.seat)} label={contacts.get(l.seat) ?? ""} />
             <Arrow />
             <PlayerPortrait className="mf-result__face" seat={l.to} animal={animals?.get(l.to)} label={contacts.get(l.to) ?? ""} />

@@ -52,9 +52,8 @@
 }
 .mf-journal__row:last-child { border-bottom: 0; }
 .mf-journal__d { white-space: nowrap; }
-.mf-journal__w { display: inline-flex; align-items: center; gap: var(--space-xs); min-width: 0; color: var(--gray-50); }
+.mf-journal__w { display: inline-flex; align-items: center; min-width: 0; color: var(--gray-50); }
 .mf-journal__w b { font-weight: 700; }
-.mf-journal__dot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
 /* 붉은 결과는 밝은 속지 결 위에서도 읽히도록 색을 밝힌다. */
 .mf-journal__rz--bad { color: color-mix(in srgb, var(--crimson-300) 60%, var(--gray-50)); font-weight: 700; }
 .mf-journal__rz--ok { color: var(--gray-50); font-weight: 400; }
@@ -132,7 +131,6 @@
 /* 받은 사람별로 의심딱지 수를 묶는다. */
 .mf-suspect__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-xs); }
 .mf-suspect__row { display: flex; align-items: center; gap: var(--space-xs); min-height: 32px; padding: 0 var(--space-sm); border-radius: var(--radius-md); }
-.mf-suspect__dot { flex: none; width: 12px; height: 12px; border-radius: 50%; }
 .mf-suspect__nick { flex: 1 1 0; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 20px; }
 .mf-suspect__nick--to { color: var(--gray-50); font-weight: 700; }
 .mf-suspect__total { flex: none; color: var(--gray-300); }

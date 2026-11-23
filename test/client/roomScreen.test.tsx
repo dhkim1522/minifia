@@ -885,7 +885,9 @@ describe("RoomScreen: 첫날 답안 발표", () => {
     setView(play("dayAnnounce", own));
     rerender(ui());
     expect(suspect()).toBeNull();
-    expect(screen.getByText("민수 (나)")).not.toBeNull();
+    const ownSpeaker = container.querySelector("[data-answer-speaker]");
+    expect(ownSpeaker?.textContent).toBe("민수 (나)");
+    expect(ownSpeaker?.querySelector('[data-player-name="0"]')?.textContent).toBe("민수");
     expect(stage.props?.scene?.table?.focus).toBeUndefined();
     const day = play("discussion");
     setView({ ...day, me: { ...day.me, suspectTo: 1 }, day: { ...day.day!, suspects: [{ from: 0, to: 1 }] } });

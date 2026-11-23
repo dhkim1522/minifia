@@ -89,9 +89,16 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
     // 입장·퇴장은 위 알림과 같은 문구로 기록 칸에도 시스템 줄로 남긴다. 재접속 띠가 떠 있어도 기록은 남기고,
     // 재연결 첫 상태(prevView 가 비어 diff 가 빈 결과)에서는 만들지 않는다. 방장 변경은 crown 시스템 줄로 남긴다(UI-SPEC E.1, 로컬 생성·저장 안 함).
     const at = Date.now() + offsetRef.current; // 서버 줄은 서버 시각이다 — 같은 기준으로 끼워 넣는다(WR-02)
-    for (const p of diff.joined) chat.addSystem(CHAT_TEXT.joined(p.nickname), { scope: "all", at });
-    for (const p of diff.left) chat.addSystem(CHAT_TEXT.left(p.nickname), { scope: "all", at });
-    if (diff.newHost) chat.addSystem(CHAT_TEXT.hostChanged(diff.newHost.nickname), { scope: "all", icon: "crown", at });
+    for (const p of diff.joined) {
+      chat.addSystem(CHAT_TEXT.joined(p.nickname), { scope: "all", at, textParts: [{ seat: p.seat, name: p.nickname }, CHAT_TEXT.joined("")] });
+    }
+    for (const p of diff.left) {
+      chat.addSystem(CHAT_TEXT.left(p.nickname), { scope: "all", at, textParts: [{ seat: p.seat, name: p.nickname }, CHAT_TEXT.left("")] });
+    }
+    if (diff.newHost) {
+      const { seat, nickname } = diff.newHost;
+      chat.addSystem(CHAT_TEXT.hostChanged(nickname), { scope: "all", icon: "crown", at, textParts: [CHAT_TEXT.hostChanged(""), { seat, name: nickname }] });
+    }
   }, [view, epoch, bannerVisible, show, chat]);
 
   // 열려 있는 시트. 화면이 기억하는 상태는 이것과 [시작] 잠금뿐이다.

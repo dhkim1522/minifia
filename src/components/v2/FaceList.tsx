@@ -1,9 +1,10 @@
 import { useState } from "react";
 import "../../styles/v2.css";
+import { PlayerName } from "../PlayerName";
 import { V2Icon } from "./V2Icon";
 
 // 얼굴 목록(FaceList). design/v2.0/design-system/components/FaceList 와 bundle.css 124-132 를 React 19 로 옮겼다(승인 2026-10-31, 9페이즈 NIGHT-09).
-// 깜깜한 밤에 경찰(조사)·의사(살리기)가 비친 얼굴을 눌러 대상을 고른다. 4열 격자, 얼굴 그림 + 자리 구분색 점 + 닉네임.
+// 깜깜한 밤에 경찰(조사)·의사(살리기)가 비친 얼굴을 눌러 대상을 고른다. 4열 격자, 얼굴 그림 + 좌석색 닉네임.
 // 승인 모양에서 하나를 바꿨다: faces 의 id 대신 seat 를 쓴다(서버 pick 의 target 이 seat 라 변환이 없다).
 // 마감 전까지 바꿀 수 있지만 같은 칸을 다시 눌러도 취소되지 않는다(onPick 을 부르지 않는다).
 // 이 화면은 역할마다 생김새가 같아야 해서 진홍·놋쇠를 쓰지 않는다. 밤 목록은 아이콘을 주지 않는다(15페이즈 D-05 — 고른 칸의 모양이 역할마다 같다).
@@ -82,10 +83,7 @@ export function FaceList({ faces, value, onPick, icon, label = "대상", disable
                 onError={() => setFailed((prev) => new Set(prev).add(f.seat))}
               />
             )}
-            <span className="mv-face__name">
-              <i className="mv-face__dot" style={{ background: f.color }} />
-              {f.name}
-            </span>
+            <PlayerName className="mv-face__name" seat={f.seat}>{f.name}</PlayerName>
             {on && (
               <span className="mv-face__mark" data-mark-icon={icon ?? "check"}>
                 <V2Icon name={icon ?? "check"} size={18} />

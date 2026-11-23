@@ -88,7 +88,7 @@ describe("Journal 머리", () => {
 });
 
 describe("Journal 줄", () => {
-  it("경찰: 오름차순 입력도 최신이 위, 한 줄은 일차 | 점+이름 | 결과 순서", () => {
+  it("경찰: 오름차순 입력도 최신이 위, 한 줄은 일차 | 이름 | 결과 순서", () => {
     const { container } = renderJournal("police");
     const rows = rowsOf(container);
     expect(rows.length).toBe(2);
@@ -103,12 +103,12 @@ describe("Journal 줄", () => {
     expect(order).toEqual(["mf-journal__d", "mf-journal__w", "mf-journal__rz", "mf-journal__nw"]);
   });
 
-  it("색깔점은 이름표와 같은 (seat % 8) + 1 좌석색이다", () => {
+  it("대상 닉네임은 무대와 같은 좌석색을 사용한다", () => {
     const { container } = renderJournal("police");
     const rows = rowsOf(container);
-    expect(cell(rows[0]!, "w").querySelector<HTMLElement>("i.mf-journal__dot")?.getAttribute("style")).toContain("var(--seat-3)");
-    expect(cell(rows[1]!, "w").querySelector<HTMLElement>("i.mf-journal__dot")?.getAttribute("style")).toContain("var(--seat-2)");
-    expect(cell(rows[1]!, "w").querySelector("i")?.getAttribute("aria-hidden")).toBe("true");
+    expect(cell(rows[0]!, "w").querySelector('[data-player-name="2"]')?.getAttribute("style")).toContain("var(--player-name-3)");
+    expect(cell(rows[1]!, "w").querySelector('[data-player-name="1"]')?.getAttribute("style")).toContain("var(--player-name-2)");
+    expect(cell(rows[1]!, "w").querySelector("i")).toBeNull();
   });
 
   it("마피아: died true → 사망(bad), died false → 생존(ok) — 의사가 막은 것을 알리는 다른 글자가 없다", () => {

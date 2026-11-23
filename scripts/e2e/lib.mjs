@@ -1480,10 +1480,9 @@ export function cssAlpha(color) {
   return Number.isFinite(v) ? v : Number.NaN;
 }
 
-/** 이름표가 겹치면 z-index 순서와 맨 앞의 불투명도를 검사한다.
- * 모든 이름표에서 실제 닉네임 글자 대비와 자신의 밝은 면·다른 사람의 어두운 면을 확인한다. */
+/** 이름표 쌓임과 어두운 바탕, 닉네임 대비, 본인·선택 테두리를 검사한다. */
 export function tagStackChecks(tags) {
-  const label = "내 이름표 맨 위·본인과 선택한 대상의 밝은 면·상대의 어두운 면·글자 대비";
+  const label = "내 이름표 맨 위·본인과 선택 대상에 테두리·어두운 면·닉네임 대비";
   if (!Array.isArray(tags) || tags.length === 0) return result("NT3", label, ["측정값 없음(이름표가 없음)"]);
   const bad = [];
   const touching = tags.map(() => []);
@@ -1510,14 +1509,15 @@ export function tagStackChecks(tags) {
       bad.push(`자리 ${t.seat} 측정값 없음(면 색)`);
       return;
     }
-    const bright = t.me || t.selected;
+    const marked = t.me || t.selected;
     const luminance = relLuminance(face);
-    if (bright ? luminance < 0.6 : luminance > 0.10) bad.push(`자리 ${t.seat} ${bright ? "밝은" : "어두운"} 이름표 면 기대, 측정 ${t.face}`);
+    if (luminance > 0.10) bad.push(`자리 ${t.seat} 어두운 이름표 면 기대, 측정 ${t.face}`);
+    if (marked && t.stateEdge !== true) bad.push(`자리 ${t.seat} 본인·선택 테두리 없음`);
     if (contrast === null || contrast < 4.5) bad.push(`자리 ${t.seat} 닉네임 대비 ${contrast ?? "측정값 없음"} (4.5 이상)`);
     const nearby = touching[i];
     const isFront = nearby.length > 0 && nearby.every((j) => Number.isFinite(t.z) && Number.isFinite(tags[j].z) && t.z > tags[j].z);
-    if (bright || isFront) {
-      if (alpha < TAG_FRONT_ALPHA_MIN) bad.push(`자리 ${t.seat} 밝은 면 또는 맨 앞 면 알파 ${alpha} < ${TAG_FRONT_ALPHA_MIN}`);
+    if (marked || isFront) {
+      if (alpha < TAG_FRONT_ALPHA_MIN) bad.push(`자리 ${t.seat} 본인·선택 또는 맨 앞 면 알파 ${alpha} < ${TAG_FRONT_ALPHA_MIN}`);
     } else if (alpha < 0.9 || (nearby.length === 0 && alpha > TAG_BASE_ALPHA_MAX)) {
       bad.push(`자리 ${t.seat} 상대 이름표 기본 면 알파 ${alpha}`);
     }

@@ -489,7 +489,9 @@ describe("useChat: 카드 줄 매핑 (MORN-02)", () => {
     receive({ t: "chatLog", lines: [line(1, 3, "범인은 2번", { k: "will" }), line(2, 3, "다음은 너", { k: "note" })] });
     const [will, note] = result.current.messages;
     expect(`${will?.kind}|${will?.card}|${will?.title}|${will?.icon}|${will?.text}|${will?.tone}`).toBe("card|will|서연 님의 유언|quill|범인은 2번|undefined");
+    expect(will?.titleParts).toEqual([{ seat: 3, name: "서연" }, " 님의 유언"]);
     expect(`${note?.kind}|${note?.card}|${note?.title}|${note?.icon}|${note?.text}|${note?.tone}`).toBe("card|note|쪽지|note|다음은 너|mafia");
+    expect(note?.titleParts).toBeUndefined();
   });
 
   it("라이브 카드는 2800ms 뒤에야 메시지에 나타난다", () => {
@@ -539,9 +541,10 @@ describe("useChat: 카드 줄 매핑 (MORN-02)", () => {
 
   it("로컬 경찰 카드는 제목·본문을 그대로 eye 카드 메시지로 넘긴다", () => {
     const { result } = mount(cardView());
-    act(() => store.addLocalCard({ icon: "eye", title: "민준", text: "마피아 아님", at: 5000 }));
+    act(() => store.addLocalCard({ icon: "eye", seat: 2, title: "민준", text: "마피아 아님", at: 5000 }));
     const m = result.current.messages[0];
     expect(`${m?.kind}|${m?.card}|${m?.title}|${m?.icon}|${m?.text}|${m?.tone}`).toBe("card|eye|민준|eye|마피아 아님|undefined");
+    expect(m?.titleParts).toEqual([{ seat: 2, name: "민준" }]);
   });
 
   it("사람 줄은 본문이 '[유언]' 이어도 player 메시지다", () => {

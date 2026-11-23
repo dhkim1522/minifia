@@ -4,13 +4,14 @@ import { SUSPECT_TEXT } from "../../game/suspectView";
 import type { RoleId } from "../../../shared/game/roles";
 import type { BadgeId } from "../../../shared/protocol";
 import type { ReactNode } from "react";
+import { PlayerName } from "../PlayerName";
 import { ClaimBadge } from "./ClaimBadge";
 import { RoleChip } from "./RoleChip";
 import { V2Icon } from "./V2Icon";
 import { VoteBadge } from "./VoteBadge";
 
 // 이름표(NameTag)와 머리 위 쌓임(HeadStack). design/v2.0/design-system/components/bundle.js :81·:98 을 React 19 로 옮겼다.
-// 같은 마크업·클래스 이름(mv-tag·mv-head·mv-typing)을 쓴다. 속성은 name·color·me·away 와 typing(입력 중 칸)이다.
+// 같은 클래스 이름(mv-tag·mv-head·mv-typing)을 쓰고, 닉네임 색은 공개 좌석으로 정한다.
 // 입력 중 칸은 7페이즈(07-03), 직업 표시·도장·배지와 mine·done·blink·ghost 는 8페이즈(08-05)가 더했다.
 // 쌓임 순서(위 → 아래): typing → RoleChip(role) → VoteBadge(count·lead) → 이름표. (22-13: 유력 도장 SureStamp·sure 는 선두·과반 연출이 없어져 지웠다)
 // role 은 부르는 쪽(유령 화면 분기)이 넘길 때만 칩을 그린다 — 이 부품은 역할을 스스로 판단하지 않는다(T-08-20).
@@ -33,13 +34,12 @@ export const suspectChipShown = (count: number | undefined, mine: boolean): bool
 
 export interface NameTagProps {
   name: string;
-  /** 자리 구분색 — `var(--seat-1)` ~ `var(--seat-8)` 값 */
-  color: string;
+  seat: number;
   /** 내 캐릭터: 닉네임 뒤에 " (나)" 와 안쪽 테두리(이름이 "나" 면 접미 없이 테두리만) */
   me?: boolean;
-  /** 연결 끊김: 불투명도 0.55, 점 gray-700 */
+  /** 연결 끊김: 점선 테두리 */
   away?: boolean;
-  /** 내가 지목·선택한 사람: gray-100 면·night-900 글자 + 손가락 */
+  /** 내가 지목·선택한 사람: 밝은 테두리 + 손가락 */
   mine?: boolean;
   /** 찬반에서 투표를 마친 사람: 이름 뒤 체크 16 (접근성 이름 "투표함") */
   done?: boolean;
@@ -57,14 +57,13 @@ export interface NameTagProps {
   children?: ReactNode;
 }
 
-export function NameTag({ name, color, me, away, mine, done, doneLabel, blink, call, ghost, suspect, children }: NameTagProps) {
+export function NameTag({ name, seat, me, away, mine, done, doneLabel, blink, call, ghost, suspect, children }: NameTagProps) {
   const cls = ["mv-tag", me && "is-me", away && "is-away", blink && "is-blink", call && "is-call", mine && "is-mine", ghost && "is-ghost"]
     .filter(Boolean)
     .join(" ");
   return (
     <span className={cls}>
-      <span className="mv-tag__dot" style={{ background: color }} />
-      <span className="mv-tag__name">{name}{me && name !== ME_NAME ? <span className="mv-tag__self"> (나)</span> : null}</span>
+      <PlayerName className="mv-tag__name" seat={seat}>{name}{me && name !== ME_NAME ? <span className="mv-tag__self"> (나)</span> : null}</PlayerName>
       {mine ? <V2Icon name="point" size={16} label={MINE_LABEL} /> : null}
       {done ? (
         <span className="mv-tag__done">
@@ -102,7 +101,7 @@ export type HeadStackProps = NameTagProps & {
 };
 
 // 바닥 가운데를 캐릭터 머리 꼭대기에 translate(-50%, -100%) 로 놓는 일은 쓰는 쪽(이름표 층, 06-13)이 한다.
-export function HeadStack({ name, color, me, away, typing, role, count, lead, mine, done, doneLabel, blink, call, ghost, suspect, claim, claimSwapped, claimPop, claimNotice }: HeadStackProps) {
+export function HeadStack({ name, seat, me, away, typing, role, count, lead, mine, done, doneLabel, blink, call, ghost, suspect, claim, claimSwapped, claimPop, claimNotice }: HeadStackProps) {
   const hasBadge = count !== undefined && count >= 1;
   return (
     <div
@@ -123,7 +122,7 @@ export function HeadStack({ name, color, me, away, typing, role, count, lead, mi
       ) : null}
       {role ? <RoleChip role={role} /> : null}
       {hasBadge ? <VoteBadge count={count} lead={lead} /> : null}
-      <NameTag name={name} color={color} me={me} away={away} mine={mine} done={done} doneLabel={doneLabel} blink={blink} call={call} ghost={ghost} suspect={suspect}>
+      <NameTag name={name} seat={seat} me={me} away={away} mine={mine} done={done} doneLabel={doneLabel} blink={blink} call={call} ghost={ghost} suspect={suspect}>
         {claim !== undefined ? (
           <ClaimBadge key={claimPop ?? 0} claim={claim} swapped={claimSwapped === true} pop={claimPop !== undefined && claimPop > 0} notice={claimNotice === true} />
         ) : null}

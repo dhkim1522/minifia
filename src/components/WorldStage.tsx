@@ -4,7 +4,6 @@ import { isAlive } from "../../shared/game/alive";
 import { phaseKey } from "../../shared/game/audience";
 import type { ClientMessage, EmoteId, MapId, PublicPlayer, RoomView } from "../../shared/protocol";
 import { MOVE_COORD_LIMIT } from "../../shared/protocol";
-import { playerColor } from "../game/playerIdentity";
 import { useReducedMotion } from "../net/useReducedMotion";
 import { HEADER_BOTTOM, PANEL_HEIGHT } from "../world/camera";
 import { createTapTracker, TAP_SLOP_PX } from "../world/input";
@@ -122,7 +121,7 @@ export interface WorldStageProps {
   /** 캔버스·입력 면 위, 이름표 층 아래에 깔리는 장식(시민 편 긴장 비네트). 터치를 막지 않는 부품만 넣는다 */
   underlay?: ReactNode;
   /** 좌석별 이름표 쌓임 속성(득표 배지·선두·도장·내 선택·투표함·직업 칩 …)과 발밑 고리 종류 */
-  tagProps?: (seat: number) => Partial<Omit<HeadStackProps, "name" | "color">> & { ring?: RingKind; turn?: boolean };
+  tagProps?: (seat: number) => Partial<Omit<HeadStackProps, "name" | "seat">> & { ring?: RingKind; turn?: boolean };
   onNotice(text: string): void;
   /** 있을 때만 연결이 끊긴 사람의 이름표가 [내보내기] 버튼이 된다(대기실 전용 — 게임 중 서버는 CANNOT_KICK) */
   onKick?(seat: number, nickname: string): void;
@@ -447,7 +446,7 @@ export function WorldStage(props: WorldStageProps) {
           const stack = (
             <HeadStack
               name={p.nickname}
-              color={playerColor(p.seat, p.animal)}
+              seat={p.seat}
               me={me}
               away={away}
               typing={!hideTyping && props.typingSeats?.has(p.seat) === true}

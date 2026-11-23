@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type CSSProperties, type ReactNode, type Ref } from "react";
 import "../../styles/v2.css";
 import { CHAT_MAX_GRAPHEMES } from "../../../shared/game/chatRules";
-import { CHAT_TEXT } from "../../game/chatText";
+import { CHAT_TEXT, type ChatTextPart } from "../../game/chatText";
 import { AUTO_SCROLL_SLOP_PX, DUP_SUBMIT_MS, IME_WAIT_MS, LOG_FADE_H, LOG_H, LOG_OPEN_MAX, OPEN_STAGE_MIN, TAIL_WINDOW_MS } from "../../game/chatUi";
 import type { EmoteId } from "../../../shared/protocol";
 import type { AnimalId } from "../../../shared/game/animals";
@@ -39,7 +39,7 @@ export interface ChatPanelMessage {
   /** 귓속말 줄의 보임: public = 공개 사실 줄(system), in = 받은 비공개 블록, out = 보낸 비공개 블록. data-whisper 값이다 */
   whisper?: "public" | "in" | "out";
   text: string;
-  /** 자리 번호 0~7 → 구분색 var(--seat-(n+1)) */
+  /** 사람 줄의 공개 좌석 */
   seat?: number;
   animal?: AnimalId;
   name?: string;
@@ -50,6 +50,9 @@ export interface ChatPanelMessage {
   card?: "will" | "note" | "eye";
   /** 카드 제목 */
   title?: string;
+  /** 서버·도구가 특정한 닉네임만 색을 적용한다. 사용자가 쓴 본문은 일반 텍스트다. */
+  textParts?: readonly ChatTextPart[];
+  titleParts?: readonly ChatTextPart[];
   /** mafia = 쪽지 카드(진홍 테두리·제목) */
   tone?: "mafia";
 }

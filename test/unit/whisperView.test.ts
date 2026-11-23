@@ -83,17 +83,17 @@ describe("whisperUsed / whisperTargets", () => {
 describe("whisperLine: 줄 모델 (UI-SPEC B-3)", () => {
   it("공개 사실 줄: {A} → {B} 귓속말, system + whisper 아이콘, data 표식 public", () => {
     const m = whisperLine({ kind: "system", icon: "whisper", seat: 1, to: 2, text: "" }, 0, nameOf);
-    expect(m).toEqual({ kind: "system", whisper: "public", icon: "whisper", text: "영희 → 서준 귓속말" });
+    expect(m).toEqual({ kind: "system", whisper: "public", icon: "whisper", text: "영희 → 서준 귓속말", textParts: [{ seat: 1, name: "영희" }, " → ", { seat: 2, name: "서준" }, " 귓속말"] });
   });
 
   it("받은 줄: 내가 받는 사람이면 side in, 제목 '{A} → 나' + 본문", () => {
     const m = whisperLine({ kind: "whisper", seat: 1, to: 0, text: "비밀이에요" }, 0, nameOf);
-    expect(m).toEqual({ kind: "whisper", whisper: "in", icon: "whisper", title: "영희 → 나", text: "비밀이에요" });
+    expect(m).toEqual({ kind: "whisper", whisper: "in", icon: "whisper", title: "영희 → 나", titleParts: [{ seat: 1, name: "영희" }, " → ", { seat: 0, name: "나" }], text: "비밀이에요" });
   });
 
   it("보낸 줄: 내가 보낸 사람이면 side out, 제목 '나 → {B}' + 본문", () => {
     const m = whisperLine({ kind: "whisper", seat: 0, to: 3, text: "믿어요" }, 0, nameOf);
-    expect(m).toEqual({ kind: "whisper", whisper: "out", icon: "whisper", title: "나 → 지아", text: "믿어요" });
+    expect(m).toEqual({ kind: "whisper", whisper: "out", icon: "whisper", title: "나 → 지아", titleParts: [{ seat: 0, name: "나" }, " → ", { seat: 3, name: "지아" }], text: "믿어요" });
   });
 
   it("당사자(보낸·받은 사람)에게는 사실 줄이 와도 그리지 않는다 — 비공개 줄 하나만 본다", () => {

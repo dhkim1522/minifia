@@ -187,7 +187,7 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
     }
     // 경찰 조사 결과 채팅 카드(이 화면에만): 채널 기록이 아니라 화면이 만든 내 일지 카드다 — 재접속 복원 대상이 아니다(L8, T-09-40)
     for (const c of ev.localCards ?? []) {
-      later(c.at, () => chat.addLocalCard({ icon: "eye", title: c.title, text: c.text, at: Date.now() }));
+      later(c.at, () => chat.addLocalCard({ icon: "eye", seat: c.seat, title: c.title, text: c.text, at: Date.now() }));
     }
     for (const a of announces) {
       later(a.at, () => {

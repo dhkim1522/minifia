@@ -1,6 +1,7 @@
 import type { KeywordAnswerRow, RoomView } from "../../shared/protocol";
 import { SUSPECT_TEXT } from "../game/suspectView";
 import { Button } from "./Button";
+import { PlayerName } from "./PlayerName";
 import { PlayerPortrait } from "./PlayerPortrait";
 import { V2Icon } from "./v2/V2Icon";
 import "../styles/answer-presentation.css";
@@ -21,7 +22,7 @@ export function AnswerPresentation({ turn, player, mySeat, marked, canSuspect, o
       <div className="mf-answer-presentation__answer" aria-live="polite" aria-atomic="true">
         <div className="mf-answer-presentation__speaker">
           <PlayerPortrait seat={turn.seat} animal={player?.animal} className="mf-answer-presentation__portrait" />
-          <span data-answer-speaker="">{name}{turn.seat === mySeat ? " (나)" : ""}</span>
+          <span data-answer-speaker=""><PlayerName seat={player?.seat}>{name}</PlayerName>{turn.seat === mySeat ? " (나)" : ""}</span>
           <span className="mf-answer-presentation__order" aria-label={`${turn.total}명 중 ${turn.order}번째`}>{turn.order}/{turn.total}</span>
         </div>
         <p className="mf-answer-presentation__text" data-answer-content="" data-answer-none={turn.text === null ? "" : undefined}>{turn.text ?? "미제출"}</p>

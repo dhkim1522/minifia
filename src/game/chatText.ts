@@ -6,6 +6,9 @@
 
 import type { EmoteId } from "../../shared/protocol";
 
+/** 이미 공개가 허용된 좌석·닉네임과 고정 문구로 구성한 채팅 안내. */
+export type ChatTextPart = string | { seat: number; name: string };
+
 export const CHAT_TEXT = {
   logLabel: "채팅 기록",
   // 접힌 기록 칸 전체를 덮는 단추의 접근성 이름(18.1)

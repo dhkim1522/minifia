@@ -562,6 +562,7 @@ export async function readWorld(page) {
       const ncs = name ? getComputedStyle(name) : null;
       const tcs = tag ? getComputedStyle(tag) : null;
       const z = parseInt(getComputedStyle(el).zIndex, 10);
+      const selected = tag?.classList.contains("is-mine") ?? false;
       return {
         seat: Number(el.getAttribute("data-seat")),
         me: el.getAttribute("data-me") === "true",
@@ -575,7 +576,8 @@ export async function readWorld(page) {
         z: Number.isFinite(z) ? z : Number.NaN,
         face: tcs ? tcs.backgroundColor : "",
         ink: ncs?.color ?? "",
-        selected: tag?.classList.contains("is-mine") ?? false,
+        selected,
+        stateEdge: tcs?.boxShadow.includes(selected ? "2px inset" : "1.5px inset") ?? false,
         opacity: Number(getComputedStyle(el).opacity),
       };
     });

@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { AnimalId } from "../../shared/game/animals";
 import { faceSrc } from "../net/assets";
 import { playerColor } from "../game/playerIdentity";
+import { PlayerName } from "./PlayerName";
 import { V2Icon } from "./v2/V2Icon";
 import "../styles/night.css";
 
@@ -31,7 +32,7 @@ export function PoliceResultCard({ seat, animal, name, isMafia, reducedMotion = 
       ) : (
         <img className="mf-police-card__face" src={faceSrc(seat, animal)} alt="" draggable={false} onError={() => setBroken(true)} />
       )}
-      <span className="mf-police-card__name">{name}</span>
+      <PlayerName className="mf-police-card__name" seat={seat}>{name}</PlayerName>
       <span className="mf-police-card__label">
         <span className="mf-police-card__icon" data-icon={isMafia ? "roleMafia" : "check"}>
           <V2Icon name={isMafia ? "roleMafia" : "check"} size={20} />

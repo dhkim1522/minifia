@@ -132,6 +132,7 @@ export interface PointsTally {
 /** 이 화면에만 남는 채팅 카드(경찰 조사 결과). 서버 채널 기록이 아니다. at 은 단계 진입 기준 ms */
 export interface LocalCard {
   at: number;
+  seat: number;
   title: string;
   text: string;
 }
@@ -305,7 +306,7 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
       if (police !== null) {
         // 결과 문구는 이 경찰 분기 안에서만 만든다(L8, T-09-40) — 다른 신분 화면의 DOM 에 없다
         const target = nameOf(cur, police.seat);
-        if (target !== undefined) out.localCards = [{ at: POLICE_CARD_AT, title: target, text: police.isMafia ? POLICE_TEXT.mafia : POLICE_TEXT.clear }];
+        if (target !== undefined) out.localCards = [{ at: POLICE_CARD_AT, seat: police.seat, title: target, text: police.isMafia ? POLICE_TEXT.mafia : POLICE_TEXT.clear }];
       }
       return;
     }

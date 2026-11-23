@@ -3,6 +3,7 @@ import type { PublicPlayer, RoleRecord } from "../../shared/protocol";
 import { JOURNAL_TEXT, journalResult } from "../game/journalText";
 import { journalArt } from "../net/assets";
 import type { JournalRole } from "../net/assets";
+import { PlayerName } from "./PlayerName";
 import "../styles/rolecard.css";
 
 // 역할 카드 시트의 [활동 기록] 본문(결정 0026, 시안 R3~R5). 입력은 서버가 본인에게만 보낸 me.records 뿐이다 —
@@ -50,8 +51,7 @@ export function Journal({ role, records, players, mySeat, newCount }: JournalPro
               <li key={r.n} className="mf-journal__row" aria-label={`${isNew ? "새 기록, " : ""}${r.n}일차 밤, ${name}, ${result.text}`}>
                 <span className="mf-journal__d">{`${r.n}일차 밤`}</span>
                 <span className="mf-journal__w">
-                  <i className="mf-journal__dot" aria-hidden="true" style={{ background: `var(--seat-${(r.target % 8) + 1})` }} />
-                  <b>{name}</b>
+                  <b><PlayerName seat={r.target}>{name}</PlayerName></b>
                 </span>
                 <span className={`mf-journal__rz mf-journal__rz--${result.tone}`}>{result.text}</span>
                 <span className="mf-journal__nw">{isNew ? <span className="mf-journal__new">NEW</span> : null}</span>

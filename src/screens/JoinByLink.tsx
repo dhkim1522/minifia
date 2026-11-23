@@ -6,6 +6,7 @@ import { unlockAudio } from "../audio/unlock";
 import { Backdrop } from "../components/Backdrop";
 import { Button } from "../components/Button";
 import { Figure } from "../components/Figure";
+import { PlayerName } from "../components/PlayerName";
 import { TextField } from "../components/TextField";
 import { Toast, useToast } from "../components/Toast";
 import { getPreview, joinRoom } from "../net/api";
@@ -214,7 +215,7 @@ export function JoinByLink({ code, notice, onEnterRoom, onHome }: JoinByLinkProp
               <li key={p.seat} className="mf-tag">
                 <Figure seat={p.seat} animal={p.animal} />
                 <span className="mf-tag__name" title={p.nickname}>
-                  <span>{p.nickname}</span>
+                  <PlayerName seat={p.seat}>{p.nickname}</PlayerName>
                 </span>
               </li>
             ))}

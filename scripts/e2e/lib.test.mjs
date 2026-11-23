@@ -1271,10 +1271,10 @@ test("cssAlpha: rgba·rgb·공백 문법·transparent 를 알파로 읽고 못 �
 });
 
 const STRONG = "rgb(23, 34, 52)";
-const SELF = "rgb(226, 237, 249)";
+const SELF = "rgb(16, 25, 39)";
 const BASE = "rgba(23, 34, 52, 0.933)";
 const tagSample = (seat, left, z, face, me = false) => ({
-  seat, me, rect: rect(left, 100, 100, 24), z, face, ink: me ? "rgb(39, 56, 84)" : "rgb(241, 242, 245)",
+  seat, me, rect: rect(left, 100, 100, 24), z, face, ink: me ? "rgb(151, 200, 254)" : "rgb(206, 178, 250)", stateEdge: me,
 });
 
 test("tagStackChecks NT3: 겹친 이름표는 z-index 가 달라야 하고 같거나 못 읽으면 실패, 안 겹치면 z 가 같아도 통과한다", () => {
@@ -1288,7 +1288,7 @@ test("tagStackChecks NT3: 겹친 이름표는 z-index 가 달라야 하고 같�
   assert.match(tagStackChecks([]).detail, /측정값 없음/);
 });
 
-test("tagStackChecks NT3: 내 이름표가 맨 위여야 한다 — 겹치는 쌍에서 내 이름표가 위이고 밝은 면이면 통과, 내가 아래이면 실패하고 자리를 말한다", () => {
+test("tagStackChecks NT3: 내 이름표는 맨 위에서 어두운 불투명 면과 테두리로 구분한다", () => {
   const ok = tagStackChecks([tagSample(0, 100, 4, SELF, true), tagSample(1, 150, 3, BASE)]);
   assert.equal(ok.id, "NT3");
   assert.equal(ok.ok, true, ok.detail);
@@ -1306,7 +1306,8 @@ test("tagStackChecks NT3: 맨 앞 이름표는 불투명하고 다른 이름표�
   const flat = tagStackChecks([tagSample(0, 100, 4, BASE, true), tagSample(1, 150, 3, BASE)]);
   assert.equal(flat.ok, false);
   assert.match(flat.detail, /맨 앞/);
-  assert.match(flat.detail, /밝은 이름표/);
+  assert.match(tagStackChecks([{ ...tagSample(0, 100, 4, SELF, true), stateEdge: false }]).detail, /테두리 없음/);
+  assert.match(tagStackChecks([tagSample(0, 100, 4, "rgb(226, 237, 249)", true)]).detail, /어두운 이름표/);
   const lone = tagStackChecks([tagSample(0, 100, 4, SELF, true), tagSample(1, 150, 3, BASE), tagSample(2, 500, 1, STRONG)]);
   assert.equal(lone.ok, false);
   assert.match(lone.detail, /자리 2/);

@@ -32,20 +32,21 @@ function rulesFor(css: string, selector: string): string[] {
 
 describe("NameTag (MAP-07, MAP-01)", () => {
   it("전각 8자 + (나) 를 .mv-tag.is-me 로 한 글자도 줄이지 않고 그린다", () => {
-    const { container } = render(<NameTag name="가나다라마바사아" color="var(--seat-3)" me />);
+    const { container } = render(<NameTag name="가나다라마바사아" seat={2} me />);
     const tag = container.querySelector("span.mv-tag");
     expect(tag?.classList.contains("is-me")).toBe(true);
     expect(tag?.querySelector(".mv-tag__name")?.textContent).toBe("가나다라마바사아 (나)");
   });
 
-  it("점은 자리 구분색을 background 로 가진다", () => {
-    const { container } = render(<NameTag name="철수" color="var(--seat-3)" />);
-    const dot = container.querySelector(".mv-tag__dot") as HTMLElement | null;
-    expect(dot?.getAttribute("style")).toContain("var(--seat-3)");
+  it("좌석에 맞춘 고유색은 닉네임 글자에만 적용한다", () => {
+    const { container } = render(<NameTag name="철수" seat={2} />);
+    expect(container.querySelector(".mv-tag__dot")).toBeNull();
+    const name = container.querySelector('.mv-tag__name[data-player-name="2"]');
+    expect(name?.getAttribute("style")).toContain("var(--player-name-3)");
   });
 
   it("away 는 .is-away, me 가 아니면 (나) 가 없다", () => {
-    const { container } = render(<NameTag name="철수" color="var(--seat-1)" away />);
+    const { container } = render(<NameTag name="철수" seat={0} away />);
     const tag = container.querySelector("span.mv-tag");
     expect(tag?.classList.contains("is-away")).toBe(true);
     expect(tag?.classList.contains("is-me")).toBe(false);
@@ -53,25 +54,25 @@ describe("NameTag (MAP-07, MAP-01)", () => {
   });
 
   it("17-04: me 이고 이름이 \"나\" 면 글이 \"나\" 하나(접미 없음), 다른 이름은 \" (나)\" 그대로 (0080-16)", () => {
-    const mine = render(<NameTag name="나" color="var(--seat-6)" me />);
+    const mine = render(<NameTag name="나" seat={5} me />);
     expect(mine.container.querySelector(".mv-tag__name")?.textContent).toBe("나");
     mine.unmount();
-    const other = render(<NameTag name="도윤" color="var(--seat-2)" me />);
+    const other = render(<NameTag name="도윤" seat={1} me />);
     expect(other.container.querySelector(".mv-tag__name")?.textContent).toBe("도윤 (나)");
     other.unmount();
-    const notMe = render(<NameTag name="나" color="var(--seat-6)" />);
+    const notMe = render(<NameTag name="나" seat={5} />);
     expect(notMe.container.querySelector(".mv-tag__name")?.textContent).toBe("나");
   });
 
   it("끊긴 나도 그려진다: is-me 와 is-away 가 함께 붙는다", () => {
-    const { container } = render(<NameTag name="가나다라마바사아" color="var(--seat-8)" me away />);
+    const { container } = render(<NameTag name="가나다라마바사아" seat={7} me away />);
     const tag = container.querySelector("span.mv-tag");
     expect(tag?.classList.contains("is-me") && tag.classList.contains("is-away")).toBe(true);
     expect(tag?.textContent).toBe("가나다라마바사아 (나)");
   });
 
   it("닉네임에 HTML 이 들어 있어도 글자 그대로이고 요소가 생기지 않는다 (T-06-26)", () => {
-    const { container } = render(<NameTag name="<b>x</b>" color="var(--seat-1)" />);
+    const { container } = render(<NameTag name="<b>x</b>" seat={0} />);
     expect(container.querySelector("b")).toBeNull();
     expect(container.querySelector(".mv-tag__name")?.textContent).toBe("<b>x</b>");
   });
@@ -79,7 +80,7 @@ describe("NameTag (MAP-07, MAP-01)", () => {
 
 describe("HeadStack", () => {
   it("div.mv-head 안에 span.mv-tag 하나", () => {
-    const { container } = render(<HeadStack name="철수" color="var(--seat-1)" />);
+    const { container } = render(<HeadStack name="철수" seat={0} />);
     const head = container.querySelector("div.mv-head");
     expect(head).not.toBeNull();
     expect(head?.children.length).toBe(1);
@@ -89,7 +90,7 @@ describe("HeadStack", () => {
 
 describe("HeadStack 입력 중 칸 (CHAT-04, 07-03)", () => {
   it("typing 이면 .mv-head 에 data-typing=true 와 맨 위 칸 알약(role img, 입력 중, 점 세 개), 그다음 이름표", () => {
-    const { container } = render(<HeadStack name="지호" color="var(--seat-1)" typing />);
+    const { container } = render(<HeadStack name="지호" seat={0} typing />);
     const head = container.querySelector("div.mv-head");
     expect(head?.getAttribute("data-typing")).toBe("true");
     expect(head?.children.length).toBe(2);
@@ -102,7 +103,7 @@ describe("HeadStack 입력 중 칸 (CHAT-04, 07-03)", () => {
   });
 
   it("typing 이 없으면 data-typing 속성 자체가 없고 알약도 없다", () => {
-    const { container } = render(<HeadStack name="지호" color="var(--seat-1)" />);
+    const { container } = render(<HeadStack name="지호" seat={0} />);
     const head = container.querySelector("div.mv-head");
     expect(head?.hasAttribute("data-typing")).toBe(false);
     expect(container.querySelector(".mv-typing")).toBeNull();
@@ -110,13 +111,13 @@ describe("HeadStack 입력 중 칸 (CHAT-04, 07-03)", () => {
   });
 
   it("알약에는 글자가 없다: 채팅 본문을 머리 위에 띄우지 않는다 (점 세 개뿐)", () => {
-    const { container } = render(<HeadStack name="지호" color="var(--seat-1)" typing />);
+    const { container } = render(<HeadStack name="지호" seat={0} typing />);
     expect(container.querySelector(".mv-typing")?.textContent).toBe("");
     expect(container.querySelector(".mv-typing")?.children.length).toBe(3);
   });
 
   it("typing={false} 도 알약이 없다", () => {
-    const { container } = render(<HeadStack name="지호" color="var(--seat-1)" typing={false} />);
+    const { container } = render(<HeadStack name="지호" seat={0} typing={false} />);
     expect(container.querySelector(".mv-typing")).toBeNull();
     expect(container.querySelector("div.mv-head")?.hasAttribute("data-typing")).toBe(false);
   });
@@ -152,7 +153,7 @@ describe("HeadStack 8페이즈 칸(DAY-04, GHOST-02)", () => {
       .join(",");
 
   it("count 2 · lead 면 .mv-head 안 순서가 VoteBadge(.is-lead) → 이름표이고 data-count=2 · data-lead=true", () => {
-    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" count={2} lead />);
+    const { container } = render(<HeadStack name="도윤" seat={1} count={2} lead />);
     const head = container.querySelector("div.mv-head");
     expect(order(head)).toBe("mv-badge,mv-tag");
     expect(head?.querySelector(".mv-badge")?.classList.contains("is-lead")).toBe(true);
@@ -161,7 +162,7 @@ describe("HeadStack 8페이즈 칸(DAY-04, GHOST-02)", () => {
   });
 
   it("typing · role mafia · count 3 이면 자식 순서가 알약 → 직업 칩 → 배지 → 이름표 (유력 도장은 22-13 에서 지웠다)", () => {
-    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" typing role="mafia" count={3} />);
+    const { container } = render(<HeadStack name="도윤" seat={1} typing role="mafia" count={3} />);
     const head = container.querySelector("div.mv-head");
     expect(order(head)).toBe("mv-typing,mv-rolechip,mv-badge,mv-tag");
     expect(head?.hasAttribute("data-sure")).toBe(false);
@@ -170,36 +171,36 @@ describe("HeadStack 8페이즈 칸(DAY-04, GHOST-02)", () => {
   });
 
   it("role 이 없으면 직업 칩 요소도 data-role-chip 도 DOM 에 없다 (GHOST-02 산 사람 쪽, T-08-20)", () => {
-    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" count={1} />);
+    const { container } = render(<HeadStack name="도윤" seat={1} count={1} />);
     expect(container.querySelectorAll("[data-role-chip]").length).toBe(0);
     expect(container.querySelectorAll(".mv-rolechip").length).toBe(0);
   });
 
   it("role 이 있으면 그 역할 칩 하나를 그린다 (police)", () => {
-    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" role="police" />);
+    const { container } = render(<HeadStack name="도윤" seat={1} role="police" />);
     expect(container.querySelectorAll("[data-role-chip]").length).toBe(1);
     expect(container.querySelector("[data-role-chip]")?.getAttribute("data-role-chip")).toBe("police");
   });
 
   it("mine 이면 이름표에 is-mine 과 data-mine=true", () => {
-    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" mine />);
+    const { container } = render(<HeadStack name="도윤" seat={1} mine />);
     expect(container.querySelector(".mv-tag")?.classList.contains("is-mine")).toBe(true);
     expect(container.querySelector("div.mv-head")?.getAttribute("data-mine")).toBe("true");
   });
 
   it("blink 이면 이름표에 is-blink", () => {
-    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" blink />);
+    const { container } = render(<HeadStack name="도윤" seat={1} blink />);
     expect(container.querySelector(".mv-tag")?.classList.contains("is-blink")).toBe(true);
   });
 
   it("ghost 이면 이름표에 is-ghost 와 data-ghost=true", () => {
-    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" ghost />);
+    const { container } = render(<HeadStack name="도윤" seat={1} ghost />);
     expect(container.querySelector(".mv-tag")?.classList.contains("is-ghost")).toBe(true);
     expect(container.querySelector("div.mv-head")?.getAttribute("data-ghost")).toBe("true");
   });
 
   it("done 이면 이름표 안 뒤쪽에 체크 아이콘(role img, 투표함)과 data-done=true", () => {
-    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" done />);
+    const { container } = render(<HeadStack name="도윤" seat={1} done />);
     const done = container.querySelector(".mv-tag .mv-tag__done");
     expect(done).not.toBeNull();
     expect(done?.querySelector("svg")?.getAttribute("role")).toBe("img");
@@ -209,35 +210,35 @@ describe("HeadStack 8페이즈 칸(DAY-04, GHOST-02)", () => {
   });
 
   it("done + doneLabel 이면 체크의 접근성 이름이 그 문구다 (결과 화면은 '준비됨', 11-12)", () => {
-    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" done doneLabel="준비됨" />);
+    const { container } = render(<HeadStack name="도윤" seat={1} done doneLabel="준비됨" />);
     expect(container.querySelector(".mv-tag__done svg")?.getAttribute("aria-label")).toBe("준비됨");
     expect(container.querySelector("div.mv-head")?.getAttribute("data-done")).toBe("true");
   });
 
   it("doneLabel 이 없으면 기본 '투표함' 그대로", () => {
-    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" done />);
+    const { container } = render(<HeadStack name="도윤" seat={1} done />);
     expect(container.querySelector(".mv-tag__done svg")?.getAttribute("aria-label")).toBe("투표함");
   });
 
   it("아무 속성도 없으면 기존과 같은 DOM: 이름표 하나, data-* 없음, 이름표 안은 점과 이름뿐", () => {
-    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" />);
+    const { container } = render(<HeadStack name="도윤" seat={1} />);
     const head = container.querySelector("div.mv-head");
     expect(order(head)).toBe("mv-tag");
     for (const a of ["data-count", "data-lead", "data-sure", "data-mine", "data-done", "data-ghost", "data-typing"]) {
       expect(head?.hasAttribute(a), a).toBe(false);
     }
-    expect(container.querySelector(".mv-tag")?.children.length).toBe(2);
+    expect(container.querySelector(".mv-tag")?.children.length).toBe(1);
   });
 
   it("count 0 이면 배지도 data-count 도 없다 (0표 경계)", () => {
-    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" count={0} lead />);
+    const { container } = render(<HeadStack name="도윤" seat={1} count={0} lead />);
     const head = container.querySelector("div.mv-head");
     expect(container.querySelector(".mv-badge")).toBeNull();
     expect(head?.hasAttribute("data-count")).toBe(false);
   });
 
   it("false 로 끈 속성은 data-* 를 싣지 않는다", () => {
-    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" lead={false} mine={false} done={false} ghost={false} blink={false} />);
+    const { container } = render(<HeadStack name="도윤" seat={1} lead={false} mine={false} done={false} ghost={false} blink={false} />);
     const head = container.querySelector("div.mv-head");
     for (const a of ["data-lead", "data-sure", "data-mine", "data-done", "data-ghost"]) {
       expect(head?.hasAttribute(a), a).toBe(false);
@@ -246,7 +247,7 @@ describe("HeadStack 8페이즈 칸(DAY-04, GHOST-02)", () => {
   });
 
   it("닉네임은 여전히 텍스트 노드이고 새 칸이 있어도 \"(나)\" 가 붙는다", () => {
-    const { container } = render(<HeadStack name="<b>x</b>" color="var(--seat-2)" me count={1} done />);
+    const { container } = render(<HeadStack name="<b>x</b>" seat={1} me count={1} done />);
     expect(container.querySelector("b")).toBeNull();
     expect(container.querySelector(".mv-tag__name")?.textContent).toBe("<b>x</b> (나)");
   });
@@ -258,11 +259,11 @@ describe("HeadStack 8페이즈 칸(DAY-04, GHOST-02)", () => {
     expect(/import\s+\{[^}]*\bROLES?\b[^}]*\}/.test(src)).toBe(false);
   });
 
-  it("이름표는 space-xs 간격, 내 이름표는 종이 면과 잉크 글자, 유령 이름표는 불투명(09.1-09)", () => {
+  it("이름표는 space-xs 간격, 지목한 이름표는 어두운 면과 밝은 테두리, 유령 이름표는 불투명", () => {
     expect(rulesFor(V2_CSS, ".mv-head")[0] ?? "").toContain("gap: var(--space-xs)");
     const mine = rulesFor(V2_CSS, ".mv-tag.is-mine").join(";");
-    expect(mine).toContain("background: var(--noir-paper)");
-    expect(mine).toContain("color: var(--noir-ink)");
+    expect(mine).toContain("background: var(--noir-control-on)");
+    expect(mine).toContain("box-shadow: inset 0 0 0 2px var(--noir-paper)");
     // 09.1-09(UI-SPEC 시안과 다르게 7): 몸이 0.26 안개라 이름표는 불투명, 직업은 RoleChip 이 알린다
     const ghost = rulesFor(V2_CSS, ".mv-tag.is-ghost").join(";");
     expect(ghost).not.toContain("opacity");
@@ -345,7 +346,7 @@ describe("v2.css 이름표 스타일 계약 (MAP-07, 결정 0052-2)", () => {
     expect(V2_CSS).not.toContain("ellipsis");
   });
 
-  it("이름표의 안쪽 여백 2px 8px, 점 8×8, 이름 간격 6px, 어두운 면에 밝은 글자 14px 700", () => {
+  it("이름표의 안쪽 여백 2px 8px, 상태 표시 간격 6px, 어두운 면에 밝은 글자 14px 700", () => {
     const tag = rulesFor(V2_CSS, ".mv-tag")[0] ?? "";
     expect(tag).toContain("gap: 6px");
     expect(tag).toContain("padding: 2px var(--space-sm)");
@@ -353,12 +354,10 @@ describe("v2.css 이름표 스타일 계약 (MAP-07, 결정 0052-2)", () => {
     expect(tag).toContain("color: var(--gray-50)");
     expect(tag).toContain("font: var(--type-label-strong)");
     expect(tag).toContain("text-shadow: var(--shadow-text)");
-    const dot = rulesFor(V2_CSS, ".mv-tag__dot").join(";");
-    expect(dot).toContain("width: 8px");
-    expect(dot).toContain("height: 8px");
+    expect(rulesFor(V2_CSS, ".mv-tag__dot")).toHaveLength(0);
   });
 
-  it("겹친 이름표의 앞면은 어둡게, 지목한 이름표의 면은 종이색으로 유지한다 (G-06-4)", () => {
+  it("겹친 이름표를 어둡게 유지하며 지목한 이름표의 선택 면을 보존한다", () => {
     const selector = '.mf-world__tag[data-front="true"] .mv-tag';
     const front = rulesFor(WORLD_CSS, `${selector}:not(.is-mine)`).join(";");
     expect(front).toContain("background: var(--overlay-ink-strong)");
@@ -366,10 +365,11 @@ describe("v2.css 이름표 스타일 계약 (MAP-07, 결정 0052-2)", () => {
     expect(rulesFor(V2_CSS, ".mv-tag")[0] ?? "").toContain("background: color-mix(in srgb, var(--noir-inset) 94%, transparent)");
   });
 
-  it("내 이름표는 안쪽 테두리 1.5px gray-100, 끊긴 이름표는 불투명도 0.55 와 점 gray-700", () => {
+  it("내 이름표는 밝은 테두리, 끊긴 이름표는 이름을 흐리지 않고 점선으로 표시한다", () => {
     expect(V2_CSS).toMatch(/\.mv-tag\.is-me\s*\{[^}]*inset 0 0 0 1\.5px var\(--gray-100\)/);
-    expect(V2_CSS).toMatch(/\.mv-tag\.is-away\s*\{[^}]*opacity: 0\.55/);
-    expect(V2_CSS).toMatch(/\.mv-tag\.is-away \.mv-tag__dot\s*\{[^}]*var\(--gray-700\)/);
+    const away = rulesFor(V2_CSS, ".mv-tag.is-away").join(";");
+    expect(away).toContain("outline: 1px dashed var(--noir-silver)");
+    expect(away).not.toContain("opacity");
   });
 
   // 8페이즈(08-03)가 득표 배지·유력 도장(놋쇠)과 직업 칩(마피아 진홍 테두리)을, 08-05 가 hot 시스템 줄(놋쇠 글자)을 같은 파일에 더했다 — 그 규칙만 이 검사에서 뺀다.
@@ -384,7 +384,7 @@ describe("v2.css 이름표 스타일 계약 (MAP-07, 결정 0052-2)", () => {
   // 22-11: 유언 시트 남은 초의 마지막 5초 진홍(.mv-will__secs[data-tone=urgent])도 같은 시간 신호(timerTone)라 같이 뺀다(UI-SPEC P22-8).
   // 나머지 규칙(이름표·채팅·시간 링 기본 등)은 7페이즈 규칙 그대로다.
   const WITHOUT_PHASE8_PARTS = V2_CSS.replace(/\/\*[\s\S]*?\*\//g, "").replace(/[^{}]*\{[^{}]*\}/g, (rule) =>
-    /^\s*\.mv-(badge|stamp|rolechip)|^\s*\.mv-chat__sys\.is-hot|^\s*\.mv-will--mafia|^\s*\.mv-chat__card--mafia|^\s*\.mv-ring\.is-(warn|urgent)|^\s*\.mf-turn\[data-turn-tone=|^\s*\.mv-host|^\s*\.mv-tag\.is-call|^\s*\.mv-errand-(pin|act|arrow|start|dot)|^\s*\.mv-will__secs\[data-tone/.test(rule) ? "" : rule,
+    /^\s*\.mv-(badge|stamp|rolechip)|^\s*\.mv-chat__sys\.is-hot|^\s*\.mv-will--mafia|^\s*\.mv-chat__card--mafia|^\s*\.mv-ring\.is-(warn|urgent)|^\s*\.mf-turn\[data-turn-tone=|^\s*\.mv-host|^\s*\.is-call\.mv-verdict__btn|^\s*\.mv-errand-(pin|act|arrow|start|dot)|^\s*\.mv-will__secs\[data-tone/.test(rule) ? "" : rule,
   );
 
   it("hex 색이 없고 놋쇠 토큰을 쓰지 않으며, 진홍은 crimson-300 글자색 하나뿐이다 (07-UI-SPEC Color: 진홍 글자 예약, 면·큰 글자 금지) — 8페이즈 부품 규칙 제외", () => {

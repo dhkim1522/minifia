@@ -75,7 +75,6 @@
 
 .mf-result__whisper { display: flex; flex-direction: column; gap: 2px; margin: 0; }
 .mf-result__whisper-head { display: inline-flex; font: var(--type-label); align-items: center; gap: 6px; color: var(--gray-300); }
-.mf-result__whisper-dot { flex: none; width: 8px; height: 8px; border-radius: var(--radius-pill); }
 .mf-result__arrow { flex: none; display: block; }
 .mf-result__whisper-text { font: var(--type-body); color: var(--gray-100); word-break: keep-all; overflow-wrap: anywhere; }
 

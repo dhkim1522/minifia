@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { PublicPlayer } from "../../shared/protocol";
 import { SUSPECT_TEXT } from "../game/suspectView";
+import { PlayerName } from "./PlayerName";
 import { PlayerPortrait } from "./PlayerPortrait";
 import { V2Icon } from "./v2/V2Icon";
 import type { WorldPick } from "./WorldStage";
@@ -46,7 +47,7 @@ export function TableControls({ players, focus, selected, readOnly = false, pick
                 <PlayerPortrait seat={seat} animal={player.animal} variant="participant" look={player.look} />
               </span>
             ) : <PlayerPortrait seat={seat} animal={player.animal} />}
-            <span className="mf-table-controls__name">{player.nickname}</span>
+            <PlayerName className="mf-table-controls__name" seat={seat}>{player.nickname}</PlayerName>
             {cards && pressed ? <span className="mv-face__mark" data-mark-icon="check" aria-hidden="true"><V2Icon name="check" size={18} /></span> : null}
             {count > 0 ? <span className="mf-table-controls__count" aria-hidden="true"><V2Icon name="postit" size={11} />{count}</span> : null}
             {sure ? <span className="mv-face__count" role="img" aria-label="확정"><V2Icon name="check" size={14} /></span>

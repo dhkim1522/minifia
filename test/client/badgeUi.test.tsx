@@ -236,7 +236,7 @@ describe("view 의 주장 → 이름표 모서리 배지 (UI-SPEC A-1)", () => {
     mount(makeView({ badges: { 1: "police" } }));
     const props = stage.props!.tagProps!(1);
     expect(props).toMatchObject({ claim: "police" });
-    const { container } = render(<HeadStack name="영희" color="red" {...props} />);
+    const { container } = render(<HeadStack name="영희" seat={0} {...props} />);
     const badge = container.querySelector('[data-claim="police"]');
     expect(badge).not.toBeNull();
     expect(badge?.getAttribute("role")).toBe("img");
@@ -248,7 +248,7 @@ describe("view 의 주장 → 이름표 모서리 배지 (UI-SPEC A-1)", () => {
     mount(makeView({ badges: { 1: "police" } }));
     const props = stage.props!.tagProps!(2);
     expect(props.claim).toBeUndefined();
-    const { container } = render(<HeadStack name="서준" color="red" {...props} />);
+    const { container } = render(<HeadStack name="서준" seat={0} {...props} />);
     expect(container.querySelector("[data-claim]")).toBeNull();
   });
 
@@ -264,7 +264,7 @@ describe("view 의 주장 → 이름표 모서리 배지 (UI-SPEC A-1)", () => {
 
 // ---- Task 2: 말 바꿈 효과·낙관 표시/거절 되돌림·접근성 한 줄·재접속 첫 화면 ----
 const live = (c: ParentNode): string => c.querySelector("[data-badge-live]")?.textContent ?? "";
-const stackOf = (seat: number) => render(<HeadStack name={NAMES[seat] ?? ""} color="red" {...stage.props!.tagProps!(seat)} />).container;
+const stackOf = (seat: number) => render(<HeadStack name={NAMES[seat] ?? ""} seat={seat} {...stage.props!.tagProps!(seat)} />).container;
 const toastText = (c: ParentNode): string => c.querySelector(".mv-toast--top .mv-toast__text")?.textContent ?? "";
 const reduceMotion = (): void => {
   vi.stubGlobal(
@@ -494,7 +494,7 @@ describe("L23: 배지는 직업 칩(data-role-chip)과 섞이지 않는다", () 
   });
 
   it("배지 요소의 속성에 data-role-chip 이 없고 .mv-head 에도 data-claim 이 없다", () => {
-    const { container } = render(<HeadStack name="영희" color="red" claim="mafia" claimSwapped />);
+    const { container } = render(<HeadStack name="영희" seat={0} claim="mafia" claimSwapped />);
     expect(container.querySelector("[data-role-chip]")).toBeNull();
     expect(container.querySelector(".mv-head")?.hasAttribute("data-claim")).toBe(false);
     expect(container.querySelectorAll("[data-claim]")).toHaveLength(1);

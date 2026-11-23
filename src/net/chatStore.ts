@@ -1,6 +1,7 @@
 // 서버가 보낸 줄만 든다(낙관적 표시 없음). 받을 권리가 없는 줄은 서버가 보내지 않는다 — visibleLines 는 표시 흐름
 // 선택이지 보안 경계가 아니다(결정 0002·0021). React 밖이라 프레임마다 리렌더하지 않는다(WorldStore 와 같은 형태).
 import { CHAT_KEEP_LINES, NOTICE_MS, TYPING_EXPIRE_MS } from "../game/chatUi";
+import type { ChatTextPart } from "../game/chatText";
 import { MAX_PLAYERS } from "../../shared/protocol";
 import { WILL_REVEAL_MS } from "../../shared/game/phases";
 import type { ChatChannel, ChatLogFrame, ChatLineFrame, ChatRejectFrame, ChatRejectWhy, ChatLineWire, TypingFrame } from "../../shared/protocol";
@@ -26,6 +27,8 @@ export interface ChatStoreLine {
   seat?: number;
   seq?: number;
   text: string;
+  /** 입장·퇴장처럼 이름과 좌석을 함께 아는 로컬 안내의 구성 */
+  textParts?: readonly ChatTextPart[];
   at: number;
   icon?: V2IconName;
   scope: ChatChannel;
@@ -161,16 +164,17 @@ export class ChatStore {
   }
 
   /** 클라이언트가 view 변화에서 만드는 시스템 줄(입장·퇴장·채널 시작 등). 서버가 보낸 줄이 아니다 */
-  addSystem(text: string, opts: { scope: ChatChannel; icon?: V2IconName; at: number; kind?: "system" | "vote" | "hot" }): void {
+  addSystem(text: string, opts: { scope: ChatChannel; icon?: V2IconName; at: number; kind?: "system" | "vote" | "hot"; textParts?: readonly ChatTextPart[] }): void {
     const line: ChatStoreLine = { key: `sys:${++this.sysSeq}:${opts.at}`, kind: opts.kind ?? "system", text, at: opts.at, scope: opts.scope };
     if (opts.icon) line.icon = opts.icon;
+    if (opts.textParts) line.textParts = opts.textParts;
     this.insertAll([line]);
     this.bump();
   }
 
   /** 이 화면만 가진 카드 줄(경찰 조사 결과). 서버 채널 기록이 아니라 재접속 복원 대상이 아니고 보류 없이 바로 보인다 */
-  addLocalCard(opts: { icon: "eye"; title: string; text: string; at: number }): void {
-    this.insertAll([{ key: `local:${++this.sysSeq}:${opts.at}`, kind: "card", card: "eye", title: opts.title, text: opts.text, at: opts.at, icon: opts.icon, scope: "all" }]);
+  addLocalCard(opts: { icon: "eye"; seat?: number; title: string; text: string; at: number }): void {
+    this.insertAll([{ key: `local:${++this.sysSeq}:${opts.at}`, kind: "card", card: "eye", title: opts.title, text: opts.text, at: opts.at, icon: opts.icon, scope: "all", ...(opts.seat !== undefined ? { seat: opts.seat } : {}) }]);
     this.bump();
   }
 

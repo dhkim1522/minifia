@@ -159,7 +159,7 @@ describe("유령·귓속말·기록 탭 (A-3)", () => {
     expect(heads[0]).toEqual([faceSrc(0), faceSrc(1)]);
     expect(heads[1]).toEqual([faceSrc(1), faceSrc(0)]);
     expect(rows[0]!.querySelector(".mf-result__arrow")).not.toBeNull();
-    expect(rows[0]!.querySelector<HTMLElement>(".mf-result__whisper-dot")!.style.background).toContain("var(--seat-1)");
+    expect(rows[0]!.querySelector(".mf-result__whisper-dot")).toBeNull();
     expect(text(rows[0]!.querySelector(".mf-result__whisper-text"))).toBe("비밀이야");
     // 얼굴 그림 대체 글은 닉네임이다
     expect(Array.from(rows[0]!.querySelectorAll<HTMLImageElement>(".mf-result__face")).map((i) => i.alt)).toEqual(["지우", "하윤"]);

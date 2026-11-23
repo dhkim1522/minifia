@@ -3,6 +3,7 @@ import type { MouseEvent, PointerEvent, ReactNode, RefObject } from "react";
 import type { ChatChannel } from "../../shared/protocol";
 import type { ChatStore } from "../net/chatStore";
 import type { ChatPanelMessage } from "./v2/ChatPanel";
+import { PlayerName } from "./PlayerName";
 import { PlayerPortrait } from "./PlayerPortrait";
 import { TableControls } from "./TableControls";
 import type { TableControlsProps } from "./TableControls";
@@ -170,7 +171,7 @@ export function GameDock({ scope, initialPane, peopleAction, preserveWriting, ke
           open("chat");
         }}>
           <PlayerPortrait seat={latest.seat} animal={latest.animal} />
-          <strong>{latest.name}</strong>
+          <strong><PlayerName seat={latest.seat}>{latest.name}</PlayerName></strong>
           <span>{latest.text}</span>
         </button>
       ) : null}

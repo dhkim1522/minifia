@@ -494,12 +494,14 @@ describe("ChatPanel 채널 모양 (UI-SPEC 채널별 모양, T-07-08)", () => {
     }
   });
 
-  it("마피아 채널 줄은 어느 보는 사람에게나 is-mafia(이름 crimson-300)이다", () => {
+  it("마피아 채널 표식과 닉네임 고유색을 함께 유지한다", () => {
     const { container } = render(<Harness messages={MIXED} />);
     const lines = [...container.querySelectorAll("[data-chat-log] > p")];
     expect(lines[0]?.classList.contains("is-mafia")).toBe(true);
     expect(lines[2]?.classList.contains("is-mafia")).toBe(false);
-    expect(rulesFor(V2_CSS, ".mv-chat__msg.is-mafia .mv-chat__name").join(";")).toContain("color: var(--crimson-300)");
+    expect(lines[0]?.querySelector('.mv-chat__name[data-player-name="1"]')?.getAttribute("style")).toContain("var(--player-name-2)");
+    expect(lines[2]?.querySelector('.mv-chat__name[data-player-name="3"]')?.getAttribute("style")).toContain("var(--player-name-4)");
+    expect(rulesFor(V2_CSS, ".mv-chat__msg.is-mafia .mv-chat__name")).toHaveLength(0);
   });
 
   it("system 줄은 앞 아이콘을 가질 수 있고 긴 안내도 한 덩어리 글자로 그려진다", () => {

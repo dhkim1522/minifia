@@ -494,11 +494,12 @@ describe("RoleCardSheet 의심 구역 (P24-19·20, D-27)", () => {
     expect(lines(d3).map((x) => x.getAttribute("aria-label"))).toEqual(["지우 님, 의심 표시 2개", "하윤 님, 의심 표시 1개", "민지 님, 의심 표시 1개"]);
   });
 
-  it("줄에는 받은 좌석 표시와 이름, 장수가 보인다", () => {
+  it("기록에는 받은 사람의 고유색 이름과 개수가 보인다", () => {
     renderRoleSheet(suspectView("citizen", LOG));
     const row = lines(secs()[0]!)[1]!;
-    expect(row.querySelectorAll(".mf-suspect__dot").length).toBe(1);
+    expect(row.querySelector(".mf-suspect__dot")).toBeNull();
     expect(row.querySelector(".mf-suspect__nick")?.textContent).toBe("하윤");
+    expect(row.querySelector(".mf-suspect__nick")?.getAttribute("data-player-name")).toBe(row.getAttribute("data-suspect-to"));
     expect(row.querySelector(".mf-suspect__total")?.textContent).toBe("1개");
   });
 

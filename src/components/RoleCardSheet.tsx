@@ -5,9 +5,10 @@ import type { RoleId } from "../../shared/game/roles";
 import { ROLE_TEXT, alliesText, allyNicknames } from "../game/roleText";
 import { SUSPECT_TEXT, suspectLogByDay } from "../game/suspectView";
 import { roleArtSrc } from "../net/assets";
-import { ownAnimalOf, playerColor } from "../game/playerIdentity";
+import { ownAnimalOf } from "../game/playerIdentity";
 import type { JournalRole } from "../net/assets";
 import { Journal } from "./Journal";
+import { PlayerName } from "./PlayerName";
 import { Diamond } from "./RoleCard";
 import { Sheet } from "./Sheet";
 import { V2Icon } from "./v2/V2Icon";
@@ -176,8 +177,7 @@ function RecordsPanel({ view }: { view: RoomView }): ReactElement {
                   data-suspect-to={to}
                   aria-label={`${nick(to)} 님, ${SUSPECT_TEXT.count(count)}`}
                 >
-                  <span className="mf-suspect__dot" style={{ background: playerColor(to, players.get(to)?.animal) }} aria-hidden="true" />
-                  <span className="mf-suspect__nick mf-suspect__nick--to">{nick(to)}</span>
+                  <PlayerName className="mf-suspect__nick mf-suspect__nick--to" seat={to}>{nick(to)}</PlayerName>
                   <span className="mf-suspect__total">{count}개</span>
                 </li>
               ))}

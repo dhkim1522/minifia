@@ -382,11 +382,11 @@ describe("SuspectButton", () => {
 describe("HeadStack 의심 칩", () => {
   it("남의 이름표는 4장 이상일 때만 칩이 보인다", () => {
     for (const n of [0, 1, 2, 3]) {
-      const { container, unmount } = render(<HeadStack name="영희" color="var(--seat-2)" suspect={n} />);
+      const { container, unmount } = render(<HeadStack name="영희" seat={1} suspect={n} />);
       expect(container.querySelector("[data-suspect-count]")).toBeNull();
       unmount();
     }
-    const { container } = render(<HeadStack name="영희" color="var(--seat-2)" suspect={4} />);
+    const { container } = render(<HeadStack name="영희" seat={1} suspect={4} />);
     const chip = container.querySelector("[data-suspect-count]");
     expect(chip?.getAttribute("data-suspect-count")).toBe("4");
     expect(chip?.getAttribute("aria-label")).toBe("의심 표시 4개");
@@ -396,13 +396,13 @@ describe("HeadStack 의심 칩", () => {
     expect(container.querySelector(".mv-tag [data-suspect-count]")).not.toBeNull();
   });
   it("내 이름표는 1장 이상이면 늘 보이고 0장·값 없음은 없다", () => {
-    const one = render(<HeadStack name="민수" color="var(--seat-1)" me suspect={1} />);
+    const one = render(<HeadStack name="민수" seat={0} me suspect={1} />);
     expect(one.container.querySelector("[data-suspect-count]")?.getAttribute("aria-label")).toBe("의심 표시 1개");
     one.unmount();
-    const zero = render(<HeadStack name="민수" color="var(--seat-1)" me suspect={0} />);
+    const zero = render(<HeadStack name="민수" seat={0} me suspect={0} />);
     expect(zero.container.querySelector("[data-suspect-count]")).toBeNull();
     zero.unmount();
-    const none = render(<HeadStack name="민수" color="var(--seat-1)" me />);
+    const none = render(<HeadStack name="민수" seat={0} me />);
     expect(none.container.querySelector("[data-suspect-count]")).toBeNull();
   });
 });

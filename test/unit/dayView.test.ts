@@ -570,14 +570,14 @@ describe("dayEvents — 경찰 화면 순서 (UI-SPEC 245·266행, E6 #35)", () 
     const events = dayEvents(police("night", []), police("morning", [{ n: 1, target: 2, isMafia: false }], undefined, { morning: {} }));
     same(events.announces, [{ text: "아무 일도 없었습니다", at: 2600, ms: 2200 }]);
     same(events.lines, [{ kind: "hot", text: "아무 일도 없었습니다", at: 2600 }]);
-    same(events.localCards, [{ at: 2400, title: "도윤", text: "마피아 아님" }]);
+    same(events.localCards, [{ at: 2400, seat: 2, title: "도윤", text: "마피아 아님" }]);
     same([ANNOUNCE_POLICE_AT, ANNOUNCE_POLICE_MS, POLICE_CARD_AT], [2600, 2200, 2400]);
   });
 
   it("대상이 마피아면 본문 '마피아', 피해자 문장도 2.6초", () => {
     const events = dayEvents(police("night", []), police("morning", [{ n: 1, target: 4, isMafia: true }], undefined, { morning: { eliminated: 3 } }));
     same(events.announces, [{ text: "지호 님이 밤사이 탈락했어요", icon: "target", at: 2600, ms: 2200 }]);
-    same(events.localCards, [{ at: 2400, title: "하윤", text: "마피아" }]);
+    same(events.localCards, [{ at: 2400, seat: 4, title: "하윤", text: "마피아" }]);
   });
 
   it("경찰이 그 밤에 고르지 않았으면 0.4초 보통 순서이고 카드가 없다", () => {
@@ -591,7 +591,7 @@ describe("dayEvents — 경찰 화면 순서 (UI-SPEC 245·266행, E6 #35)", () 
     const dead = NAMES.map((n, seat) => pl(seat, n, seat !== 1));
     const events = dayEvents(police("night", [], alive), police("morning", [{ n: 1, target: 2, isMafia: false }], dead, { morning: { eliminated: 1 } }));
     same(events.announces, [{ text: "암살당했습니다", icon: "ghost", at: 2600, ms: 2000 }]);
-    same(events.localCards, [{ at: 2400, title: "도윤", text: "마피아 아님" }]);
+    same(events.localCards, [{ at: 2400, seat: 2, title: "도윤", text: "마피아 아님" }]);
   });
 
   it("시민 화면에는 로컬 카드가 없고 결과 문구가 어디에도 없다 (L8, T-09-40)", () => {

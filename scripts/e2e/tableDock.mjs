@@ -3,11 +3,13 @@ import {
   SetupError,
   closeSheet,
   installFakeViewport,
+  openRoleCard,
   openTableDockPane,
   openTestSheet,
   readChatLines,
   readGame,
   readPeoplePages,
+  selectRoleCardTab,
   setBots,
   showPeopleTarget,
   skipOnce,
@@ -20,6 +22,11 @@ import { rectInside, TAP_MIN } from "./lib.mjs";
 
 function dockMode(page, name) {
   return page.locator(`[data-table-dock][data-dock-open="${name}"]`);
+}
+
+async function nicknameColor(parent, seat) {
+  const name = parent.locator(`[data-player-name="${seat}"]`).last();
+  return await name.count() > 0 ? await name.evaluate((element) => getComputedStyle(element).color) : null;
 }
 
 async function peoplePage(page) {
@@ -242,6 +249,8 @@ export function makeTableDockFlow({ recorder, openGame, closeGame, writeSheet, g
         && await roster.locator(`[data-table-seat="${game.hostSeat}"]`).count() === 0
         && await roster.locator("[data-pick]").count() === 0
         && await hp.locator("[data-chat-input]").count() === 0);
+      const peopleColors = await Promise.all(guests.map(({ seat }) => nicknameColor(roster, seat)));
+      const worldColors = await Promise.all(guests.map(({ seat }) => nicknameColor(hp.locator("[data-world-stage]"), seat)));
       await swipe(hp, "[data-dock-handle]", 1, ctx.size.mobile !== false);
       await dockMode(hp, "closed").waitFor({ timeout: 3500 });
       rec(sc, "TD4", "손잡이를 아래로 밀면 펼친 패널이 닫힌다", await hp.locator("[data-dock-pane]").count() === 0);
@@ -262,6 +271,8 @@ export function makeTableDockFlow({ recorder, openGame, closeGame, writeSheet, g
       const lines = await readChatLines(hp);
       rec(sc, "TD6", "채팅을 열면 두 메시지가 보이고 읽지 않은 표시가 사라진다",
         messages.every((text) => lines?.some((line) => line.text === text)) && await unread.count() === 0);
+      const chatLog = hp.locator("[data-chat-log]");
+      const chatColors = await Promise.all([first, second].map(({ seat }) => nicknameColor(chatLog, seat)));
 
       const draft = "쓰던 채팅은 남아요";
       const input = hp.locator("[data-chat-input]");
@@ -285,6 +296,18 @@ export function makeTableDockFlow({ recorder, openGame, closeGame, writeSheet, g
       await roster.locator(`[data-table-seat="${first.seat}"][data-suspect-tag]`).click();
       await ht.waitFor((view) => view.me.suspectTo === first.seat, 4000, "의심 딱지 서버 반영");
       rec(sc, "TD8", "도구에서 의심 대상을 골라 서버에 반영한다", ht.last().me.suspectTo === first.seat);
+      await openRoleCard(hp);
+      await selectRoleCardTab(hp, "의심 기록");
+      const record = hp.locator(`[data-suspect-row][data-suspect-to="${first.seat}"]`);
+      const recordColor = await nicknameColor(record, first.seat);
+      rec(sc, "TD-NAMES", "무대·참가자 판·채팅·의심 기록의 닉네임 색은 공개 좌석별로 같고 식별용 점이 없다",
+        peopleColors.every((color, i) => color !== null && color === worldColors[i])
+        && new Set(peopleColors).size === guests.length
+        && chatColors.every((color, i) => color === peopleColors[i])
+        && recordColor === peopleColors[0]
+        && await hp.locator(".mv-tag__dot, .mf-suspect__dot").count() === 0,
+        JSON.stringify({ peopleColors, worldColors, chatColors, recordColor }));
+      await closeSheet(hp, "의심 기록");
       await openTableDockPane(hp, "tools");
       await tools.locator("[data-will-button]").click();
       await writeSheet(hp, ht, "will", "제 유언을 전해 주세요");
@@ -309,7 +332,8 @@ export function makeTableDockFlow({ recorder, openGame, closeGame, writeSheet, g
       const preview = first.page.locator("[data-dock-peek]").filter({ hasText: messages[1] });
       await preview.waitFor({ timeout: 3500 });
       rec(voteScenario, "TD10b", "남의 지목 차례 대기 중에는 최신 상대 메시지 한 줄만 보여 준다",
-        await preview.count() === 1 && await first.page.locator("[data-chat-log]").count() === 0);
+        await preview.count() === 1 && await first.page.locator("[data-chat-log]").count() === 0
+        && await nicknameColor(preview, second.seat) === peopleColors[1]);
       await preview.click();
       await dockMode(first.page, "chat").waitFor({ timeout: 3500 });
       const guestInput = first.page.locator("[data-chat-input]");

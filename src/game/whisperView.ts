@@ -4,6 +4,10 @@ import { isAlive } from "../../shared/game/alive";
 import { RULES } from "../../shared/game/ruleset";
 import { WHISPER_PHASES } from "../../shared/game/whisper";
 import type { RoomView } from "../../shared/protocol";
+import type { ChatTextPart } from "./chatText";
+
+const between = " → ";
+const factSuffix = " 귓속말";
 
 /** 화면 문구 단일 출처 (UI-SPEC Copywriting Contract 원문) */
 export const WHISPER_TEXT = {
@@ -24,9 +28,9 @@ export const WHISPER_TEXT = {
   rejectPhase: "지금은 보낼 수 없어요",
   /** 그 밖의 거절 */
   rejectOther: "보내지 못했어요. 다시 해 보세요",
-  fact: (from: string, to: string): string => `${from} → ${to} 귓속말`,
-  toMe: (from: string): string => `${from} → 나`,
-  fromMe: (to: string): string => `나 → ${to}`,
+  fact: (from: string, to: string): string => `${from}${between}${to}${factSuffix}`,
+  toMe: (from: string): string => `${from}${between}나`,
+  fromMe: (to: string): string => `나${between}${to}`,
 } as const;
 
 /** 버튼·모드·시트를 낼 수 있는가: 낮 토론(O-3)이고 내가 산 사람이고 나를 뺀 산 사람이 1명 이상. 유령에게는 만들지 않는다(O-21) */
@@ -67,6 +71,8 @@ export interface WhisperLineModel {
   /** 비공개 블록의 첫 줄 "{A} → 나" / "나 → {B}" */
   title?: string;
   text: string;
+  titleParts?: readonly ChatTextPart[];
+  textParts?: readonly ChatTextPart[];
 }
 
 /**
@@ -78,10 +84,18 @@ export function whisperLine(line: WhisperSource, mySeat: number, nameOf: (seat: 
   if (line.kind === "system" && line.icon === "whisper") {
     // 보낸·받은 사람은 공개 사실 줄 대신 비공개 줄 하나만 본다(중복 없음). 서버가 당사자에게 사실 줄을 보내지 않지만, 혹시 와도 겹쳐 그리지 않는다
     if (line.seat === mySeat || line.to === mySeat) return null;
-    return { kind: "system", whisper: "public", icon: "whisper", text: WHISPER_TEXT.fact(nameOf(line.seat), nameOf(line.to)) };
+    const from = { seat: line.seat, name: nameOf(line.seat) };
+    const to = { seat: line.to, name: nameOf(line.to) };
+    return { kind: "system", whisper: "public", icon: "whisper", text: WHISPER_TEXT.fact(from.name, to.name), textParts: [from, between, to, factSuffix] };
   }
   if (line.kind !== "whisper") return null;
-  if (line.to === mySeat) return { kind: "whisper", whisper: "in", icon: "whisper", title: WHISPER_TEXT.toMe(nameOf(line.seat)), text: line.text };
-  if (line.seat === mySeat) return { kind: "whisper", whisper: "out", icon: "whisper", title: WHISPER_TEXT.fromMe(nameOf(line.to)), text: line.text };
+  if (line.to === mySeat) {
+    const from = { seat: line.seat, name: nameOf(line.seat) };
+    return { kind: "whisper", whisper: "in", icon: "whisper", title: WHISPER_TEXT.toMe(from.name), titleParts: [from, between, { seat: mySeat, name: "나" }], text: line.text };
+  }
+  if (line.seat === mySeat) {
+    const to = { seat: line.to, name: nameOf(line.to) };
+    return { kind: "whisper", whisper: "out", icon: "whisper", title: WHISPER_TEXT.fromMe(to.name), titleParts: [{ seat: mySeat, name: "나" }, between, to], text: line.text };
+  }
   return null; // 당사자가 아닌 본문 줄은 서버가 보내지 않는다 — 혹시 와도 그리지 않는다
 }
