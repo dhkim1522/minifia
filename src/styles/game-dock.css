@@ -137,6 +137,17 @@
   .mf-table-controls__suspect-progress rect { animation-timing-function: steps(1, end); }
 }
 .mf-game-dock .mf-table-controls--cards .mf-table-controls__name { word-break: normal; overflow-wrap: anywhere; flex: none; }
+
+/* 모든 이름을 같은 칸에서 재면 페이지나 배지 유무에 따라 카드 높이가 달라지지 않는다. */
+.mf-table-controls__name-stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+}
+.mf-table-controls__name-stack > * { grid-area: 1 / 1; }
+.mf-table-controls__name-space { visibility: hidden; }
+.mf-table-controls__name-space::before { content: attr(data-measure-name); }
+
 .mf-table-controls__portrait {
   position: relative;
   display: grid;

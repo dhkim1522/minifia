@@ -20,15 +20,16 @@ export interface TableControlsProps {
   holdingSuspect?: number | undefined;
   extra?: ReactNode;
   cards?: boolean;
+  pagedPlayers?: readonly PublicPlayer[] | undefined;
   night?: { tally: ReadonlyMap<number, number>; sure?: number; callSeats?: ReadonlySet<number> };
   onChoose(seat: number): void;
 }
 
-export function TableControls({ players, focus, selected, readOnly = false, pick, notes, myNoteTarget, suspectHold, holdingSuspect, extra, cards = false, night, onChoose }: TableControlsProps) {
+export function TableControls({ players, focus, selected, readOnly = false, pick, notes, myNoteTarget, suspectHold, holdingSuspect, extra, cards = false, pagedPlayers, night, onChoose }: TableControlsProps) {
   return (
     <div className={`mf-table-controls${cards ? " mf-table-controls--cards" : ""}`} role="group"
       aria-label={pick?.group ?? "테이블 참가자"} data-table-controls="" data-face-list={night ? "" : undefined}>
-      {players.map((player) => {
+      {players.map((player, index) => {
         const seat = player.seat;
         const count = notes?.get(seat)?.length ?? 0;
         const myNote = cards && myNoteTarget === seat;
@@ -42,6 +43,7 @@ export function TableControls({ players, focus, selected, readOnly = false, pick
         const label = count > 0 ? `${name}, ${SUSPECT_TEXT.count(count)}${myNote ? ", 내 딱지 있음" : ""}`
           : sure ? `${name}, 확정` : tally > 0 ? `${name}, ${tally}명 선택` : name;
         const pressed = (pick ? pick.mine : selected ?? focus) === seat;
+        const playerName = <PlayerName className="mf-table-controls__name" seat={seat}>{player.nickname}</PlayerName>;
         return (
           <button key={seat} type="button" className={`mf-table-controls__seat${call ? " is-call" : ""}`}
             data-face={night && pick?.seats.has(seat) ? seat : undefined} data-call={call ? "" : undefined}
@@ -63,7 +65,15 @@ export function TableControls({ players, focus, selected, readOnly = false, pick
                 <PlayerPortrait seat={seat} animal={player.animal} variant="participant" look={player.look} />
               </span>
             ) : <PlayerPortrait seat={seat} animal={player.animal} />}
-            <PlayerName className="mf-table-controls__name" seat={seat}>{player.nickname}</PlayerName>
+            {index === 0 && pagedPlayers ? (
+              <span className="mf-table-controls__name-stack">
+                {playerName}
+                {pagedPlayers.map((participant) => (
+                  <span key={participant.seat} className="mf-table-controls__name mf-table-controls__name-space"
+                    aria-hidden="true" data-measure-name={participant.nickname} />
+                ))}
+              </span>
+            ) : playerName}
             {cards && pressed ? <span className="mv-face__mark" data-mark-icon="check" aria-hidden="true"><V2Icon name="check" size={18} /></span> : null}
             {count > 0 ? <span className="mf-table-controls__count" data-suspect-mine={myNote ? "" : undefined} aria-hidden="true">
               <V2Icon name={myNote ? "postitFilled" : "postit"} size={11} />{count}

@@ -287,7 +287,8 @@ export function GameDock({ scope, initialPane, peopleAction, preserveWriting, ke
                     event.stopPropagation();
                   }}>
                   <TableControls {...roster} suspectHold={holdAction} holdingSuspect={holdingSeat}
-                    cards players={roster.players.slice(page * PEOPLE_PER_PAGE, (page + 1) * PEOPLE_PER_PAGE)} />
+                    cards players={roster.players.slice(page * PEOPLE_PER_PAGE, (page + 1) * PEOPLE_PER_PAGE)}
+                    pagedPlayers={pageCount > 1 ? roster.players : undefined} />
                 </div>
                 {activeAction?.footer}
               </div>

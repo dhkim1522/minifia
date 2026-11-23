@@ -54,9 +54,13 @@
 }
 
 .mf-btn.mf-answer-presentation__suspect {
-  background: var(--crimson-300);
+  background: var(--noir-inset);
   border-color: var(--crimson-300);
-  color: var(--night-950);
+  color: var(--crimson-300);
+}
+
+.mf-btn.mf-answer-presentation__suspect[aria-pressed="false"]:enabled:is(:active, [data-answer-suspect-touch]) {
+  background: color-mix(in srgb, var(--noir-inset), var(--crimson-300) 12%);
 }
 
 .mf-btn.mf-answer-presentation__suspect[aria-pressed="true"] {

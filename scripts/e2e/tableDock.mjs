@@ -39,9 +39,10 @@ async function peoplePage(page) {
 
 function peoplePagesFit(pages, size) {
   const viewport = { left: 0, top: 0, right: size.w, bottom: size.h };
-  return pages.length > 0 && pages.every((cards) => cards.length > 0 && cards.length <= 4 &&
+  const first = pages[0]?.[0]?.rect;
+  return first !== undefined && pages.every((cards) => cards.length > 0 && cards.length <= 4 &&
     cards.every(({ rect }) => rectInside(rect, viewport) && rect.width >= TAP_MIN && rect.height >= TAP_MIN &&
-      Math.abs(rect.top - cards[0].rect.top) <= 1));
+      Math.abs(rect.top - first.top) <= 1 && Math.abs(rect.height - first.height) <= 1));
 }
 
 export function makeFirstBallotDockFlow({ recorder, startHost, openGuest, checkRoomWidth }) {
@@ -66,7 +67,7 @@ export function makeFirstBallotDockFlow({ recorder, startHost, openGuest, checkR
       const lookPages = await readPeoplePages(guest.page, peoplePage);
       const selectedLook = guest.page.locator('[data-table-seat][aria-pressed="true"]');
       const beforeSwipe = await selectedLook.evaluateAll(cards => cards.map(c => c.getAttribute("data-table-seat")));
-      rec(id, "FB0", "8인 참가자 보기에서 일곱 얼굴이 한 줄씩 나눠지고 모든 카드가 44px 이상이다",
+      rec(id, "FB0", "8인 참가자 보기에서 일곱 얼굴이 한 줄씩 같은 높이로 나뉘고 모든 카드가 44px 이상이다",
         peoplePagesFit(lookPages, ctx.size) && lookPages[0].length === 4 && lookPages[1]?.length === 3);
       const touch = ctx.size.mobile !== false;
       await swipe(guest.page, `[data-table-seat="${lookPages[0][2].seat}"]`, -1, touch, "x", 780);

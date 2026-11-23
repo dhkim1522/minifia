@@ -896,6 +896,43 @@ describe("RoomScreen: 첫날 답안 발표", () => {
     expect(stage.props?.scene?.notes).toEqual({ 1: [0] });
   });
 
+  it("답안의 의심 버튼은 터치하는 동안만 누름을 표시하고 취소나 발표자 이동 후에는 남기지 않는다", () => {
+    const send = vi.fn(() => true);
+    connectionMock.current = conn({ view: play("dayAnnounce", first), send });
+    const { container, rerender } = render(ui());
+    const suspect = () => container.querySelector<HTMLButtonElement>("[data-answer-suspect]")!;
+    const held = () => suspect().hasAttribute("data-answer-suspect-touch");
+    const touch = { pointerId: 12, pointerType: "touch", isPrimary: true, button: 0 };
+
+    fireEvent.pointerDown(suspect().querySelector("svg")!, touch);
+    expect(held()).toBe(true);
+    fireEvent.pointerUp(window, { ...touch, pointerId: 13 });
+    expect(held()).toBe(true);
+    fireEvent.pointerUp(window, touch);
+    expect(held()).toBe(false);
+
+    fireEvent.pointerDown(suspect(), touch);
+    expect(held()).toBe(true);
+    fireEvent.pointerCancel(suspect(), touch);
+    expect(held()).toBe(false);
+
+    fireEvent.pointerDown(suspect(), { ...touch, pointerType: "pen" });
+    expect(held()).toBe(true);
+    fireEvent(suspect(), new PointerEvent("lostpointercapture", { ...touch, bubbles: true }));
+    expect(held()).toBe(false);
+
+    const focusedButton = suspect();
+    focusedButton.focus();
+    fireEvent.pointerDown(focusedButton, touch);
+    expect(held()).toBe(true);
+    setView(play("dayAnnounce", missing));
+    rerender(ui());
+    expect(held()).toBe(false);
+    expect(suspect()).toBe(focusedButton);
+    expect(document.activeElement).toBe(focusedButton);
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it("재접속은 이미 공개 중인 차례를 바로 그리며 마감이 지나면 이전 대상에게 전송하지 않는다", () => {
     vi.setSystemTime(5_000);
     const send = vi.fn(() => true);
