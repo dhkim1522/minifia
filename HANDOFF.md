@@ -6,7 +6,7 @@
 
 - **v3.0 시험판**(`v3`)은 [B안 달빛 누아르](docs/decisions/0093-v3-noir-visual-redesign.md)의 재즈 바와 공통 화면을 쓴다. **22** 낮은 토론 → 찬반 → 지목 → 유언 → 처형(결정 0090). **23** 첫날 라이어게임과 정답 공개, 조기 진행, D1 판 기록(결정 0091). **24-01~07** 구현 완료.
 - [동물 12종](docs/decisions/0102-animal-characters.md)은 3D 모델·초상·의상을 공유한다. [공용 화면](docs/decisions/0100-home-art-and-discussion-controls.md)의 채팅은 하단에 두고, [단계의 선택과 결과](docs/decisions/0103-phase-events.md)는 중앙에서 진행한다.
-- **공개 v3** `2026-11-23T07:20:58Z+ee3a8600`. [이전 유언 편지와 손글씨](docs/decisions/0124-v3-public-will-reading-time.md)를 복원하고 본문을 30~32px로 키웠다. 읽기 게이지는 10초이며 원하는 사람만 먼저 닫을 수 있다. 320·390px와 PC에서 검사했다. 휴대폰 실기기 확인은 대기 중이다. [딱지·제시어](docs/decisions/0122-v3-suspect-hold-keyword-reveal-and-will.md), [테스트 방](https://minifia-v3.dhplay.workers.dev/?test=1).
+- **공개 v3** `2026-11-23T08:13:34Z+fca1cfd2`. [게임 중 의심 조작과 모바일 채팅](docs/decisions/0125-v3-suspect-throughout-play-and-chat-keyboard.md)을 갱신했다. 의심 표시는 다음 날에도 이어지며, 채팅은 키보드 위로 올라간다. [유언 편지와 10초 게이지](docs/decisions/0124-v3-public-will-reading-time.md), [테스트 방](https://minifia-v3.dhplay.workers.dev/?test=1). 휴대폰 실기기 검수는 대기 중이다.
 - **v2.0 완료 처리(2026-11-07)**: 태그 `v2.0`, 문서는 `.planning/milestones/v2.0-*`. 열린 감사 항목 26개는 STATE.md 미룬 항목. main 은 v1.0 그대로, v3.0 실테스트 통과 뒤 반영.
 - **캐릭터·맵**의 B안 모델은 `src/world/character.ts`, `src/world/ghost3d.ts`, `src/world/maps/`에 있다. 시안은 `design/v3.0/redesign/b-noir.png`. 이미지 재생성은 [에셋 자동 검사](docs/screen-map.md#에셋-자동-검사) 참고.
 - **맵**: 일반·테스트·튜토리얼·다시 하기 모두 재즈 바. 이전 광장 방은 역할·단계를 유지해 원탁으로 옮긴다. 광장 자료는 개발 측정에서만 쓴다.
