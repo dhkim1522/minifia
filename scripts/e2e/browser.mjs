@@ -1828,8 +1828,9 @@ export function readLetter(page) {
       head: head ? { text: (head.textContent ?? "").trim(), fontPx: parseFloat(headCs.fontSize), color: headCs.color } : null,
       paperBg: paper ? getComputedStyle(paper).backgroundColor : null,
       family: lineCs ? lineCs.fontFamily : null,
+      // 공백은 겹치는 글꼴 서브셋을 확인하는 과정에서 false가 될 수 있으므로 보이는 글자만 확인한다.
       penLoaded: lineEls.length > 0 && [...document.fonts].some((face) => face.family.includes("Nanum Pen") && face.status === "loaded")
-        && document.fonts.check('30px "Nanum Pen Script"', lineEls.map((el) => el.textContent).join("")),
+        && document.fonts.check('30px "Nanum Pen Script"', lineEls.map((el) => el.textContent).join("").replace(/\s/g, "")),
       gaugeDuration: gauge ? Number.parseFloat(getComputedStyle(gauge).animationDuration) * 1000 : null,
       closeHeight: close?.offsetHeight ?? null,
       scrollGap: text ? text.scrollHeight - text.clientHeight : null,
