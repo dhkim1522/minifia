@@ -35,7 +35,7 @@ export const BED_OF: Readonly<Record<PhaseId, BedId | null>> = {
   defense: "bed.vote",
   verdict: "bed.vote",
   execution: "bed.vote",
-  answerReveal: "bed.vote", // 첫날 정답 공개(P23-21): 처형 뒤 저녁빛 그대로 — 침대가 끊기지 않고 밤 직전까지 이어진다
+  answerReveal: "bed.day", // 답안 발표부터 토론까지 낮 BGM을 이어 간다.
   night: "bed.night",
   morning: "bed.dawn",
   ended: "bed.result",

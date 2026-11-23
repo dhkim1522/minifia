@@ -126,7 +126,7 @@ const ALLOWED_WIRE_PATHS: ReadonlySet<string> = new Set([".view.me.verdictVote",
  * 넓히려면 받을 권리를 이 주석에 적고 아래 "키워드 공개 경로 고정" 시험의 기대 목록을 같이 고친다. SERVER_ONLY_KEYS 의 키워드 이름(keywordProbed·answerSubmits·answerDraft)은 이 목록에 들 수 없다.
  *  - .view.me.keyword: keyword 단계, 산 시민 편(경찰·의사·시민) 본인에게만 — 마피아·탈락자·다른 단계에는 키 자체가 없다(D-06).
  *  - .view.me.answer(.text/.final/.keywordBlocked): keyword 단계, 산 본인의 글·확정 여부. 금지 초안 안내는 제시어를 아는 작성자에게만 간다.
- *  - .view.day.keyword(.genre/.answer/.presentation): 모든 소켓에 같은 모양. 첫날 발표는 현재 한 줄만, 정답은 answerReveal에서만 보낸다.
+ *  - .view.day.keyword(.genre/.answer/.answers/.presentation): 모든 소켓에 같은 모양. 발표는 현재 한 줄만, 제시어와 답 목록은 최종 발표가 끝난 뒤 공개한다.
  */
 const KEYWORD_WIRE_PATHS: readonly string[] = [
   ".view.me.keyword",
@@ -137,6 +137,10 @@ const KEYWORD_WIRE_PATHS: readonly string[] = [
   ".view.day.keyword",
   ".view.day.keyword.genre",
   ".view.day.keyword.answer",
+  ".view.day.keyword.answers",
+  ".view.day.keyword.answers[].order",
+  ".view.day.keyword.answers[].seat",
+  ".view.day.keyword.answers[].text",
   ".view.day.keyword.presentation",
   ".view.day.keyword.presentation.order",
   ".view.day.keyword.presentation.total",
@@ -2039,7 +2043,7 @@ describe("키워드 공개 경로 고정 (23-06, D-06·D-14, T-23-20)", () => {
     const sample = {
       view: {
         me: { keyword: "단어", answer: { text: "글", final: false, keywordBlocked: true } },
-        day: { keyword: { genre: "영화", answer: "단어", presentation: { order: 1, total: 4, seat: 0, text: "글" } } },
+        day: { keyword: { genre: "영화", answer: "단어", answers: [{ order: 1, seat: 0, text: "글" }], presentation: { order: 1, total: 4, seat: 0, text: "글" } } },
       },
     };
     // 컨테이너 경로(.view·.view.me·.view.day)는 다른 키도 담으므로 키워드 줄기(keyword·answer)만 본다.

@@ -43,8 +43,6 @@ const KEYWORD_COPY = {
   hiddenName: "제시어를 볼 수 없어요",
   /** 카드 접근성 이름 */
   cardName: "제시어 카드",
-  note: "제시어는 쓰지 말고 단서를 남겨요",
-  hiddenHint: "주제를 보고 단서를 써요",
   /** 입력칸과 전송 버튼의 접근성 이름, 서버 접수 안내 */
   inputName: "단서 입력",
   sendName: "단서 보내기",
@@ -60,7 +58,7 @@ const META_ID = "mf-keyword-meta";
 const CARD_ENTER_MS = 420;
 
 // 첫날 키워드 카드(23-01, P23-1~5) + 답 입력줄(23-09, P23-6·9~15). 역할 확인과 같은 3D 무대(PreGame, sceneKey preGame) 위 가운데 카드 안에 제시어와 답 입력을 모은다 — 무대는 PreGame 이 깐다.
-// 카드는 맨 위 장르, 가운데 큰 키워드(마피아는 ???), 아래 각주 한 줄이다. 마피아 표식 칩·색·문구는 따로 두지 않는다 — 모양은 시민과 같고 ??? 하나만 다르다.
+// 카드는 맨 위 장르, 가운데 큰 키워드(마피아는 ???), 아래 단서 입력칸이다.
 // 키워드는 서버가 시민 편 본인에게만 보낸다(me.keyword). 마피아는 키 자체가 없으니 DOM 에도 단어가 없다. 입력줄 표식(data-answer-*)에는 역할·키워드 값이 없다(T-23-33).
 // 제시어가 표시되면 입력줄이 열린다. 글이 있으면 입력칸 안에 전송을, 서버 접수 뒤에는 같은 자리에 체크를 보여 준다.
 // 입력과 초안 저장은 useKeywordAnswer가 관리한다. 키보드가 열리면 카드가 작아지고 보이는 영역 안에 놓인다.
@@ -132,9 +130,6 @@ export function Keyword({ view, offset, epoch = 0, myRoleButton, send, canSend, 
               {KEYWORD_COPY.hidden}
             </p>
           )}
-          {!playtest ? <p className="mf-keyword__note" data-keyword-note="" hidden={kbOpen}>
-            {KEYWORD_COPY.note}
-          </p> : null}
           {!timeless || view.me.answer !== undefined ? <div className="mf-keyword__answer" data-answer-state={answer.state}>
             <span className="mf-sr-only" role="status" data-answer-done={confirmed ? "" : undefined}>{confirmed ? KEYWORD_COPY.sentName : ""}</span>
             <form className="mv-chat__form" onSubmit={onSubmit}>
@@ -155,7 +150,7 @@ export function Keyword({ view, offset, epoch = 0, myRoleButton, send, canSend, 
                   aria-label={KEYWORD_COPY.inputName}
                   aria-describedby={META_ID}
                   aria-invalid={answer.keywordBlocked || undefined}
-                  placeholder={playtest && !sent ? word === undefined ? KEYWORD_COPY.hiddenHint : KEYWORD_COPY.note : undefined}
+                  placeholder={KEYWORD_COPY.inputName}
                   disabled={answer.state === "locked"}
                   readOnly={sent || timeless}
                   value={answer.value}

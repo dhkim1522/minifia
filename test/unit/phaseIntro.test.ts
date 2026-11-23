@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { phaseDurationOf } from "../../shared/game/discussion";
-import { FIRST_ANSWER_TURN_MS, PHASE_INTRO_MS, PHASE_INTRO_SWITCH, phaseIntroActive } from "../../shared/game/phases";
+import { ANSWER_REVEAL_MS, FIRST_ANSWER_TURN_MS, PHASE_INTRO_MS, PHASE_INTRO_SWITCH, phaseIntroActive } from "../../shared/game/phases";
 import { skipPhase } from "../../shared/game/testTools";
 import { tick } from "../../shared/game/tick";
 import { buildView } from "../../shared/game/view";
@@ -37,9 +37,14 @@ it("역할, 라이어, 첫 답안 발표, 토론에서 서버 열림부터 원�
   expect(second.keywordPresentationIndex).toBe(1);
   expect(second.phaseStartsAt).toBeUndefined();
   expect(second.phaseEndsAt).toBe(presentation.phaseEndsAt! + FIRST_ANSWER_TURN_MS);
-  const discussion = tick(presentation, presentation.phaseEndsAt! + FIRST_ANSWER_TURN_MS * 3, random);
+  const revealAt = presentation.phaseEndsAt! + FIRST_ANSWER_TURN_MS * 3;
+  const reveal = tick(presentation, revealAt, random);
+  expect(reveal.phase).toBe("answerReveal");
+  expect(reveal.phaseStartsAt).toBeUndefined();
+  expect(reveal.phaseEndsAt).toBe(revealAt + ANSWER_REVEAL_MS);
+  const discussion = tick(reveal, reveal.phaseEndsAt!, random);
   expect(discussion.phase).toBe("discussion");
-  expect(discussion.phaseStartsAt).toBe(presentation.phaseEndsAt! + FIRST_ANSWER_TURN_MS * 3 + PHASE_INTRO_MS);
+  expect(discussion.phaseStartsAt).toBe(reveal.phaseEndsAt! + PHASE_INTRO_MS);
   expect(discussion.phaseEndsAt).toBe(discussion.phaseStartsAt! + phaseDurationOf(discussion)!);
 });
 
@@ -60,7 +65,7 @@ it("조기 테스트 넘김과 늦은 알람도 새 단계의 서버 열림을 �
 });
 
 it("전용 공개 연출과 기존 저장 형식에 새 단계 안내 시간을 겹치지 않는다", () => {
-  const verdict = startedAt(4, 23, "verdict");
+  const { keywordReveal: _current, ...verdict } = startedAt(4, 23, "verdict");
   const answerReveal = tick(verdict, verdict.phaseEndsAt!, random);
   expect(answerReveal.phase).toBe("answerReveal");
   expect(answerReveal.phaseStartsAt).toBeUndefined();

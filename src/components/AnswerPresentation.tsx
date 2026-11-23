@@ -32,7 +32,7 @@ export function AnswerPresentation({ turn, player, mySeat, marked, canSuspect, o
           {turn.seat !== mySeat ? (
             <Button variant="secondary" compact className="mf-answer-presentation__suspect" data-answer-suspect="" aria-pressed={marked}
               aria-label={SUSPECT_TEXT.target(name, marked)}
-              icon={<V2Icon name="postit" size={18} />} disabled={!canSuspect} onClick={onSuspect}>
+              icon={<V2Icon name={marked ? "postitFilled" : "postit"} size={18} />} disabled={!canSuspect} onClick={onSuspect}>
               {marked ? SUSPECT_TEXT.clear : SUSPECT_TEXT.ready}
             </Button>
           ) : null}

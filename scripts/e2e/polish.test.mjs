@@ -60,7 +60,7 @@ test("TOD_BY_PHASE 키 11개(첫날 정답 공개 포함, 23-05)·TOD_ABSENT_PHA
   assert.equal(TOD_BY_PHASE.night, "night");
   assert.equal(TOD_BY_PHASE.morning, "morning");
   assert.equal(TOD_BY_PHASE.nomination, "dusk");
-  assert.equal(TOD_BY_PHASE.answerReveal, "dusk", "첫날 정답 공개는 저녁(조명 vote, 23-05 P23-2)");
+  assert.equal(TOD_BY_PHASE.answerReveal, "day", "첫날 제시어 공개는 토론 전 낮 조명");
   assert.equal(TOD_BY_PHASE.verdict, "day", "찬반은 토론 장면(낮) 그대로 — 22-13 P22-3");
 });
 

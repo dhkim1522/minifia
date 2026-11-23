@@ -59,17 +59,16 @@ describe("첫날 키워드 단계 (D-01·D-06)", () => {
   });
 });
 
-// 23-05: 실제 방에서 첫날 찬반 부결 → answerReveal(4.4초, 정답 공개) → 밤. 둘째 날 부결은 곧장 밤(D-02·D-22·D-03).
-describe("첫날 정답 공개 단계 (D-02·D-22)", () => {
+describe("첫날 제시어 공개 단계", () => {
   const rejectAll = (room: Awaited<ReturnType<typeof seat>>): Record<number, boolean> =>
     Object.fromEntries(actorsOf(room).map((a) => [a.seat, false]));
 
-  it("첫날 찬반 부결 → answerReveal: phaseDurationMs 4400, 모든 소켓의 day.keyword.answer 가 저장된 단어와 같고, 마감 뒤 night", async () => {
+  it("마지막 답 발표 → 3초 제시어 공개 → 토론, 첫날 부결 뒤는 다시 공개 없이 밤", async () => {
     const room = await seat(3, 0);
     const socks = [room.host, ...room.guests.map((g) => g.sock)];
     send(room.host, { t: "start" });
     for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
-    await advanceTo(room.code, socks, "verdict");
+    await advanceTo(room.code, socks, "dayAnnounce");
     for (const sock of socks) await settle(sock, mark(sock));
     const before = (await storedRoom(room.code)) as KeywordRoom;
     const word = before.keyword!.word;
@@ -77,20 +76,24 @@ describe("첫날 정답 공개 단계 (D-02·D-22)", () => {
     // 정답 공개 전 프레임에는 어느 소켓의 view 에도 answer 가 없다
     for (const sock of socks) expect((lastViewOf(sock).day?.keyword as { answer?: string } | undefined)?.answer).toBeUndefined();
 
+    await advanceTo(room.code, socks, "answerReveal");
+    for (const sock of socks) {
+      const view = lastViewOf(sock);
+      expect(view.phase).toBe("answerReveal");
+      expect(view.phaseDurationMs).toBe(3000);
+      expect(view.day?.keyword).toEqual({ genre: label, answer: word, answers: expect.any(Array) });
+      expect(view.day?.noExecution).toBeUndefined();
+    }
+    await advanceTo(room.code, socks, "discussion");
+    for (const sock of socks) expect(lastViewOf(sock).day?.keyword?.answer).toBe(word);
+    await advanceTo(room.code, socks, "verdict");
     const actors = actorsOf(room);
     await verdictAll(room.code, actors, rejectAll(room));
-    for (const sock of socks) await settle(sock, mark(sock));
-    expect((await storedRoom(room.code)).phase).toBe("answerReveal");
-    for (const a of actors) {
-      const view = lastViewOf(a.sock);
-      expect(view.phase).toBe("answerReveal");
-      expect(view.phaseDurationMs).toBe(4400);
-      expect(view.day?.keyword).toEqual({ genre: label, answer: word });
-      expect(view.day?.noExecution).toEqual({ reason: "rejected" });
+    expect((await storedRoom(room.code)).phase).toBe("night");
+    for (const sock of socks) {
+      expect(lastViewOf(sock).day?.keyword?.answer).toBe(word);
+      expect(lastViewOf(sock).day?.noExecution).toEqual({ reason: "rejected" });
     }
-
-    await advanceTo(room.code, socks, "night");
-    for (const a of actors) expect(lastViewOf(a.sock).day?.keyword).toBeUndefined();
   }, 60_000);
 
   it("둘째 날 찬반 부결은 곧장 night 이다(answerReveal 없음)", async () => {
@@ -236,9 +239,11 @@ describe("키워드 답 접수 (D-07·D-10)", () => {
       assertCurrent(i);
     }
     send(room.host, { t: "testSkip" });
+    for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "answerReveal");
+    send(room.host, { t: "testSkip" });
     for (const sock of socks) {
       await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "discussion");
-      expect(lastViewOf(sock).day?.keyword).toBeUndefined();
+      expect(lastViewOf(sock).day?.keyword?.answers).toEqual(rows.map((row, index) => ({ ...row, order: index + 1 })));
       expect(lastViewOf(sock).day?.suspects).toEqual([{ from: a.seat, to: c.seat }]);
     }
     const stored = (await storedRoom(room.code)) as AnswerRoom;

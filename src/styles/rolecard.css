@@ -127,6 +127,10 @@
 .mf-suspect-log__day + .mf-suspect-log__day { margin-top: var(--space-md); }
 .mf-suspect-log__head { position: sticky; top: 0; z-index: 1; padding-bottom: var(--space-xs); margin-bottom: var(--space-xs); background: var(--noir-panel); }
 .mf-suspect-log__dayname { font-size: 16px; line-height: 24px; font-weight: 700; color: var(--gray-50); }
+.mf-keyword-record__word { margin-inline-start: var(--space-sm); color: var(--noir-accent); overflow-wrap: anywhere; }
+.mf-keyword-record__answers { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--space-xs); }
+.mf-keyword-record__answer { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: var(--space-sm); padding: 4px var(--space-sm); overflow-wrap: anywhere; font: var(--type-label); }
+.mf-keyword-record__name { font-weight: 700; }
 
 /* 받은 사람별로 의심딱지 수를 묶는다. */
 .mf-suspect__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-xs); }

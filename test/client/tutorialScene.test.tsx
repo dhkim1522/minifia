@@ -69,6 +69,9 @@ describe("혼자 하기 장면 시계", () => {
     const clickTool = vi.fn();
     const { result } = renderHook(() => useTutorialScene(clickTool, true));
     expect(result.current.steps).toBe(9);
+    act(() => result.current.go("answerReveal"));
+    await wait(3_000);
+    expect(result.current.scene.id).toBe("postit");
     act(() => result.current.go("verdict"));
     await wait(0);
     expect(result.current.target).toBe("first-ballot");
@@ -77,7 +80,7 @@ describe("혼자 하기 장면 시계", () => {
     await wait(1500);
     expect(result.current.beat.id).toBe("c");
     await wait(3000);
-    expect(result.current.scene.id).toBe("answerReveal");
+    expect(result.current.scene.id).toBe("night");
 
     act(() => result.current.go("night"));
     await wait(0);

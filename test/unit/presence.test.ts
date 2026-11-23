@@ -220,7 +220,7 @@ describe("lightingOf (UI-SPEC 단계 조명)", () => {
     ["verdict", "talk"], // 22-13(P22-3): 찬반은 토론 장면 그대로
     ["defense", "trial"],
     ["execution", "trial"],
-    ["answerReveal", "vote"], // 23-05(P23-21): 정답 공개는 저녁빛(vote) — 장면 dusk
+    ["answerReveal", "talk"], // 제시어 공개도 답안 발표와 같은 낮 조명을 쓴다.
     ["night", "night"],
     ["morning", "morning"],
     ["lobby", "talk"],

@@ -10,6 +10,7 @@ import type { KeywordForms } from "./keywordGuard";
 import { BAR_CHAIR_CLOCKWISE_ANGLES, keywordPresentationOf } from "./keywordPresentation";
 import { keywordEntryOf } from "./keywords";
 import { barChairAssignment } from "./map";
+import { firstDayAnswerPending } from "./phases";
 import type { Player, RoomState } from "./room";
 import type { DeadlineResult } from "./tick";
 
@@ -21,9 +22,24 @@ export function routeAfterRoleReveal(state: RoomState): DeadlineResult {
   return state.keyword === undefined ? { state, stay: false, next: "dayAnnounce" } : { state, stay: false };
 }
 
-/** 정답은 첫날 라이어 게임의 정답 공개 장면에서만 모두에게 보낸다. */
+/** 공개가 시작된 뒤에는 기록에서도 같은 제시어와 답을 볼 수 있다. */
 export function answerOpenOf(state: RoomState): boolean {
-  return state.keyword !== undefined && (state.day ?? 1) === 1 && state.phase === "answerReveal";
+  return state.keyword !== undefined && (state.keywordReveal !== undefined || ((state.day ?? 1) === 1 && state.phase === "answerReveal"));
+}
+
+/** 발표가 끝난 직후에 공개 상태를 저장한다. 아무 답도 없었던 첫날에도 같은 흐름을 쓴다. */
+export function routeAfterKeywordPresentation(state: RoomState): DeadlineResult | undefined {
+  const turn = stepKeywordPresentation(state);
+  if (turn !== undefined) return turn;
+  if (!firstDayAnswerPending(state)) return undefined;
+  const { keywordPresentationIndex: _presentation, ...presented } = state;
+  return { state: { ...presented, keywordReveal: "beforeDiscussion" }, stay: false, next: "answerReveal" };
+}
+
+/** 배포 때 이미 저녁 공개에 들어갔던 판은 토론을 되돌리지 않고 밤을 이어 간다. */
+export function routeAfterKeywordReveal(state: RoomState): DeadlineResult {
+  if (state.keywordReveal === "beforeDiscussion") return { state, stay: false, next: "discussion" };
+  return { state: state.keyword === undefined ? state : { ...state, keywordReveal: "afterDay" }, stay: false };
 }
 
 /**

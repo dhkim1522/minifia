@@ -3,7 +3,7 @@
 // day.mjs·avatar.mjs 와 같은 모양: helpers 를 받고 서로 import 하지 않는다.
 // helpers: { recorder, attempt, openGame, closeGame, allAt, untilGame, gameGH, GAME_HOST_NICK }.
 // 표식(data-keyword-*·data-answer-*·data-announce-label·data-early)에는 역할·키워드 값이 없다 — 키워드는 텍스트 노드로만 읽는다(T-23-43).
-import { chooseVerdict, installFakeViewport, openRoleCard, openTableDockPane, settle, showPeopleTarget, skipDayToExecution, skipTo, sleep, waitForPhaseStart, watchSockets } from "./browser.mjs";
+import { chooseVerdict, installFakeViewport, openRoleCard, openTableDockPane, selectRoleCardTab, settle, showPeopleTarget, skipDayToExecution, skipTo, sleep, waitForPhaseStart, watchSockets } from "./browser.mjs";
 import { OVERLAP_EPS, TAP_MIN } from "./lib.mjs";
 
 const isNum = (x) => typeof x === "number" && Number.isFinite(x);
@@ -26,8 +26,6 @@ export const ANSWER_MIN_GAP_MS_COPY = 400;
 export const EARLY_GRACE_MS_COPY = 1_500;
 /** 제시어를 아는 사람의 수정 안내 */
 export const KEYWORD_BLOCKED_COPY = "제시어가 들어 있어요. 다른 표현으로 바꿔 주세요.";
-/** 키워드 카드 각주(사용자 글) */
-export const KEYWORD_NOTE_COPY = "제시어는 쓰지 말고 단서를 남겨요";
 /** 판정 시간 오차(ms) */
 export const KW_TOL_MS = 800;
 /** 방장 화면에만 있는 테스트 방 키(me) — 마피아·시민 키 비교에서 방장 전용으로 허용한다 */
@@ -41,11 +39,10 @@ const MASK = "???";
 
 /**
  * KW1(P23-1) 첫날 단계 열. m = { seq(받은 단계 id 의 연속 중복 없는 목록), endedDayOne(첫날 처형으로 끝난 판) }.
- * 계속되는 판: 역할 확인 → 키워드 → 낮 시작 … 정답 공개 → 밤, 이후 날에는 keyword·answerReveal 이 없다(둘째 날 낮 시작 발표가 보여야 측정이 된다).
- * 첫날 끝난 판: 키워드는 있고 answerReveal 은 없이 ended 로 닫힌다.
+ * 첫날은 답안 발표 직후 제시어를 공개한 뒤 토론한다. 이후 같은 판에서 다시 공개하지 않는다.
  */
 export function kw1PhaseColumns(m) {
-  const label = m?.endedDayOne ? "첫날 처형으로 끝난 판: 역할 확인 → 키워드 → 낮 시작 … 처형 → 결과(정답 공개 없음)" : "첫날 단계 열: 역할 확인 → 키워드 → 낮 시작 … 처형 → 정답 공개 → 밤, 둘째 날 키워드·정답 공개 없음";
+  const label = "첫날 단계 열: 역할 확인 → 단서 입력 → 답안 발표 → 제시어 공개 → 토론, 이후 중복 공개 없음";
   const seq = m?.seq;
   if (!Array.isArray(seq) || seq.length === 0) return noMeasure("KW1", label, "단계 열");
   const bad = [];
@@ -56,9 +53,11 @@ export function kw1PhaseColumns(m) {
   if (iKw < 0) bad.push("keyword 가 없음");
   if (iRole >= 0 && iKw >= 0 && iKw !== iRole + 1) bad.push(`keyword 가 roleReveal 바로 다음이 아님(${seq[iRole + 1]})`);
   if (iKw >= 0 && seq[iKw + 1] !== "dayAnnounce") bad.push(`keyword 다음이 dayAnnounce 가 아님(${seq[iKw + 1] ?? "없음"})`);
+  const iReveal = at("answerReveal");
+  if (iReveal < 0 || iReveal !== iKw + 2 || seq[iReveal + 1] !== "discussion") bad.push("답안 발표 → 제시어 공개 → 토론 순서가 아님");
+  if (iReveal >= 0 && at("answerReveal", iReveal + 1) >= 0) bad.push("answerReveal 이 두 번 이상 나옴");
   if (at("keyword", iKw + 1) >= 0) bad.push("keyword 가 두 번 이상 나옴");
   if (m.endedDayOne) {
-    if (at("answerReveal") >= 0) bad.push("처형으로 끝난 판에 answerReveal 이 있음");
     if (seq[seq.length - 1] !== "ended") bad.push(`마지막 단계가 ended 가 아님(${seq[seq.length - 1]})`);
     if (at("night") >= 0) bad.push("끝난 판에 night 가 있음");
     return result("KW1", label, bad);
@@ -66,8 +65,6 @@ export function kw1PhaseColumns(m) {
   const iNight = at("night");
   if (iNight < 0) bad.push("night 가 없음");
   else {
-    if (seq[iNight - 1] !== "answerReveal") bad.push(`첫 밤 바로 앞이 answerReveal 이 아님(${seq[iNight - 1]})`);
-    if (at("answerReveal") !== iNight - 1) bad.push("answerReveal 이 첫 밤 앞 말고 다른 자리에도 있음");
     const rest = seq.slice(iNight + 1);
     if (!rest.includes("dayAnnounce")) bad.push("둘째 날 낮 시작이 열에 없음(측정 부족)");
     if (rest.includes("keyword")) bad.push("둘째 날 이후에 keyword 가 있음");
@@ -76,14 +73,14 @@ export function kw1PhaseColumns(m) {
   return result("KW1", label, bad);
 }
 
-/** KW2(P23-2) 시민 카드. m = { genre(주제 줄 글), word(키워드 줄 글), note(각주 글) } */
+/** KW2(P23-2) 시민 카드의 주제·제시어와 안내 삭제를 확인한다. */
 export function kw2CitizenCard(m) {
-  const label = "시민 카드: 주제 줄 `주제 · …` · 키워드 줄 · 각주가 사용자 글과 같다";
-  if (!m || typeof m.genre !== "string" || typeof m.word !== "string" || typeof m.note !== "string") return noMeasure("KW2", label, "장르·키워드·각주 글");
+  const label = "시민 카드: 주제와 제시어가 표시되고 단서 안내는 없다";
+  if (!m || typeof m.genre !== "string" || typeof m.word !== "string") return noMeasure("KW2", label, "장르·키워드");
   const bad = [];
   if (!/^주제 · \S.*$/.test(m.genre.trim())) bad.push(`주제 줄 '${m.genre}'`);
   if (m.word.trim() === "" || m.word.trim() === MASK) bad.push(`키워드 줄 '${m.word}'(시민은 키워드가 보여야 한다)`);
-  if (m.note.trim() !== KEYWORD_NOTE_COPY) bad.push(`각주 '${m.note}'`);
+  if (m.note !== null || m.placeholder !== "단서 입력") bad.push(`각주 '${m.note}', 입력 안내 '${m.placeholder}'`);
   return result("KW2", label, bad);
 }
 
@@ -183,16 +180,17 @@ export function kw8AnswerTurns(pages, expectedOrder) {
 }
 
 export function kw9Reconnect(m) {
-  const label = "발표가 끝난 답안은 재접속과 역할 카드에서 다시 열리지 않는다";
+  const label = "재접속해도 답안 발표는 다시 열리지 않고 답과 제시어는 기록에서 읽을 수 있다";
   if (!m) return noMeasure("KW9", label, "재접속 화면");
   const bad = [];
   if (m.autoOpened !== false) bad.push("재접속 뒤 답안 발표가 다시 열림");
-  if (m.recordRows !== 0) bad.push("역할 카드에 첫날 답안이 남음");
+  if (m.recordRows !== m.total) bad.push(`기록 답안 수 ${m.recordRows}, 기대 ${m.total}`);
+  if (!m.answer || m.recordAnswer !== m.answer) bad.push("기록에서 공개한 제시어를 찾을 수 없음");
   return result("KW9", label, bad);
 }
 
 export function kw10Reveal(m) {
-  const label = "첫날 제시어는 정답 공개 동안 같고 밤에 이어지지 않는다";
+  const label = "마지막 답안 직후 같은 제시어를 공개하고 밤에 중앙에서 다시 발표하지 않는다";
   if (!m?.answer || !m.pages?.length || !m.hidden?.length) return noMeasure("KW10", label, "정답·큰 글·밤 화면");
   const bad = [];
   for (const p of m.pages) {
@@ -207,12 +205,12 @@ export function kw10Reveal(m) {
 }
 
 export function kw11FirstDayEnd(m) {
-  const label = "첫날 종료는 바로 결과로 넘어가고 제시어는 결과에 넣지 않는다";
+  const label = "첫날 처형 뒤 결과로 이어지고 제시어를 다시 발표하지 않는다";
   if (!m?.phases?.length) return noMeasure("KW11", label, "단계 열과 결과");
   const bad = [];
   if (m.phases.includes("answerReveal")) bad.push("answerReveal 단계가 끼어 있음");
   if (m.phases.at(-1) !== "ended") bad.push("마지막 단계가 결과가 아님");
-  if (m.keywordPresent !== false || (m.hostLine ?? "").startsWith("제시어")) bad.push("결과에 첫날 제시어가 남음");
+  if (m.keywordAnnouncement !== false || (m.hostLine ?? "").startsWith("제시어")) bad.push("결과에 첫날 제시어 발표가 남음");
   return result("KW11", label, bad);
 }
 
@@ -293,6 +291,7 @@ const readCard = (page) =>
     genre: document.querySelector("[data-keyword-genre]")?.textContent ?? null,
     word: document.querySelector("[data-keyword-word]")?.textContent ?? null,
     note: document.querySelector("[data-keyword-note]")?.textContent ?? null,
+    placeholder: document.querySelector("[data-answer-input]")?.getAttribute("placeholder") ?? null,
   }));
 
 /** 문서 원문과 모든 속성 값(키워드·정답이 DOM 어디에도 없는지 보는 재료) */
@@ -394,6 +393,7 @@ async function typeAndSend(page, text) {
 function withoutOwnAnswer(text, answer) {
   try {
     const frame = JSON.parse(text);
+    if (frame.t === "state" && frame.view?.phase === "answerReveal") return "";
     if (frame.t !== "state" || frame.view?.me?.answer?.text !== answer) return text;
     delete frame.view.me.answer.text;
     return JSON.stringify(frame);
@@ -590,15 +590,34 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
         if (!observer) throw new Error("발표자가 아닌 테스트 화면 없음");
         const suspectButton = observer.page.locator("[data-answer-suspect]");
         const readyCopy = await suspectButton.textContent({ timeout: 1200 });
+        const readyColor = await suspectButton.evaluate(b => getComputedStyle(b).backgroundColor);
         await suspectButton.click({ timeout: 1200 });
         await Promise.all(pages.map(p => p.tracker.waitFor(v => v.day?.suspects?.some(note => note.to === current.seat), 2500, "현재 발표자 의심 표시")));
-        const markedCopy = await observer.page.locator('[data-answer-suspect][aria-pressed="true"]').textContent({ timeout: 1200 }).catch(() => null);
+        const pressedButton = observer.page.locator('[data-answer-suspect][aria-pressed="true"]');
+        const markedCopy = await pressedButton.textContent({ timeout: 1200 }).catch(() => null);
+        const markedColor = await pressedButton.evaluate(b => getComputedStyle(b).backgroundColor);
         suspectCopyMatches = readyCopy?.trim() === "의심!" && markedCopy?.trim() === "의심 해제";
+        const [red, green, blue] = readyColor.match(/\d+/g)?.map(Number) ?? [];
+        const [neutralRed, neutralGreen, neutralBlue] = markedColor.match(/\d+/g)?.map(Number) ?? [];
+        const enabled = await observer.page.locator('[data-answer-suspect][aria-pressed="true"]:enabled').waitFor({ timeout: 1200 }).then(() => true, () => false);
+        rec(`${id}/answers`, "KW8-COLOR", "붙이기는 적색, 해제는 누를 수 있는 중립색이다",
+          red > green + 20 && red > blue + 12 && Math.max(neutralRed, neutralGreen, neutralBlue) - Math.min(neutralRed, neutralGreen, neutralBlue) <= 24 && enabled,
+          JSON.stringify({ readyColor, markedColor }));
         markedSeat = current.seat;
         markedBy = observer;
       }
 
-      await Promise.all(pages.map(p => p.tracker.waitFor(v => v.phase === "discussion", 7500, "발표 → 첫 토론")));
+      await Promise.all(pages.map(p => p.tracker.waitFor(v => v.phase === "answerReveal", 7000, "마지막 답 → 제시어 공개")));
+      const reveal = await Promise.all(pages.map(async (p) => {
+        await p.page.locator("[data-announce-label]").filter({ hasText: "제시어" }).waitFor({ timeout: 2500 });
+        return { who: p.who, ...(await readAnnounce(p.page)) };
+      }));
+      const mafiaHits = mafiaWs.hits[word] ?? 0;
+      const citizenHits = citizenWs.hits[word] ?? 0;
+      mafiaWs.stop();
+      citizenWs.stop();
+      rec1(rec, `${id}/leak`, kw13Leak({ mafia: keyBefore.mafia, citizen: keyBefore.citizen, mafiaFrameHits: mafiaHits, citizenFrameHits: citizenHits, hostOnlyMe: HOST_ONLY_ME_KEYS, roleMe: ROLE_ME_KEYS }));
+      await Promise.all(pages.map(p => p.tracker.waitFor(v => v.phase === "discussion", 6500, "제시어 공개 → 첫 토론")));
       const presentations = await Promise.all(pages.map(async (p, i) => {
         await waitForPhaseStart(p.page, p.tracker.last());
         await untilGame(p.page, v => v.phase === "discussion", 5000, "첫 토론 UI");
@@ -642,34 +661,24 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       await untilGame(gp, (x) => x.phase === "discussion", 10_000, "재접속 뒤 토론");
       const beforeOpen = await readDiscussionTools(gp);
       await at("KW9 내 역할과 기록", () => openRoleCard(gp));
-      const records = await gp.locator('dialog[aria-label="역할 카드"]').evaluate((sheet) => ({
+      await selectRoleCardTab(gp, "답과 의심");
+      const records = await gp.locator('dialog[aria-label="답과 의심"]').evaluate((sheet) => ({
         recordRows: sheet.querySelectorAll("[data-answer-row]").length,
+        recordAnswer: sheet.querySelector("[data-answer-correct]")?.textContent?.trim().replace(/^제시어\s*[·:]?\s*/, ""),
       }));
       rec1(rec, `${id}/reconnect`, kw9Reconnect({
         autoOpened: beforeOpen.clueCount !== 0 || beforeOpen.dialogOpen,
+        total,
+        answer: word,
         ...records,
       }));
       await closeOpenSheet(gp);
 
-      // KW13: 정답 공개 전 마피아 프레임에 키워드 문자열 0, view 키 집합(키워드 단계 스냅샷)
-      await sleep(300);
-      const mafiaHits = mafiaWs.hits[word] ?? 0;
-      const citizenHits = citizenWs.hits[word] ?? 0;
-      mafiaWs.stop();
-      citizenWs.stop();
-      rec1(rec, `${id}/leak`, kw13Leak({ mafia: keyBefore.mafia, citizen: keyBefore.citizen, mafiaFrameHits: mafiaHits, citizenFrameHits: citizenHits, hostOnlyMe: HOST_ONLY_ME_KEYS, roleMe: ROLE_ME_KEYS }));
-
-      // 정답 공개: 찬반 부결(봇 둘 반대) → 처형 없음 → 정답 공개(KW10)
-      await at("정답 공개로 넘기기", () => skipTo(hp, ht, "answerReveal"));
-      const reveal = await Promise.all(pages.map(async (p) => {
-        await p.page.waitForSelector("[data-announce-label]", { timeout: 6000 }).catch(() => {});
-        return { who: p.who, ...(await readAnnounce(p.page)) };
-      }));
-      await Promise.all(pages.map((p) => p.tracker.waitFor((v) => v.phase === "night", 9000, "정답 공개 → 밤")));
+      await at("찬반 뒤 밤으로 넘기기", () => skipTo(hp, ht, "night"));
+      await Promise.all(pages.map((p) => p.tracker.waitFor((v) => v.phase === "night", 9000, "찬반 뒤 밤")));
       const hidden = await Promise.all(pages.map(async (p) => {
         await untilGame(p.page, (v) => v.phase === "night", 6000, "밤 화면");
-        return { who: p.who, hidden: p.tracker.last().day?.keyword === undefined &&
-          await p.page.locator("[data-answer-list], [data-answer-correct]").count() === 0 &&
+        return { who: p.who, hidden: await p.page.locator("[data-answer-presentation]").count() === 0 &&
           await p.page.locator("[data-announce-label]").filter({ hasText: "제시어" }).count() === 0 };
       }));
       rec1(rec, `${id}/reveal`, kw10Reveal({ pages: reveal, answer: word, hidden }));
@@ -682,7 +691,7 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       await closeGame(game);
     }
 
-    // KW11: 첫날 처형으로 끝난 판은 제시어 공개 없이 결과로 간다.
+    // KW11: 첫날 처형으로 끝난 판은 저녁의 중복 발표 없이 결과로 간다.
     {
       const sc = `${id}/end`;
       const game2 = await openGame(ctx, id, { ...GAME4, role: "mafia", vote: { exec: "yes", pick: "host" }, to: "keyword", hostNick: GAME_HOST_NICK });
@@ -697,7 +706,8 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
         await gp.waitForSelector("[data-result-stage]", { timeout: 8000 });
         const line = await gp.locator("[data-host-line]").textContent();
         const from = Math.max(0, ht.phases.indexOf("execution"));
-        rec1(rec, sc, kw11FirstDayEnd({ phases: ht.phases.slice(from), hostLine: line, keywordPresent: ht.last().day?.keyword !== undefined }));
+        const keywordAnnouncement = await gp.locator("[data-announce-label]").filter({ hasText: "제시어" }).count() > 0;
+        rec1(rec, sc, kw11FirstDayEnd({ phases: ht.phases.slice(from), hostLine: line, keywordAnnouncement }));
         rec1(rec, sc, kw1PhaseColumns({ seq: ht.phases.slice(), endedDayOne: true }), " (첫날 끝)");
       } finally {
         await closeGame(game2);

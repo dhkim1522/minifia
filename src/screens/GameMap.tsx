@@ -775,6 +775,7 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
       players: tablePlayers,
       pick: layerKind === null ? dockTarget : { ...dockTarget, disabled: true },
       notes: suspectStack,
+      myNoteTarget: view.me.suspectTo,
       onChoose: dockTarget.onPick,
     },
   } : undefined;
@@ -785,6 +786,16 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
     ...(tableBallot && mine !== undefined ? { selected: mine } : {}),
     ...(pick && (!tableDock || (!dockSuspect && !tableBallot)) ? { pick } : {}),
     notes: suspectStack,
+    myNoteTarget: view.me.suspectTo,
+    ...(tableDock && suspect.visible && canSend && !whisper.mode && layerKind === null ? {
+      suspectHold: {
+        seats: suspect.targets,
+        onRelease: (seat) => {
+          if (view.phaseEndsAt !== null && Date.now() + offset >= view.phaseEndsAt) return;
+          if (suspect.change(seat) === false) show(SEND_FAIL_TEXT);
+        },
+      },
+    } : {}),
     onChoose: tableDock && (tableBallot || dockSuspect || firstBallotOpen) ? lookAtTableSeat : chooseTableSeat,
   };
   const standaloneRoster = firstBallotOpen ? dockAction?.roster : tableOn && (!kbLifted || (tableBallot && pick !== undefined)) ? tableRoster : undefined;

@@ -5,7 +5,7 @@ import type { ChatStore } from "../net/chatStore";
 import type { ChatPanelMessage } from "./v2/ChatPanel";
 import { PlayerName } from "./PlayerName";
 import { PlayerPortrait } from "./PlayerPortrait";
-import { TableControls } from "./TableControls";
+import { SUSPECT_HOLD_MS, TableControls } from "./TableControls";
 import type { TableControlsProps } from "./TableControls";
 import { V2Icon } from "./v2/V2Icon";
 import "../styles/game-dock.css";
@@ -20,7 +20,22 @@ const TABS = [
 ] as const;
 
 const SWIPE_DISTANCE = 32;
+const HOLD_SLOP = 10;
 const PEOPLE_PER_PAGE = 4;
+
+interface RosterGesture {
+  id: number;
+  x: number;
+  y: number;
+  scope: string;
+  page: number;
+  cancelled?: true;
+  hold?: { seat: number; at: number; cancelled: boolean };
+}
+
+function movedDuringHold(start: RosterGesture, event: PointerEvent): boolean {
+  return Math.max(Math.abs(event.clientX - start.x), Math.abs(event.clientY - start.y)) >= HOLD_SLOP;
+}
 
 export interface PeopleAction {
   kind: "vote" | "suspect" | "night";
@@ -72,8 +87,28 @@ export function GameDock({ scope, initialPane, peopleAction, preserveWriting, ke
   const initialPage = selectedIndex >= 0 ? Math.floor(selectedIndex / PEOPLE_PER_PAGE) : 0;
   const savedPage = activeAction ? actionPage?.scope === scope ? actionPage.page : undefined : peoplePage;
   const page = Math.min(savedPage ?? initialPage, Math.max(0, pageCount - 1));
-  const rosterGesture = useRef<{ id: number; x: number; y: number } | undefined>(undefined);
-  const rosterSwipeAt = useRef(-Infinity);
+  const rosterGesture = useRef<RosterGesture | undefined>(undefined);
+  const rosterHandledAt = useRef(-Infinity);
+  const [holding, setHolding] = useState<{ scope: string; page: number; seat: number }>();
+  const holdAction = paused ? undefined : roster?.suspectHold;
+  const holdingSeat = holding?.scope === scope && holding.page === page && holdAction?.seats.has(holding.seat) ? holding.seat : undefined;
+
+  const clearRosterGesture = () => {
+    rosterGesture.current = undefined;
+    rosterHandledAt.current = performance.now();
+    setHolding(undefined);
+  };
+
+  useLayoutEffect(() => {
+    const start = rosterGesture.current;
+    if (!start || start.cancelled) return;
+    if (pane !== "people" || start.scope !== scope || start.page !== page ||
+      (start.hold && !holdAction?.seats.has(start.hold.seat))) {
+      // 늦게 도착한 pointerup 뒤에 생기는 click도 소비한다.
+      start.cancelled = true;
+      setHolding(undefined);
+    }
+  });
 
   const changePage = (direction: number) => {
     const next = page + direction;
@@ -114,16 +149,53 @@ export function GameDock({ scope, initialPane, peopleAction, preserveWriting, ke
     if (pane === "people" && next !== "people") peopleAction?.onLeave?.();
     setSelection({ scope, pane: next, waiting: false, action: peopleAction?.kind });
   };
-  const pageBySwipe = (event: PointerEvent<HTMLDivElement>) => {
+  const startRosterGesture = (event: PointerEvent<HTMLDivElement>) => {
+    if (!event.isPrimary || event.button !== 0) return;
+    rosterHandledAt.current = -Infinity;
+    const button = event.target instanceof Element ? event.target.closest<HTMLButtonElement>("button[data-table-seat]") : null;
+    const seat = button?.hasAttribute("data-suspect-holdable") ? Number(button.dataset.tableSeat) : undefined;
+    const hold = seat !== undefined && holdAction?.seats.has(seat) ? { seat, at: performance.now(), cancelled: false } : undefined;
+    if (!hold && pageCount < 2) {
+      rosterGesture.current = undefined;
+      return;
+    }
+    rosterGesture.current = { id: event.pointerId, x: event.clientX, y: event.clientY, scope, page, hold };
+    if (hold) setHolding({ scope, page, seat: hold.seat });
+    if (event.isTrusted) (button ?? event.currentTarget).setPointerCapture?.(event.pointerId);
+  };
+
+  const moveRosterGesture = (event: PointerEvent<HTMLDivElement>) => {
     const start = rosterGesture.current;
-    rosterGesture.current = undefined;
+    if (start?.id !== event.pointerId || start.cancelled || !start.hold || start.hold.cancelled || !movedDuringHold(start, event)) return;
+    start.hold.cancelled = true;
+    setHolding(undefined);
+  };
+
+  const cancelRosterGesture = (event: PointerEvent<HTMLDivElement>) => {
+    if (rosterGesture.current?.id === event.pointerId) clearRosterGesture();
+  };
+
+  const endRosterGesture = (event: PointerEvent<HTMLDivElement>) => {
+    const start = rosterGesture.current;
     if (!start || start.id !== event.pointerId) return;
+    cancelRosterGesture(event);
+    if (start.cancelled || start.scope !== scope || start.page !== page) return;
     const dx = event.clientX - start.x;
     const dy = event.clientY - start.y;
-    if (Math.abs(dx) < SWIPE_DISTANCE || Math.abs(dx) <= Math.abs(dy)) return;
-    // 경계에서 멈춘 밀기도 카드 누르기로 해석하지 않는다.
-    rosterSwipeAt.current = performance.now();
-    changePage(dx < 0 ? 1 : -1);
+    if (Math.abs(dx) >= SWIPE_DISTANCE && Math.abs(dx) > Math.abs(dy)) {
+      // 경계에서 멈춘 밀기도 카드 누르기로 해석하지 않는다.
+      changePage(dx < 0 ? 1 : -1);
+      return;
+    }
+    if (start.hold) {
+      const { seat, at, cancelled } = start.hold;
+      if (cancelled || movedDuringHold(start, event)) return;
+      if (rosterHandledAt.current - at >= SUSPECT_HOLD_MS) {
+        if (holdAction?.seats.has(seat)) holdAction.onRelease(seat);
+        return;
+      }
+    }
+    rosterHandledAt.current = -Infinity; // 짧게 누르기는 기존 click의 바라보기/선택으로 보낸다.
   };
   const close = () => {
     if (pane === "closed") return;
@@ -202,22 +274,19 @@ export function GameDock({ scope, initialPane, peopleAction, preserveWriting, ke
               <div key={activeAction?.kind ?? "people"} className="mf-game-dock__people"
                 data-first-ballot={activeAction?.firstBallot ? "" : undefined} data-night-targets={activeAction?.kind === "night" ? "" : undefined}>
                 <div className="mf-game-dock__cards"
-                  onPointerDownCapture={(event) => {
-                    if (!event.isPrimary || event.button !== 0 || pageCount < 2) return;
-                    rosterSwipeAt.current = -Infinity;
-                    rosterGesture.current = { id: event.pointerId, x: event.clientX, y: event.clientY };
-                    if (event.isTrusted && event.target instanceof Element) {
-                      (event.target.closest("button") ?? event.currentTarget).setPointerCapture?.(event.pointerId);
-                    }
-                  }}
-                  onPointerUpCapture={pageBySwipe}
-                  onPointerCancel={() => { rosterGesture.current = undefined; }}
+                  onPointerDownCapture={startRosterGesture}
+                  onPointerMoveCapture={moveRosterGesture}
+                  onPointerUpCapture={endRosterGesture}
+                  onPointerCancel={cancelRosterGesture}
+                  onLostPointerCapture={cancelRosterGesture}
+                  onContextMenu={(event) => { if (rosterGesture.current?.hold) event.preventDefault(); }}
                   onClickCapture={(event) => {
-                    if (event.detail === 0 || performance.now() - rosterSwipeAt.current > 350) return;
+                    if (event.detail === 0 || performance.now() - rosterHandledAt.current > 350) return;
                     event.preventDefault();
                     event.stopPropagation();
                   }}>
-                  <TableControls {...roster} cards players={roster.players.slice(page * PEOPLE_PER_PAGE, (page + 1) * PEOPLE_PER_PAGE)} />
+                  <TableControls {...roster} suspectHold={holdAction} holdingSuspect={holdingSeat}
+                    cards players={roster.players.slice(page * PEOPLE_PER_PAGE, (page + 1) * PEOPLE_PER_PAGE)} />
                 </div>
                 {activeAction?.footer}
               </div>

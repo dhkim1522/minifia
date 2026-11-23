@@ -217,7 +217,7 @@ describe("closeKeyword (D-24)", () => {
 });
 
 describe("tick: keyword 마감 훅", () => {
-  it("다음 마감마다 5초 간격으로 한 명을 공개하고 마지막 뒤 정상 토론으로 간다", () => {
+  it("다음 마감마다 한 명씩 발표하고 마지막 답 뒤 제시어를 공개한 다음 토론한다", () => {
     let s = keywordState();
     s = must(submitAnswer(s, idOf(s, 1), "마법", true)).state;
     s = must(submitAnswer(s, idOf(s, 2), "초안글", false)).state;
@@ -234,10 +234,13 @@ describe("tick: keyword 마감 훅", () => {
       expect(s.answerSubmits).toBeUndefined();
       expect(buildView(s, idOf(s, 0), now).day?.keyword?.presentation).toEqual({ order: i + 1, total: 5, ...row });
     }
-    const discussion = tick(s, s.phaseEndsAt!, () => 0);
+    const reveal = tick(s, s.phaseEndsAt!, () => 0);
+    expect(reveal.phase).toBe("answerReveal");
+    expect(reveal.phaseEndsAt).toBe(s.phaseEndsAt! + 3_000);
+    const discussion = tick(reveal, reveal.phaseEndsAt!, () => 0);
     expect(discussion.phase).toBe("discussion");
     expect(discussion.keywordPresentationIndex).toBeUndefined();
-    expect(buildView(discussion, idOf(s, 0), s.phaseEndsAt!).day?.keyword).toBeUndefined();
+    expect(buildView(discussion, idOf(s, 0), reveal.phaseEndsAt!).day?.keyword?.answers).toEqual(rows.map((row, i) => ({ order: i + 1, ...row })));
   });
 
   it("늦은 알람은 현재 차례만 열고, 옛 저장의 단순 낮 시작은 종전 마감을 쓴다", () => {
@@ -249,6 +252,6 @@ describe("tick: keyword 마감 훅", () => {
     const { keywordPresentationIndex: _i, ...old } = caughtUp;
     const oldAnnouncement = { ...old, phaseEndsAt: now + DAY_ANNOUNCE_MS };
     expect(buildView(oldAnnouncement, idOf(s, 0), now).day?.keyword).toBeUndefined();
-    expect(tick(oldAnnouncement, now + DAY_ANNOUNCE_MS, () => 0).phase).toBe("discussion");
+    expect(tick(oldAnnouncement, now + DAY_ANNOUNCE_MS, () => 0).phase).toBe("answerReveal");
   });
 });

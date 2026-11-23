@@ -62,7 +62,7 @@ describe("단계 → 침대 표 (D-17, O-7)", () => {
       defense: "bed.vote",
       verdict: "bed.vote",
       execution: "bed.vote",
-      answerReveal: "bed.vote", // 23-05: 처형 뒤 저녁빛 그대로
+      answerReveal: "bed.day",
       night: "bed.night",
       morning: "bed.dawn",
       ended: "bed.result",

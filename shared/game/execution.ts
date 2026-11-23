@@ -24,7 +24,7 @@ export function enterExecution(state: RoomState): RoomState {
 
 /**
  * 처형이 성립하지 않아 밤으로 온 그 밤 단계의 이유 코드(D-34, 22-09). 새 상태 필드를 두지 않고 그날 공개 투표 기록(voteLog)에서 파생한다 —
- * 새 정보가 생기지 않고, 단계가 night(첫날 키워드 판은 그 앞의 answerReveal 도, D-22)일 때만 값을 주므로 아침으로 넘어가면 저절로 사라진다(지울 상태가 없다).
+ * 밤과 예전 판의 저녁 제시어 공개에서만 값을 주므로 아침으로 넘어가면 저절로 사라진다.
  *   night·answerReveal 이 아니거나 그날(n === day ?? 1) 줄이 없음            → 없음
  *   줄에 reason 이 있음                                          → 그 값(찬반 부결 rejected · 지목 동률 tie · 지목 0표 noVotes)
  *   reason 은 없고 cand 에 candidate 가 없음(결선 동점)          → tie (누가 누구를 골랐는지는 저장하지 않는다 — 22-12 D-25. 마지막 3인 결전·지목 마감은 reason 을 남긴다)
@@ -32,7 +32,7 @@ export function enterExecution(state: RoomState): RoomState {
  * 반환은 새 객체 리터럴이다(키는 reason 하나).
  */
 export function noExecutionOf(state: RoomState): { reason: NoExecutionReason } | undefined {
-  if (state.phase !== "night" && state.phase !== "answerReveal") return undefined;
+  if (state.phase !== "night" && (state.phase !== "answerReveal" || state.keywordReveal === "beforeDiscussion")) return undefined;
   const entry = (state.voteLog ?? []).find((e) => e.n === (state.day ?? 1));
   if (entry === undefined) return undefined;
   if (entry.reason !== undefined) return { reason: entry.reason };

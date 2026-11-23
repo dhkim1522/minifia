@@ -14,6 +14,7 @@ import {
   showPeopleTarget,
   skipOnce,
   skipTo,
+  sleep,
   startGame,
   tapTurnPick,
   typeAndSendChat,
@@ -57,12 +58,21 @@ export function makeFirstBallotDockFlow({ recorder, startHost, openGuest, checkR
       await guest.tracker.waitFor((view) => view.phase === "discussion", 4000, "친구 화면의 첫 토론");
       await openTableDockPane(guest.page, "people");
       const lookPages = await readPeoplePages(guest.page, peoplePage);
+      const selectedLook = guest.page.locator('[data-table-seat][aria-pressed="true"]');
+      const beforeSwipe = await selectedLook.evaluateAll(cards => cards.map(c => c.getAttribute("data-table-seat")));
       rec(id, "FB0", "8인 참가자 보기에서 일곱 얼굴이 한 줄씩 나눠지고 모든 카드가 44px 이상이다",
         peoplePagesFit(lookPages, ctx.size) && lookPages[0].length === 4 && lookPages[1]?.length === 3);
-      await swipe(guest.page, "[data-table-controls]", -1, ctx.size.mobile !== false, "x");
+      const touch = ctx.size.mobile !== false;
+      await swipe(guest.page, `[data-table-seat="${lookPages[0][2].seat}"]`, -1, touch, "x", 780);
       await guest.page.locator("[data-people-page]").filter({ hasText: "2/2" }).waitFor({ timeout: 3000 });
       rec(id, "FB0a", "참가자 카드를 옆으로 밀어도 다음 페이지로 넘어간다", (await peoplePage(guest.page))[0]?.seat === lookPages[1][0]?.seat);
-      await guest.page.locator("[data-people-prev]").click();
+      const previous = guest.page.locator("[data-people-prev]");
+      // CDP의 연속 touchMove → 탭은 기존 카드와 일반 버튼에서도 후속 click을 만들지 않는다.
+      await previous.click();
+      await guest.page.locator("[data-people-page]").filter({ hasText: "1/2" }).waitFor({ timeout: 3000 });
+      const afterSwipe = await selectedLook.evaluateAll(cards => cards.map(c => c.getAttribute("data-table-seat")));
+      rec(id, "FB0b", "길게 누른 뒤 밀면 딱지나 바라보기 없이 페이지를 넘긴다",
+        guest.tracker.last().me.suspectTo === undefined && JSON.stringify(beforeSwipe) === JSON.stringify(afterSwipe));
 
       await skipTo(page, tracker, "verdict");
       const hostBallot = page.locator('[data-dock-pane="people"] [data-first-ballot]');
@@ -111,7 +121,7 @@ export function makeFirstBallotDockFlow({ recorder, startHost, openGuest, checkR
   };
 }
 
-async function swipe(page, selector, direction, mobile, axis = "y") {
+async function swipe(page, selector, direction, mobile, axis = "y", beforeMove = 0) {
   const area = await page.locator(selector).boundingBox();
   if (!area) throw new Error(`스와이프 영역이 보이지 않음: ${selector}`);
   const x = Math.round(area.x + area.width / 2);
@@ -120,6 +130,7 @@ async function swipe(page, selector, direction, mobile, axis = "y") {
   if (!mobile) {
     await page.mouse.move(x, y);
     await page.mouse.down();
+    if (beforeMove) await sleep(beforeMove);
     const end = point(76);
     await page.mouse.move(end.x, end.y, { steps: 5 });
     await page.mouse.up();
@@ -128,10 +139,33 @@ async function swipe(page, selector, direction, mobile, axis = "y") {
   const cdp = await page.context().newCDPSession(page);
   try {
     await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
+    if (beforeMove) await sleep(beforeMove);
     for (const distance of [18, 36, 54, 76]) {
       await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [point(distance)] });
     }
     await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  } finally {
+    await cdp.detach().catch(() => {});
+  }
+}
+
+async function holdCard(page, card, mobile, whilePressed) {
+  const area = await card.boundingBox();
+  if (!area) throw new Error("길게 누를 참가자 카드가 보이지 않음");
+  const x = Math.round(area.x + area.width / 2);
+  const y = Math.round(area.y + area.height / 2);
+  if (!mobile) {
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    try { await whilePressed(); }
+    finally { await page.mouse.up(); }
+    return;
+  }
+  const cdp = await page.context().newCDPSession(page);
+  try {
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
+    try { await whilePressed(); }
+    finally { await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] }); }
   } finally {
     await cdp.detach().catch(() => {});
   }
@@ -297,7 +331,8 @@ export function makeTableDockFlow({ recorder, openGame, closeGame, writeSheet, g
       await ht.waitFor((view) => view.me.suspectTo === first.seat, 4000, "의심 딱지 서버 반영");
       rec(sc, "TD8", "도구에서 의심 대상을 골라 서버에 반영한다", ht.last().me.suspectTo === first.seat);
       await openRoleCard(hp);
-      await selectRoleCardTab(hp, "의심 기록");
+      const recordsTab = ht.last().day?.keyword?.answer === undefined ? "의심 기록" : "답과 의심";
+      await selectRoleCardTab(hp, recordsTab);
       const record = hp.locator(`[data-suspect-row][data-suspect-to="${first.seat}"]`);
       const recordColor = await nicknameColor(record, first.seat);
       rec(sc, "TD-NAMES", "무대·참가자 판·채팅·의심 기록의 닉네임 색은 공개 좌석별로 같고 식별용 점이 없다",
@@ -307,7 +342,32 @@ export function makeTableDockFlow({ recorder, openGame, closeGame, writeSheet, g
         && recordColor === peopleColors[0]
         && await hp.locator(".mv-tag__dot, .mf-suspect__dot").count() === 0,
         JSON.stringify({ peopleColors, worldColors, chatColors, recordColor }));
-      await closeSheet(hp, "의심 기록");
+      await closeSheet(hp, recordsTab);
+      await openTableDockPane(hp, "people");
+      const firstCard = roster.locator(`[data-table-seat="${first.seat}"]`);
+      const secondCard = roster.locator(`[data-table-seat="${second.seat}"]`);
+      const mobile = ctx.size.mobile !== false;
+      if (mobile) await secondCard.tap();
+      else await secondCard.click();
+      rec(sc, "TD-HOLD-TAP", "짧게 탭하면 바라보는 사람만 바뀌고 내 딱지는 기존 배지에 남는다",
+        await secondCard.getAttribute("aria-pressed") === "true" && ht.last().me.suspectTo === first.seat
+        && await firstCard.locator("[data-suspect-mine]").count() === 1);
+      await holdCard(hp, secondCard, mobile, () => sleep(320));
+      rec(sc, "TD-HOLD-EARLY", "0.7초 전 손을 떼면 딱지는 움직이지 않는다", ht.last().me.suspectTo === first.seat);
+      let waitedForRelease = false;
+      await holdCard(hp, secondCard, mobile, async () => {
+        await secondCard.locator("[data-suspect-hold]").waitFor({ timeout: 1500 });
+        await sleep(790);
+        waitedForRelease = ht.last().me.suspectTo === first.seat;
+      });
+      await ht.waitFor((view) => view.me.suspectTo === second.seat, 4000, "놓은 뒤 딱지 이동");
+      await secondCard.locator("[data-suspect-mine]").waitFor({ timeout: 3500 });
+      rec(sc, "TD-HOLD-MOVE", "완료 후에도 누르는 중에는 유지되며 손을 떼면 채워진 배지가 다른 카드로 옮겨진다",
+        waitedForRelease && await firstCard.locator("[data-suspect-mine]").count() === 0);
+      await holdCard(hp, secondCard, mobile, () => sleep(820));
+      await ht.waitFor((view) => view.me.suspectTo === undefined, 4000, "같은 카드에서 딱지 해제");
+      await secondCard.locator("[data-suspect-mine]").waitFor({ state: "detached", timeout: 3500 });
+      rec(sc, "TD-HOLD-CLEAR", "같은 카드에서 다시 길게 누르고 손을 떼면 내 딱지가 사라진다", ht.last().me.suspectTo === undefined);
       await openTableDockPane(hp, "tools");
       await tools.locator("[data-will-button]").click();
       await writeSheet(hp, ht, "will", "제 유언을 전해 주세요");

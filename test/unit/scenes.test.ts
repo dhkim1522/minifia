@@ -71,7 +71,7 @@ describe("단계 → 장면 규칙표(PHASE_SCENE)", () => {
       morning: "morning",
       defense: "dusk",
       execution: "dusk",
-      answerReveal: "dusk", // 23-05: 첫날 정답 공개 — 처형과 같은 해질녘
+      answerReveal: "day",
       nomination: "dusk",
       runoff: "dusk",
       showdown: "dusk",
@@ -86,7 +86,7 @@ describe("단계 → 장면 규칙표(PHASE_SCENE)", () => {
     expect(used.has("verdictDusk")).toBe(false);
     expect(used.has("dusk")).toBe(true);
     expect(PHASES.filter((p) => PHASE_SCENE[p] === "dusk").sort()).toEqual(
-      ["answerReveal", "defense", "execution", "nomination", "runoff", "showdown"].sort(),
+      ["defense", "execution", "nomination", "runoff", "showdown"].sort(),
     );
     expect(PHASE_SCENE.ended).toBe("night");
     expect(SCENE_IDS).toContain("dusk");

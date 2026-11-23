@@ -103,7 +103,6 @@
 /* 마피아의 ???: 글자 모양은 시민 카드와 같고 글자 간격만 0.2em(키워드 자리 높이가 같다) */
 .mf-keyword__word.is-hidden { letter-spacing: 0.2em; }
 /* 각주: Label 14/400 — 360 폭에서 2줄이 될 수 있다 */
-.mf-keyword__note { margin: 0; font: var(--type-label); color: var(--noir-ink); opacity: 0.76; word-break: keep-all; }
 @keyframes mf-keyword-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .mf-keyword__card { animation: none; } }
 
@@ -135,7 +134,6 @@
 .mf-keyword__answer .mf-keyword__action:focus-visible { outline-offset: -3px; }
 
 /* 가상 키보드가 올라와도 헤더와 카드가 보이는 영역 안에 있게 한다. */
-.mf-keyword__note[hidden] { display: none; }
 .mf-keyword.is-kb .mf-reveal__header { top: var(--mf-vv-top, 0px); }
 .mf-keyword.is-kb .mf-reveal__stage { margin-top: var(--mf-vv-top, 0px); margin-bottom: var(--mf-kb-lift, 0px); padding-top: 66px; padding-bottom: var(--space-xs); }
 .mf-keyword__card.is-compact { padding: 8px 16px; gap: 0; }

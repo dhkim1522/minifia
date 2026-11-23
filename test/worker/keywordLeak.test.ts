@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GENRES } from "../../shared/game/keywords";
 import type { ServerMessage } from "../../shared/protocol";
 import { openKeyword } from "../helpers/keyword";
-import { actorsOf, advanceTo, editRoom, lastViewOf, mark, nextFrame, seat, send, settle, storedRoom, summary, verdictAll } from "./helpers";
+import { actorsOf, advanceTo, editRoom, lastViewOf, mark, nextFrame, seat, send, settle, storedRoom, summary } from "./helpers";
 import type { Actor, Seated, StoredRoom, TestSocket } from "./helpers";
 
 let restore: () => void = () => {};
@@ -18,7 +18,7 @@ afterEach(() => restore());
 const WORD = "해리포터";
 const SECRETS = [WORD, "Harry Potter", "해포"] as const;
 /** 서버 전용 이름: 어떤 프레임의 어떤 경로에도 키로 없다. RoomState.keyword 는 view 키 day.keyword·me.keyword 와 이름이 같아 넣을 수 없고 값 검사(SECRETS)로 지킨다(RESEARCH P2). */
-const SERVER_ONLY_NAMES = ["keywordProbed", "answerSubmits", "answerDraft", "keywordAnswers", "keywordPresentationIndex"] as const;
+const SERVER_ONLY_NAMES = ["keywordProbed", "answerSubmits", "answerDraft", "keywordAnswers", "keywordPresentationIndex", "keywordReveal"] as const;
 
 const socksOf = (room: Seated): TestSocket[] => [room.host, ...room.guests.map((g) => g.sock)];
 const answerOf = (sock: TestSocket, text: string, final: boolean): void => send(sock, { t: "answer", text, final });
@@ -82,20 +82,25 @@ describe("① 마피아 소켓의 어떤 프레임에도 정답이 없다 — �
     const published = (await storedRoom(room.code)) as StoredRoom & { keywordAnswers?: Array<{ seat: number; text: string | null }> };
     expect(published.keywordAnswers?.[0]?.seat).toBe(citizen.seat);
     expect(published.keywordAnswers?.find((row) => row.seat === mafia.seat)?.text).toBeNull();
-    await advanceTo(room.code, socks, "discussion");
-    await advanceTo(room.code, socks, "verdict");
-    for (const sock of socks) await settle(sock, mark(sock));
-    for (const s of SECRETS) expect(await previewText(room.code), `preview verdict ${s}`).not.toContain(s);
+    for (const s of SECRETS) expect(await previewText(room.code), `preview presentation ${s}`).not.toContain(s);
+    await advanceTo(room.code, socks, "answerReveal");
 
     // 정답 공개 직전까지 모든 마피아 소켓의 모든 프레임 원문
-    const pre = socks.map((s) => mark(s));
     for (const a of all.filter((x) => x.role === "mafia")) {
-      const text = a.sock.frames.slice(0, pre[socks.indexOf(a.sock)]!).map(parse).map((frame) => {
+      const firstReveal = a.sock.frames.findIndex((raw) => {
+        const frame = parse(raw);
+        return frame.t === "state" && frame.view.phase === "answerReveal";
+      });
+      expect(firstReveal).toBeGreaterThan(0);
+      const text = a.sock.frames.slice(0, firstReveal).map(parse).map((frame) => {
         if (frame.t !== "state" || frame.view.phase !== "keyword" || a.sock !== mafia.sock || frame.view.me.answer?.text !== ownSubmission) return JSON.stringify(frame);
         expect(frame.view.me.answer).toEqual({ text: ownSubmission, final: true });
         return JSON.stringify({ ...frame, view: { ...frame.view, me: { ...frame.view.me, answer: undefined } } });
       }).join("\n");
       for (const s of SECRETS) expect(text, `mafia seat ${a.seat} before reveal: ${s}`).not.toContain(s);
+      const turns = statesOf(a.sock).filter((frame) => frame.view.day?.keyword?.presentation !== undefined);
+      expect([...new Set(turns.map((frame) => frame.view.day!.keyword!.presentation!.order))]).toEqual([1, 2, 3, 4]);
+      expect(turns.every((frame) => frame.view.day?.keyword?.answers === undefined)).toBe(true);
     }
     // 서버 전용 이름은 모든 소켓의 모든 프레임에 키로 없다
     for (const sock of socks) {
@@ -104,12 +109,11 @@ describe("① 마피아 소켓의 어떤 프레임에도 정답이 없다 — �
     }
 
     // 정답 공개: 이 프레임부터 모두에게 같은 값 — 마피아에게 처음 닿는다
-    const rejectAll = Object.fromEntries(all.map((a) => [a.seat, false])) as Record<number, boolean>;
-    await verdictAll(room.code, all, rejectAll);
-    for (const sock of socks) await settle(sock, mark(sock));
     expect((await storedRoom(room.code)).phase).toBe("answerReveal");
     expect(lastViewOf(mafia.sock).day?.keyword?.answer).toBe(WORD);
     expect(lastViewOf(citizen.sock).day?.keyword?.answer).toBe(WORD);
+    await advanceTo(room.code, socks, "discussion");
+    expect(lastViewOf(mafia.sock).day?.keyword?.answer).toBe(WORD);
   }, 90_000);
 });
 

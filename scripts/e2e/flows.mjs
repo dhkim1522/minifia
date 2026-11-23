@@ -2191,15 +2191,15 @@ async function noExecChecks(rec, sc, { ht, pages, watch, from, reason, forbidden
     log = await readAnnounceWatch(watch, { stop: false });
   }
   const i = annIndex(log, (t) => t === "처형 없음");
-  rec(sc, "NE1", "'처형 없음' 큰 글이 뜬다", i >= 0, `알림 ${log.filter((a) => a.text).map((a) => a.text).join(" → ") || "없음"}`);
-  if (i >= 0) recMany(rec, sc, announceChecks(log[i]), " ('처형 없음')");
-  // 23페이즈 D-22: 첫날은 "처형 없음" 큰 글 자리가 정답 공개(answerReveal) 진입이다 — 큰 글 1.4초 → 정답 3초 → 밤. (이전 기대: 큰 글 뒤 곧바로 밤)
+  rec(sc, "NE1", "밤 진입에서 '처형 없음'을 알린다", i >= 0, `알림 ${log.filter((a) => a.text).map((a) => a.text).join(" → ") || "없음"}`);
+  if (i >= 0 && log[i].nightSummary) {
+    rec(sc, "NE1a", "밤 시작 배너의 처형 없음 안내는 16px 이상이고 한 줄이다", log[i].fontPx >= 16 && log[i].lineCount === 1);
+  } else if (i >= 0) recMany(rec, sc, announceChecks(log[i]), " ('처형 없음')");
   const night = await attempt(async () => {
-    await ht.waitFor((v) => v.phase === "night", 9000, "처형 없음 → 정답 공개 → 밤");
+    await ht.waitFor((v) => v.phase === "night", 9000, "처형 없음 → 밤");
   });
   const seenPhases = ht.phases.slice(from);
-  const revealBeforeNight = seenPhases.includes("answerReveal") && seenPhases.indexOf("answerReveal") < seenPhases.indexOf("night");
-  rec(sc, "NE2", "큰 글 뒤 첫날 정답 공개(answerReveal)를 거쳐 밤이다(D-22)", night.ok && revealBeforeNight, night.ok ? `지난 단계 ${[...new Set(seenPhases)].join(",")}` : night.detail);
+  rec(sc, "NE2", "처형 없음 발표 뒤 제시어를 다시 공개하지 않고 밤으로 이어진다", night.ok && !seenPhases.includes("answerReveal"), night.ok ? `지난 단계 ${[...new Set(seenPhases)].join(",")}` : night.detail);
   const seen = ht.phases.slice(from);
   const crossed = forbidden.filter((p) => seen.includes(p));
   rec(sc, "NE3", `${forbidden.join("·")} 단계를 지나지 않는다`, crossed.length === 0, `지난 단계 ${[...new Set(seen)].join(",")}`);
@@ -2223,7 +2223,7 @@ async function noexecFlow(ctx) {
       const { ht, hp, guests } = game;
       ht.players0 = aliveOf(ht.last()).length;
       const from = Math.max(0, ht.phases.length - 1);
-      await armAnnounceWatch(guests[0].page);
+      await armAnnounceWatch(guests[0].page, { nightSummary: true });
       await noExecChecks(rec, sc, { ht, pages: [hp, ...guests.map((g) => g.page)], watch: guests[0].page, from, reason: "rejected", forbidden: ["nomination", "defense", "execution"] });
     } finally {
       await closeGame(game);
@@ -2238,7 +2238,7 @@ async function noexecFlow(ctx) {
       const { ht, hp } = game;
       ht.players0 = aliveOf(ht.last()).length;
       const from = Math.max(0, ht.phases.length - 1);
-      await armAnnounceWatch(hp);
+      await armAnnounceWatch(hp, { nightSummary: true });
       await skipTo(hp, ht, "night");
       await noExecChecks(rec, sc, { ht, pages: [hp], watch: hp, from, reason: "rejected", forbidden: ["nomination", "defense", "execution"] });
     } finally {
@@ -2260,7 +2260,7 @@ async function noexecFlow(ctx) {
         await chooseVerdict(g.page, true);
       }
       await chooseVerdict(hp, true);
-      await armAnnounceWatch(guests[0].page);
+      await armAnnounceWatch(guests[0].page, { nightSummary: true });
       await ht.waitFor((v) => v.phase === "nomination" && v.day?.turn !== undefined, 16_000, "찬반 통과 → 지목");
       const seats = humans.map((x) => x.tracker.last().me.seat);
       const picks = await Promise.all(humans.map((x, i) => attempt(async () => pickOnTurn(x, seats[(i + 1) % seats.length]))));
@@ -3012,16 +3012,15 @@ async function nightVictim(ctx, shared) {
       await writeSheet(hp, ht, "will", VICTIM_WILL);
     });
     rec(sc, "VC12", "토론에서 깃펜으로 유언을 쓰고 저장하면 서버가 같은 글을 돌려준다(피해자 편지용)", wrote.ok, wrote.detail);
-    await skipTo(hp, ht, "verdict");
-    // 첫날 부결은 정답 공개(처형 없음 안내 포함)를 거친다. 실제 밤 진입 직전에 관찰을 시작한다.
-    await ht.waitFor((v) => v.phase === "answerReveal", 15_000, "찬반 부결 뒤 첫날 정답 공개");
+    // 첫날 제시어는 토론 전에 공개된다. 찬반 부결을 기다리기 전에 관찰을 시작한다.
     await armSeenWatch(hp);
     await armAnnounceWatch(hp);
     await armLetterWatch(hp);
-    const nightView = await ht.waitFor((v) => v.phase === "night", 12_000, "첫날 정답 공개 뒤 밤(서버 타이머)");
+    await skipTo(hp, ht, "verdict");
+    const nightView = await ht.waitFor((v) => v.phase === "night", 15_000, "첫날 찬반 부결 뒤 밤(서버 타이머)");
     const g = await untilGame(hp, (x) => x.phase === "night", 9000, "밤 도착");
     const nightEntry = await readSeen(hp);
-    rec(sc, "VC1", "첫날 정답 공개에서 밤으로 이어질 때 무대를 덮지 않는다", nightEntry.curtain === 0 && nightEntry.curtainGone === 0, `막 나타남 ${nightEntry.curtain}회, 사라짐 ${nightEntry.curtainGone}회`);
+    rec(sc, "VC1", "첫날 찬반에서 밤으로 이어질 때 무대를 덮지 않는다", nightEntry.curtain === 0 && nightEntry.curtainGone === 0, `막 나타남 ${nightEntry.curtain}회, 사라짐 ${nightEntry.curtainGone}회`);
     await settle(hp);
     await hp.locator("[data-face-list]").waitFor({ timeout: 8000 });
     const n = await readNightWithTools(hp);

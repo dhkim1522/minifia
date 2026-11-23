@@ -1304,6 +1304,36 @@ describe("GameMap — 순차 지목 이름표 (22-10, D-12)", () => {
     expect(document.activeElement).toBe(tab("people"));
   });
 
+  it("딱지를 붙인 직후 시작한 새 홀드도 손을 뗄 때 해제한다", () => {
+    const clock = vi.spyOn(performance, "now").mockImplementation(() => Date.now() - NOW);
+    try {
+      const store = new WorldStore();
+      const room = { ...makeView(), map: "bar" as const };
+      store.applyFrame({ t: "world", k: "snap", at: NOW, ents: room.players.map(({ seat }) => ({ s: seat, p: [0, 0, 0, 0], t0: NOW, v: 0 })) }, 1);
+      const chat = new ChatStore();
+      const send = vi.fn(() => true);
+      const map = (view: RoomView) => <GameMap view={view} store={store} chat={chat} send={send} />;
+      const { container, rerender } = render(map(room));
+      const card = () => container.querySelector('[data-table-seat="1"]')!;
+      const pointer = { pointerId: 1, pointerType: "touch", isPrimary: true, button: 0, clientX: 40, clientY: 40 };
+      const hold = () => {
+        fireEvent.pointerDown(card(), pointer);
+        expect(card().querySelector("[data-suspect-hold]")).not.toBeNull();
+        act(() => vi.advanceTimersByTime(700));
+        fireEvent.pointerUp(card(), pointer);
+      };
+      fireEvent.click(container.querySelector('[data-dock-tab="people"]')!);
+      hold();
+      expect(send).toHaveBeenLastCalledWith({ t: "suspect", target: 1 });
+      rerender(map({ ...room, me: { ...room.me, suspectTo: 1 }, day: { ...room.day!, suspects: [{ to: 1, from: 0 }] } }));
+      expect(card().querySelector("[data-suspect-mine]")).not.toBeNull();
+      hold();
+      expect(send).toHaveBeenLastCalledWith({ t: "suspect", target: 1, remove: true });
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   it("차례가 마감되면 다음 프레임을 받기 전에도 지목 얼굴판을 접는다", () => {
     const { container } = mount({ ...voteView(), map: "bar" });
     const dock = container.querySelector("[data-table-dock]")!;

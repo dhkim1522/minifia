@@ -195,6 +195,9 @@ export const TUTORIAL_SCENES: readonly TutorialScene[] = [
     beats: ANSWER_BEATS.map((id, i) => beat(id, i * ANSWER_TURN_MS, i === 0 ? null : "answers.suspect", i === 0 ? { sfx: "ui.card" } : {})),
   },
   {
+    id: "answerReveal", kind: "watch", ms: ANSWER_REVEAL_MS, beats: [beat("a", 0, null)],
+  },
+  {
     id: "discussion",
     kind: "do",
     ms: 19200,
@@ -276,6 +279,7 @@ export const TUTORIAL_PLAYTEST_SCENES: readonly TutorialScene[] = [
   },
   sceneOf("keyword"),
   sceneOf("answers"),
+  sceneOf("answerReveal"),
   {
     ...sceneOf("postit"),
     beats: [
@@ -288,9 +292,6 @@ export const TUTORIAL_PLAYTEST_SCENES: readonly TutorialScene[] = [
   {
     id: "verdict", kind: "do", ms: 16800, autoActMs: TUTORIAL_AUTO_ACT_MS, targets: ["first-ballot"],
     beats: [beat("a", 0, "verdict.choice"), beat("b", null, null, { holdMs: EARLY_GRACE_MS }), beat("c", null, null, { holdMs: 3000 })],
-  },
-  {
-    id: "answerReveal", kind: "watch", ms: ANSWER_REVEAL_MS, beats: [beat("a", 0, null)],
   },
   {
     ...sceneOf("night"),
@@ -386,7 +387,9 @@ export function tutorialView(
   acted = 0,
   { playtest = false, firstBallot }: { playtest?: boolean; firstBallot?: number | null } = {},
 ): RoomView {
-  const scene = (playtest ? TUTORIAL_PLAYTEST_SCENES : TUTORIAL_SCENES).find((entry) => entry.id === id)!;
+  const scenes = playtest ? TUTORIAL_PLAYTEST_SCENES : TUTORIAL_SCENES;
+  const sceneIndex = scenes.findIndex((entry) => entry.id === id);
+  const scene = scenes[sceneIndex]!;
   at ??= scene.beats[0]!.id;
   // 역할 확인은 시작 5초에 저절로 뒤집힌다 — 시계를 앞당겨 0.4초에 뒤집히게 한다(실제 카드 규칙을 그대로 쓴다)
   const duration = id === "roles" ? scene.ms + (AUTO_FLIP_MS - TUTORIAL_FLIP_AT_MS) : scene.ms;
@@ -416,6 +419,9 @@ export function tutorialView(
 
   const out: RoomView = view;
   const day = out.day!;
+  if (sceneIndex >= scenes.findIndex((entry) => entry.id === "answerReveal")) {
+    day.keyword = { ...keyword, answer: TUTORIAL_CAST.word, answers: TUTORIAL_ANSWERS.map(({ order, seat, text }) => ({ order, seat, text })) };
+  }
   switch (id) {
     case "roles":
       out.me = { ...mine, role: "citizen", ...(playtest && acted >= 1 ? { roleReady: true as const } : {}) };
@@ -478,7 +484,6 @@ export function tutorialView(
       break;
     case "answerReveal":
       out.me = { ...mine, role: "citizen" };
-      day.keyword = { ...keyword, answer: TUTORIAL_CAST.word };
       break;
     case "night":
       out.me = { ...mine, role: "citizen", ...(at === "b" ? playtest ? { nightDone: true as const } : { pick: 0 } : {}) };

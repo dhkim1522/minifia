@@ -26,11 +26,11 @@ export const LETTER_FONT_WAIT_MS = 1000;
 /** 편지지 높이 범위 */
 export const LETTER_PAPER_MAX_H = 340;
 export const LETTER_PAPER_MIN_H = 220;
-/** 글 크기 3단: 편지 본문을 24px에서 시작해 긴 유언을 접지 않고 넣는다. */
+/** 글 크기 3단: 편지 본문을 28px에서 시작하고 좁은 화면에서도 22px를 유지한다. */
 export const LETTER_TIERS = [
-  { font: 24, line: 30 },
-  { font: 22, line: 27 },
-  { font: 19, line: 24 },
+  { font: 28, line: 34 },
+  { font: 25, line: 31 },
+  { font: 22, line: 28 },
 ] as const;
 /** 인장 글자(미결 M-7 — 정식 이름이 정해지면 이 줄만 바꾼다) */
 export const SEAL_GLYPH = "M";

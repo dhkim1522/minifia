@@ -223,6 +223,8 @@ export interface RoomState {
   keywordAnswers?: Array<{ order: number; seat: number; text: string | null }>;
   /** 서버 전용. 첫날 답안 발표의 현재 위치. 토론에서 지운다. */
   keywordPresentationIndex?: number;
+  /** 서버 전용. 제시어가 공개된 위치. 예전 판은 첫날 저녁의 공개 위치를 이어 간다. */
+  keywordReveal?: "beforeDiscussion" | "afterDay";
   /** 서버 전용. 이전 버전에서 진행한 판의 D1 떠보기 기록을 보존한다. */
   keywordProbed?: true;
   /**
@@ -481,7 +483,7 @@ export function beginGame(
   // 의심 포스트잇(notes)도 같은 구조 분해로 뺀다 — 새 판에 어제 판의 종이가 따라오지 않게(벨트, D-08).
   const {
     keyword: _prevKeyword, answerSubmits: _prevSubmits, keywordAnswers: _prevAnswers,
-    keywordPresentationIndex: _prevPresentation, notes: _prevNotes, barChairs: _prevChairs, phaseSkipVotes: _prevSkip, ...rest
+    keywordPresentationIndex: _prevPresentation, keywordReveal: _prevReveal, notes: _prevNotes, barChairs: _prevChairs, phaseSkipVotes: _prevSkip, ...rest
   } = state;
   const keyword = pickKeyword !== undefined ? pickKeyword(randInt) : undefined;
   // 옷장 조작이 없는 실험방은 좌석별 외형과 기본 코트로 인물을 구분한다.

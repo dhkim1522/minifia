@@ -139,7 +139,7 @@ function sceneKey(phase: PhaseId, map: RoomView["map"]): string {
     case "defense":
     case "verdict":
     case "execution":
-    case "answerReveal": // 첫날 정답 공개도 같은 맵 — 처형 → 정답 공개 → 밤 사이에 맵을 다시 만들지 않는다(P23-21)
+    case "answerReveal": // 첫날 발표·제시어 공개·토론에서 같은 맵을 유지한다.
     case "night":
     case "morning":
       return "gameMap";

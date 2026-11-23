@@ -151,7 +151,7 @@ export function cameraModeOf(view: RoomView, stageH: number, opts: { verdictZoom
 }
 
 /**
- * 단계 조명(UI-SPEC): 낮 시작·토론·찬반 talk(찬반은 토론 장면 그대로, 22-13 P22-3), 지목·결선·첫날 정답 공개 vote, 유언·처형 trial, 밤 night, 아침 morning.
+ * 단계 조명(UI-SPEC): 낮 시작·제시어 공개·토론·찬반 talk, 지목·결선 vote, 유언·처형 trial, 밤 night, 아침 morning.
  * 로비·종료는 talk.
  */
 export function lightingOf(phase: PhaseId): LightingStage {
@@ -159,7 +159,6 @@ export function lightingOf(phase: PhaseId): LightingStage {
     case "nomination":
     case "runoff":
     case "showdown":
-    case "answerReveal": // 첫날 정답 공개(P23-21): 처형 뒤 저녁빛 — 장면 dusk 와 짝이다(todOf 가 여기서 파생되어 "저녁")
       return "vote";
     case "defense":
     case "execution":

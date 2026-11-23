@@ -5,7 +5,6 @@ import "../../styles/letter.css";
 import {
   LETTER_END_AT_MS,
   LETTER_FONT_WAIT_MS,
-  LETTER_PAPER_MIN_H,
   LETTER_TIERS,
   SEAL_GLYPH,
   chooseTier,
@@ -59,9 +58,10 @@ const AVAIL_REST = 40 + 30;
 /** 머리글 아래(18 + 20×1.3 = 44, 여유 8)와 인장 윗변 위 간격 */
 const HEAD_BOTTOM = 52;
 const SEAL_BOX = 84 + 8;
-const SEAL_GAP = 4;
-/** 인장 옆 줄의 오른쪽을 비우는 폭: 인장 왼쪽 가장자리(종이 오른쪽에서 100)에서 안쪽 패딩 24 를 뺀 76 + 회전·간격 12 */
-const BAND_SIDE = 88;
+/** 인장과 편지지 회전이 차지하는 폭 및 글자 여유. */
+const SEAL_GAP = 14;
+/** 인장 옆 줄의 오른쪽을 비우는 폭: 종이 오른쪽에서 100 − 최소 안쪽 여백 16 + 회전·간격 12 */
+const BAND_SIDE = 96;
 /** 글 덩어리 아래 여백 */
 const BLOCK_BOTTOM = 24;
 
@@ -133,6 +133,8 @@ interface Plan {
   blockTop: number;
   /** 인장 옆으로 좁힌 줄이 있으면 그 줄을 가리키는 기준(글 덩어리 윗변에서 from 아래) */
   bandFrom: number | null;
+  /** 인장 아래 공간을 비울 수 없는 편지의 인장은 머리글 오른쪽으로 옮긴다. */
+  compactSeal: boolean;
   schedule: WriteSchedule | null;
   /** 입력줄 윗변을 알 때만: 묶음 윗변 y, 묶음 높이 */
   box?: { top: number; h: number };
@@ -143,7 +145,7 @@ type FontState = "wait" | "ok" | "fallback";
 // 유언 편지(결정 0063-3·0063-4, UI-SPEC C-1~C-3·C-5, 시안 WillCenter envelope). 줄 쳐진 편지지가 올라오고(700ms) 0.8초부터 줄이 차례로 써지고
 // 쓰기가 끝나면 우측 하단에 실링왁스 인장이 찍히고 5초에 접힌다. 본문·이름은 React 텍스트 노드로만 그린다(사용자 글, T-09.1-29).
 // 눈에 보이는 머리글·글 줄·인장·안내는 aria-hidden 이고 스크린리더는 보이지 않는 한 줄만 읽는다. 초점을 받지도 가두지도 않는다(T-09.1-30).
-// 순서: ① 글꼴 로드를 최대 LETTER_FONT_WAIT_MS 기다린다(넘으면 대체 글꼴) ② 숨은 틀에서 글 단계(chooseTier)·줄·편지지 높이를 정한다
+// 순서: ① 글꼴 로드를 최대 LETTER_FONT_WAIT_MS 기다린다(넘으면 대체 글꼴) ② 숨은 틀에서 글 단계·줄·편지지 높이를 정한다
 // ③ T0 까지 기다렸다 나타난다. 모든 지연은 T0 기준 시각에서 지난 시간 e 를 뺀 값이라 늦게 준비되거나 탭을 가렸다 돌아와도 시간표대로 끝난다
 // (animationend 에 기대지 않고, 접힘·제거도 T0 기준 타이머와 visibilitychange 시계로 정한다).
 export function WillLetter({ letter, reducedMotion, splitLines, getInputTop, onLive }: WillLetterProps) {
@@ -195,42 +197,53 @@ export function WillLetter({ letter, reducedMotion, splitLines, getInputTop, onL
     const inputTop = rawInputTop !== null && rawInputTop > 0 ? rawInputTop : null;
     const avail = inputTop === null ? Number.POSITIVE_INFINITY : inputTop - announceTop - ah - AVAIL_REST;
 
-    /**
-     * 편지지 높이 p 에서 글 단계·줄·덩어리 윗변을 정한다. 먼저 chooseTier(안쪽 p − 56)가 고른 단계의 줄이 가운데(또는 인장 윗변 위)에 앉으면 그대로 두고,
-     * 인장에 닿는 긴 글은 머리글 아래에 붙이고 인장 옆 줄을 좁혀 다시 나눈다. 그래도 안 들어가면 한 단계 작게(3단계까지). ok=false 면 3단계로도 안 들어간 것.
-     */
-    const fit = (p: number): { tier: LetterTier; lines: string[]; top: number; band: number | null; ok: boolean } => {
+    type Placement = Pick<Plan, "tier" | "lines" | "blockTop" | "bandFrom" | "paperH" | "compactSeal">;
+    const defaultHeight = paperHeight(avail);
+    const heights = Number.isFinite(avail) && avail > defaultHeight ? [defaultHeight, avail] : [defaultHeight];
+    const fit = (p: number, tier: LetterTier, plain: string[]): Placement | undefined => {
       const sealTop = p - SEAL_BOX - SEAL_GAP;
-      const band: SealBand = { from: sealTop - HEAD_BOTTOM, side: BAND_SIDE };
-      const choice = chooseTier((t) => split(t, null).length, p - 56);
-      for (let i = choice.tier - 1; i < LETTER_TIERS.length; i++) {
-        const tier = { font: LETTER_TIERS[i]!.font, line: LETTER_TIERS[i]!.line };
-        const plain = split(tier, null);
-        const top = blockTop(p, plain.length, tier.line);
-        if (plain.length * tier.line <= p - 56 && top + plain.length * tier.line <= sealTop + 0.5) return { tier, lines: plain, top, band: null, ok: true };
-        const banded = split(tier, band);
-        if (HEAD_BOTTOM + banded.length * tier.line <= p - BLOCK_BOTTOM) return { tier, lines: banded, top: HEAD_BOTTOM, band: band.from, ok: true };
+      const textHeight = plain.length * tier.line;
+      const top = blockTop(p, plain.length, tier.line);
+      const base = { tier, paperH: p, compactSeal: false };
+      if (top >= HEAD_BOTTOM && top + textHeight <= sealTop + 0.5) {
+        return { ...base, lines: plain, blockTop: top, bandFrom: null };
       }
-      const last = LETTER_TIERS[LETTER_TIERS.length - 1]!;
-      const tier = { font: last.font, line: last.line };
-      return { tier, lines: split(tier, band), top: HEAD_BOTTOM, band: band.from, ok: false };
+      // 가로가 넓은 일반 줄도 세로로 못 들어가면 인장 옆에서 다시 재지 않는다.
+      if (HEAD_BOTTOM + textHeight > p - BLOCK_BOTTOM) return undefined;
+      const band: SealBand = { from: sealTop - HEAD_BOTTOM, side: BAND_SIDE };
+      const banded = split(tier, band);
+      if (HEAD_BOTTOM + banded.length * tier.line > p - BLOCK_BOTTOM) return undefined;
+      return { ...base, lines: banded, blockTop: HEAD_BOTTOM, bandFrom: band.from };
     };
-    let paperH = paperHeight(avail);
-    let chosen = fit(paperH);
-    // 3단계로도 안 들어가면 편지지를 가용 높이까지 키운다(하한 220 유지)
-    if (!chosen.ok && Number.isFinite(avail) && avail > paperH) {
-      paperH = Math.max(LETTER_PAPER_MIN_H, avail);
-      chosen = fit(paperH);
+
+    let chosen: Placement | undefined;
+    for (const tier of LETTER_TIERS) {
+      const lines = split(tier, null);
+      for (const height of heights) {
+        chosen = fit(height, tier, lines);
+        if (chosen !== undefined) break;
+      }
+      if (chosen !== undefined) break;
     }
-    const { tier, lines } = chosen;
+    if (chosen === undefined) {
+      // 짧은 뷰포트의 긴 본문은 인장을 머리글로 옮겨 편지지 너비를 전부 쓴다.
+      const height = Math.max(defaultHeight, Number.isFinite(avail) ? avail : defaultHeight);
+      const compactBottom = 14;
+      const fullWidth = chooseTier((tier) => split(tier, null).length, height - HEAD_BOTTOM - compactBottom);
+      const lines = split(fullWidth, null);
+      chosen = {
+        tier: fullWidth,
+        lines,
+        paperH: Math.max(height, HEAD_BOTTOM + lines.length * fullWidth.line + compactBottom),
+        blockTop: HEAD_BOTTOM,
+        bandFrom: null,
+        compactSeal: true,
+      };
+    }
     const top = announceTop + ah + ANNOUNCE_GAP;
     setPlan({
-      lines,
-      tier,
-      paperH,
-      blockTop: chosen.top,
-      bandFrom: chosen.band,
-      schedule: writeSchedule(lines),
+      ...chosen,
+      schedule: writeSchedule(chosen.lines),
       ...(inputTop !== null && inputTop - INPUT_GAP - top > 0 ? { box: { top, h: inputTop - INPUT_GAP - top } } : {}),
     });
     // 한 번만 정한다 — 이후 화면 크기가 바뀌어도 줄을 다시 나누지 않는다(5초짜리 장면)
@@ -314,7 +327,7 @@ export function WillLetter({ letter, reducedMotion, splitLines, getInputTop, onL
         <div key={run.key} className="mf-letter__fold" aria-hidden="true" style={css({ "--lw-fold-delay": ms(schedule.foldAt) })}>
           <div className="mf-letter__rise" style={css({ "--lw-rise-delay": ms(0) })}>
             <div
-              className="mf-letter__paper"
+              className={`mf-letter__paper${plan.compactSeal ? " is-compact-seal" : ""}`}
               style={css({ "--lw-font": `${plan.tier.font}px`, "--lw-line": `${plan.tier.line}px`, "--lw-paper-h": `${plan.paperH}px`, "--lw-pos": `${plan.blockTop}px` })}
             >
               <p className="mf-letter__head" data-will-head="">

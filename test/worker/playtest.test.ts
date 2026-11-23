@@ -105,8 +105,14 @@ describe("첫날 실험방 HTTP·소켓", () => {
         await closePhase(code);
       }
       await settleAll(sockets);
+      const reveal = lastViewOf(host);
+      expect(reveal).toMatchObject({ phase: "answerReveal", phaseDurationMs: 3_000 });
+      expect(reveal.day?.keyword?.answer).toEqual(expect.any(String));
+      expect(reveal.day?.keyword?.answers?.map(({ seat }) => seat)).toEqual(clockwiseSeats);
+      await closePhase(code);
+      await settleAll(sockets);
       expect(lastViewOf(host)).toMatchObject({ phase: "discussion", phaseDurationMs: 120_000 });
-      expect(lastViewOf(host).day?.keyword).toBeUndefined();
+      expect(lastViewOf(host).day?.keyword).toEqual(reveal.day?.keyword);
       const hostSeat = lastViewOf(host).me.seat;
       const nearSeat = lastViewOf(sockets[1]!).me.seat;
       const farSeat = lastViewOf(sockets[2]!).me.seat;
@@ -168,7 +174,6 @@ describe("첫날 실험방 HTTP·소켓", () => {
         expect(lastViewOf(sock).me).not.toHaveProperty("firstBallot");
       }
 
-      await closePhase(code);
       await closePhase(code);
       await settleAll(sockets);
       const endsAt = lastViewOf(host).phaseEndsAt;

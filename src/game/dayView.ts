@@ -43,7 +43,7 @@ export const DAY_COPY = {
     defense: "유언", // 결정 0089-19(D-15): defense id 는 처형자의 10초 유언 단계 — 변론은 없다(P22-1)
     verdict: "찬반",
     execution: "처형",
-    answerReveal: "제시어", // 첫날 제시어 공개(23-07, P23-2): 앞의 "저녁" 은 헤더 시간대 낱말이 말한다
+    answerReveal: "제시어",
     night: "밤",
     morning: "아침",
   } as Partial<Record<PhaseId, string>>,
@@ -259,9 +259,7 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
       return;
     }
     case "answerReveal": {
-      // 첫날 정답 공개(23-07, D-22·P23-20): 처형이 있었으면 처형 단계가 이미 알렸으므로 정답 큰 글만 0초부터 3초. 처형 없는 첫날(부결·동점·0표)은
-      // 단계가 4.4초로 길어져(서버 phaseDurationOf) "처형 없음" 0~1.4초 다음 1.4초부터 정답 3초 — 두 큰 글이 겹치지 않는다. 역할 분기 없음(T-23-27).
-      // 글자는 서버가 answerReveal 진입 프레임부터 싣는 day.keyword.answer 하나뿐이다(T-23-25) — 없으면 알림도 없다.
+      // 첫날 발표가 끝나면 바로 제시어를 3초 동안 보여 준다. 배포 전에 토론을 지난 판에서만 기존 저녁 알림을 먼저 보여 준다.
       const answer = day.keyword?.answer;
       if (answer === undefined) return;
       let at = 0;

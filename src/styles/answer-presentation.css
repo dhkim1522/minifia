@@ -53,12 +53,16 @@
   min-block-size: var(--tap-min);
 }
 
-.mf-answer-presentation__suspect[aria-pressed="true"] {
-  border-color: var(--noir-paper);
+.mf-btn.mf-answer-presentation__suspect {
+  background: var(--crimson-700);
+  border-color: var(--crimson-300);
+  color: var(--noir-paper);
 }
 
-.mf-answer-presentation__suspect[aria-pressed="true"]:disabled {
-  opacity: 1;
+.mf-btn.mf-answer-presentation__suspect[aria-pressed="true"] {
+  background: var(--gray-700);
+  border-color: var(--gray-300);
+  color: var(--gray-50);
 }
 
 .mf-game__panel[data-answer-panel] {

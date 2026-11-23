@@ -102,6 +102,34 @@
 }
 .mf-game-dock .mf-table-controls--cards .mv-face__count { top: 4px; left: 4px; right: auto; bottom: auto; }
 .mf-game-dock .mf-table-controls--cards .mf-table-controls__count { top: 4px; left: 4px; right: auto; }
+.mf-game-dock .mf-table-controls--cards [data-suspect-mine] {
+  color: var(--noir-paper);
+  background: var(--crimson-700);
+  box-shadow: 0 0 0 1px var(--crimson-300);
+}
+.mf-game-dock [data-suspect-holdable] {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+.mf-table-controls__suspect-progress {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: var(--crimson-300);
+  stroke-width: 2.5;
+  pointer-events: none;
+}
+.mf-table-controls__suspect-progress rect {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: mf-suspect-hold linear forwards;
+}
+@keyframes mf-suspect-hold { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .mf-table-controls__suspect-progress rect { animation-timing-function: steps(1, end); }
+}
 .mf-game-dock .mf-table-controls--cards .mf-table-controls__name { word-break: normal; overflow-wrap: anywhere; flex: none; }
 .mf-table-controls__portrait {
   position: relative;

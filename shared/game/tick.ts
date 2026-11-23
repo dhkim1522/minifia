@@ -24,7 +24,7 @@ import { emptyGameCloseAt, nextContinuityAt } from "./continuity";
 import { enterDiscussion, phaseDurationOf } from "./discussion";
 import { enterEnded, routeAfterExecution, routeAfterMorning } from "./endgame";
 import { enterExecution } from "./execution";
-import { closeKeyword, routeAfterRoleReveal, stepKeywordPresentation } from "./keywordAnswer";
+import { closeKeyword, routeAfterKeywordPresentation, routeAfterKeywordReveal, routeAfterRoleReveal } from "./keywordAnswer";
 import { keywordPresentationOf } from "./keywordPresentation";
 import { enterNomination, stepNomination } from "./nomination";
 import { stepRunoff } from "./runoff";
@@ -86,7 +86,8 @@ const HOOKS: PhaseHooks = {
     roleReveal: routeAfterRoleReveal,
     // 입력 마감 뒤에는 첫 확정 제출자의 의자부터 답을 한 줄씩 공개한다.
     keyword: closeKeyword,
-    dayAnnounce: (s) => stepKeywordPresentation(s) ?? (RULES.showdown ? routeAfterDayAnnounce(s) : { state: s, stay: false }),
+    dayAnnounce: (s) => routeAfterKeywordPresentation(s) ?? (RULES.showdown ? routeAfterDayAnnounce(s) : { state: s, stay: false }),
+    answerReveal: routeAfterKeywordReveal,
     showdown: stepShowdown,
     nomination: stepNomination,
     runoff: stepRunoff,

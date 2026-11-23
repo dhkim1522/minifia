@@ -97,20 +97,20 @@ const EXPECTED_ROLES = {
 // test/unit/e2eContract.test.ts 가 이 표를 nextPhaseOf(단계) 와 대조한다 — 어긋나면 거짓 통과·거짓 실패가 난다.
 // 첫날: roleReveal → keyword → dayAnnounce. 낮 순서(22-09, 결정 0089-18): dayAnnounce → discussion → verdict(찬반, 후보 없음) → (통과) nomination(순차 지목) → (최다 한 명) defense(유언 자리) → execution → night | ended,
 // 찬반 부결·지목 0표·동률은 곧장 night, night → morning → dayAnnounce(다음 낮) | ended. 승패가 나지 않는 한 낮 루프라 끝이 없다.
-// 첫날 정답 공개(23-05, D-02): 키워드가 있는 판의 첫날은 처형 뒤(승패 없음)와 처형 없는 낮(찬반 부결·지목 0표·동률) 뒤에 night 앞의 answerReveal(3초, 처형 없음이면 4.4초)이 끼고, 승패가 나면 건너뛴다. 둘째 날부터는 곧장 night 다.
+// 새 판의 첫날은 답안 발표와 토론 사이에 제시어 공개가 있다. 이미 첫날 토론이 시작된 이전 방의 밤 직전 공개도 전이 표에서 허용한다.
 // 주의: 이 파일의 낮 흐름 걸음(토론 끝내기 → 지목 → 변론 → 찬반 단언)은 아직 옛 순서 그대로다 — 전이 표만 새 순서로 맞췄다(22-09). 걸음 개편은 이월(SUMMARY).
 export const PHASE_NEXT = {
   lobby: ["assigning"],
   assigning: ["roleReveal"],
   roleReveal: ["keyword"], // 역할 확인 다음은 첫날 단서 작성이다(방 상태에 keyword 가 없는 옛 방만 곧장 dayAnnounce)
   keyword: ["dayAnnounce"],
-  dayAnnounce: ["discussion"], // 낮 시작 발표 다음이 바로 토론이다
+  dayAnnounce: ["discussion", "answerReveal"],
   discussion: ["verdict"],
   verdict: ["nomination", "night", "answerReveal"], // 찬반: 던진 표의 과반 찬성이면 지목, 부결(0표·동수 포함)이면 처형 없는 밤(첫날 키워드 판은 정답 공개 뒤 밤)
   nomination: ["defense", "night", "answerReveal"], // 동점·0표는 runoff 가 아니라 처형 없는 밤(첫날은 정답 공개 뒤)
   defense: ["execution"],
   execution: ["night", "ended", "answerReveal"], // 첫날 키워드 판은 처형 뒤(승패 없음) 정답 공개, 승패가 나면 곧장 결과
-  answerReveal: ["night"], // 첫날 정답 공개(23-05, D-02)
+  answerReveal: ["night", "discussion"],
   night: ["morning"],
   morning: ["dayAnnounce", "ended"],
   ended: [],
@@ -1283,10 +1283,9 @@ async function stageFull(url, args) {
     for (let k = 1; k < seq.length; k++) {
       if (!(PHASE_NEXT[seq[k - 1]] ?? []).includes(seq[k])) fail(`${c.nickname} 의 단계 순서가 이상함: ${seq.join(" → ")}`);
     }
-    // 첫날은 처형 뒤 키워드 정답을 공개한 다음 밤으로 넘어간다.
-    const iDisc = seq.indexOf("discussion");
-    const firstDay = ["discussion", "verdict", "nomination", "defense", "execution", "answerReveal", "night", "morning"];
-    if (iDisc < 0 || seq.slice(iDisc, iDisc + firstDay.length).join(",") !== firstDay.join(",")) fail(`${c.nickname} 의 첫 낮 단계 순서가 ${firstDay.join(" → ")} 가 아님: ${seq.join(" → ")}`);
+    const iAnnounce = seq.indexOf("dayAnnounce");
+    const firstDay = ["dayAnnounce", "answerReveal", "discussion", "verdict", "nomination", "defense", "execution", "night", "morning"];
+    if (iAnnounce < 0 || seq.slice(iAnnounce, iAnnounce + firstDay.length).join(",") !== firstDay.join(",")) fail(`${c.nickname} 의 첫 낮 단계 순서가 ${firstDay.join(" → ")} 가 아님: ${seq.join(" → ")}`);
     if (seq.at(-1) !== "ended") fail(`${c.nickname} 의 마지막 단계가 ended 가 아님: ${seq.join(" → ")}`);
   }
   // me.allies 는 마피아에게만, 다른 마피아의 seat 와 같다

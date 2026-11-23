@@ -96,7 +96,7 @@ export const PHASE_DEFS: Readonly<Record<PhaseId, PhaseDef>> = Object.freeze({
   discussion: Object.freeze({ durationMs: DISCUSSION_MS, next: "verdict", revealsOwnRole: true }),
   defense: Object.freeze({ durationMs: DEFENSE_MS, next: "execution", revealsOwnRole: true }),
   execution: Object.freeze({ durationMs: EXECUTION_MS, next: "night", revealsOwnRole: true }),
-  // 첫날만(D-02) — 마감 훅 routeAfterExecution·afterDayOf 가 keyword 가 있는 첫날에만 이 단계로 보낸다. execution.next 는 둘째 날 이후가 쓰는 night 그대로다.
+  // 첫날만. 발표 뒤 공개는 마감 훅에서 토론으로, 이미 첫날 토론 이후였던 이전 판은 밤으로 이어진다.
   answerReveal: Object.freeze({ durationMs: ANSWER_REVEAL_MS, next: "night", revealsOwnRole: true }),
   night: Object.freeze({ durationMs: NIGHT_MS, next: "morning", revealsOwnRole: true }),
   morning: Object.freeze({ durationMs: MORNING_MS, next: "dayAnnounce", revealsOwnRole: true }),
@@ -118,17 +118,15 @@ export function nextPhaseOf(phase: PhaseId): PhaseId | null {
 }
 
 /**
- * 첫날 정답 공개가 남았는지(D-02·D-29): 방 상태에 keyword 가 있고 첫날((day ?? 1) === 1)일 때만 참이다.
- * 키의 존재만 본다 — 이 파일은 클라이언트가 import 하므로 키워드 모듈을 끌어오지 않는다(Pitfall 8).
+ * 첫날 키워드가 있고 아직 공개하지 않은 방인지 확인한다.
  */
-export function firstDayAnswerPending(state: { day?: number; keyword?: unknown }): boolean {
-  return state.keyword !== undefined && (state.day ?? 1) === 1;
+export function firstDayAnswerPending(state: { day?: number; keyword?: unknown; keywordReveal?: unknown }): boolean {
+  return state.keyword !== undefined && state.keywordReveal === undefined && (state.day ?? 1) === 1;
 }
 
 /**
- * 처형 없이 끝난 낮(투표 동률·0표·결선·결전 무승부)의 다음 단계 한 곳 — 첫날(키워드가 있는 판)이면 answerReveal, 아니면 밤이다(D-02·D-10).
- * 낮 마감 분기의 리터럴을 이 함수 하나로 모은다. 처형이 있었던 날은 마감 훅 routeAfterExecution 이 같은 규칙(firstDayAnswerPending)으로 가른다.
+ * 처형 없이 끝난 낮은 밤으로 간다. 배포 전에 이미 첫날 토론에 들어간 판 중 제시어가 아직 열리지 않은 판만 늦게 공개한다.
  */
-export function afterDayOf(state: { day?: number; keyword?: unknown }): PhaseId {
+export function afterDayOf(state: Parameters<typeof firstDayAnswerPending>[0]): PhaseId {
   return firstDayAnswerPending(state) ? "answerReveal" : "night";
 }

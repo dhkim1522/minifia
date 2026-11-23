@@ -52,7 +52,8 @@ describe("키워드 카드 — 시민 편", () => {
     expect(container.querySelector("[data-keyword-screen]")).not.toBeNull();
     expect(container.querySelector("[data-keyword-genre]")!.textContent).toBe("주제 · 영화");
     expect(container.querySelector("[data-keyword-word]")!.textContent).toBe("해리포터");
-    expect(container.querySelector("[data-keyword-note]")!.textContent).toBe("제시어는 쓰지 말고 단서를 남겨요");
+    expect(container.querySelector("[data-keyword-note]")).toBeNull();
+    expect(container.querySelector("input")?.placeholder).toBe("단서 입력");
     expect(getByRole("group", { name: "제시어 카드" })).toBe(container.querySelector("[data-keyword-card]"));
   });
 });
@@ -131,13 +132,13 @@ describe("키워드 입력줄 — 시작부터 쓰기", () => {
     expect(input(container).hasAttribute("data-call")).toBe(false);
   });
 
-  it("입력칸 접근성·입력 속성: 이름 '단서 입력', enterKeyHint send, autoComplete off, 안내 글자 없음", () => {
+  it("입력칸 접근성·입력 속성: 이름과 자리표시는 '단서 입력', enterKeyHint send, autoComplete off", () => {
     const { container } = renderAnswer(makeView(CITIZEN, 5_000));
     const el = input(container);
     expect(el.getAttribute("aria-label")).toBe("단서 입력");
     expect(el.getAttribute("enterkeyhint")).toBe("send");
     expect(el.getAttribute("autocomplete")).toBe("off");
-    expect(el.getAttribute("placeholder")).toBeNull();
+    expect(el.getAttribute("placeholder")).toBe("단서 입력");
     expect(el.getAttribute("aria-describedby")).toBe(q(container, ".mf-keyword__meta").id);
   });
 
@@ -307,22 +308,19 @@ describe("키워드 카드 — 키보드가 열리면 컴팩트 (P23-15)", () =>
     vi.useRealTimers();
   });
 
-  it("열림이면 카드가 data-compact=true(각주 hidden), 닫히면 큰 카드로 돌아온다 — 각주는 DOM 에 남는다", () => {
+  it("열림이면 카드가 data-compact=true, 닫히면 큰 카드로 돌아온다", () => {
     const view = makeView(CITIZEN, 5_000);
     const { container, rerenderWith } = renderAnswer(view);
     expect(q(container, "[data-keyword-card]").hasAttribute("data-compact")).toBe(false);
-    expect(q(container, "[data-keyword-note]").hasAttribute("hidden")).toBe(false);
     kb.open = true;
     rerenderWith(view);
     const card = q(container, "[data-keyword-card]");
     expect(card.getAttribute("data-compact")).toBe("true");
     expect(card.classList.contains("is-compact")).toBe(true);
-    expect(q(container, "[data-keyword-note]").hasAttribute("hidden")).toBe(true);
     expect(q(container, "[data-keyword-word]").textContent).toBe("해리포터");
     kb.open = false;
     rerenderWith(view);
     expect(q(container, "[data-keyword-card]").hasAttribute("data-compact")).toBe(false);
-    expect(q(container, "[data-keyword-note]").hasAttribute("hidden")).toBe(false);
   });
 
   it("CSS: 컴팩트 카드는 키워드 Heading 24 한 줄(nowrap), 안쪽 8 16, hex 색이 없다", () => {

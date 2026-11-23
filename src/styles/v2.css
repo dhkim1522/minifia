@@ -383,7 +383,7 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-quote.is-on { opacity: 1; }
 .mv-quote.is-still { transition: none; }
 /* 공개 유언은 50자 전체를 큰 손글씨로 읽을 수 있게 표시한다. */
-.mv-quote--will { display: block; -webkit-line-clamp: unset; line-clamp: none; background: var(--stationery-paper, none) center / cover no-repeat, var(--noir-paper); color: var(--noir-ink); box-shadow: inset 0 0 0 1px var(--noir-paper-line), inset 0 0 0 3px var(--noir-paper); border-color: var(--noir-paper-line); font: 400 24px/1.25 var(--font-hand); }
+.mv-quote--will { display: block; -webkit-line-clamp: unset; line-clamp: none; background: var(--stationery-paper, none) center / cover no-repeat, var(--noir-paper); color: var(--noir-ink); box-shadow: inset 0 0 0 1px var(--noir-paper-line), inset 0 0 0 3px var(--noir-paper); border-color: var(--noir-paper-line); font: 400 28px/1.25 var(--font-hand); }
 /* 카드 자리: 독 아랫변 + 8(위 알림 .mv-toast--top 과 같은 윗변), 폭 = 화면 − 32. 누를 수 없다 */
 @media (prefers-reduced-motion: reduce) { .mv-quote { transition: none; } }
 

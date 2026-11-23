@@ -43,8 +43,10 @@ export function phaseDurationOf(state: RoomState): number | null {
   }
   if (keywordPresentationOf(state) !== undefined) return FIRST_ANSWER_TURN_MS;
   if (state.phase === "morning") return morningMsOf(state);
-  // 첫날 정답 공개(D-22): 처형이 있었으면 3초, 처형 없는 첫날이면 "처형 없음" 큰 글 1.4초가 앞에 붙어 4.4초다. 처형 없음 여부는 이미 공개된 값(day.noExecution)이라 길이로 새는 정보가 없다.
-  if (state.phase === "answerReveal") return ANSWER_REVEAL_MS + (noExecutionOf(state) === undefined ? 0 : NO_EXECUTION_MS);
+  // 배포 전에 첫날 토론을 시작한 판에는 기존 저녁 연출을 끝까지 보여 준다.
+  if (state.phase === "answerReveal" && noExecutionOf(state) !== undefined) {
+    return ANSWER_REVEAL_MS + NO_EXECUTION_MS;
+  }
   if (state.phase === "nomination" && state.pickTurn !== undefined) return nominationStepMs(state);
   if (state.phase === "runoff" && state.runoff !== undefined) return runoffStepMs(state);
   if (state.phase === "showdown" && state.showdown !== undefined) return showdownStepMs(state);

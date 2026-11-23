@@ -190,11 +190,15 @@ describe("1명과 무작위 봇 7명의 첫날", () => {
         await nextFrame(room.host, (m) => m.t === "state" && m.view.day?.keyword?.presentation?.order === i + 1);
         rows.push(lastView(room.host).day!.keyword!.presentation!);
       }
-      await skipUntil(room, "discussion");
       expect(rows).toHaveLength(8);
       expect(new Set(rows.map(({ text }) => text)).size).toBe(8);
       expect(rows.find((row) => row.seat === 0)).toMatchObject({ seat: 0, text: "가" });
-      expect(lastView(room.host).day?.keyword).toBeUndefined();
+      await skipUntil(room, "answerReveal");
+      const revealed = lastView(room.host).day?.keyword;
+      expect(revealed?.answer).toEqual(expect.any(String));
+      expect(revealed?.answers).toEqual(rows.map(({ total: _total, ...row }) => row));
+      await skipUntil(room, "discussion");
+      expect(lastView(room.host).day?.keyword).toEqual(revealed);
     } finally {
       restore();
     }

@@ -861,7 +861,7 @@ describe("RoomScreen: 첫날 답안 발표", () => {
     const { container, rerender } = render(ui());
     const suspect = () => container.querySelector<HTMLButtonElement>("[data-answer-suspect]");
     expect(suspect()?.textContent).toBe("의심!");
-    const icon = suspect()?.querySelector("svg")?.innerHTML;
+    expect(suspect()?.querySelector("svg path[fill='currentColor']")).toBeNull();
     fireEvent.click(suspect()!);
     expect(send).toHaveBeenCalledWith({ t: "suspect", target: 1 });
     expect(suspect()?.getAttribute("aria-pressed")).toBe("false");
@@ -870,7 +870,7 @@ describe("RoomScreen: 첫날 답안 발표", () => {
     rerender(ui());
     expect(suspect()?.getAttribute("aria-pressed")).toBe("true");
     expect(suspect()?.textContent).toBe("의심 해제");
-    expect(suspect()?.querySelector("svg")?.innerHTML).toBe(icon);
+    expect(suspect()?.querySelector("svg path[fill='currentColor']")).not.toBeNull();
     expect(suspect()?.disabled).toBe(true);
     expect(stage.props?.scene?.notes).toEqual({ 1: [0] });
     act(() => vi.advanceTimersByTime(SUSPECT_MIN_GAP_MS));

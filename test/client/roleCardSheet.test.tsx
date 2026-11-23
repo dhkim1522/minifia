@@ -448,11 +448,17 @@ function renderRoleSheet(view: RoomView, tab: RoleCardTab = "records", onTab: (t
   return render(<RoleCardSheet view={view} showBack={false} tab={tab} onTab={onTab} unread={0} newCount={0} onClose={vi.fn()} />);
 }
 
-describe("RoleCardSheet 첫날 답은 역할 카드에 두지 않는다", () => {
-  it.each(["citizen", ...TABBED] as RoleId[])("%s: 공개 답만으로 기록 탭이나 제시어가 생기지 않는다", (role) => {
+describe("RoleCardSheet 첫날 제시어와 답", () => {
+  it.each(["citizen", ...TABBED] as RoleId[])("%s: 공개 뒤 기록 탭에서 제시어와 답을 읽는다", (role) => {
     renderRoleSheet(answersView(role, { answer: "해리포터" }));
-    expect(document.querySelector('[data-rolecard-tab="records"], [data-answer-list], [data-answer-correct]')).toBeNull();
-    expect(document.querySelector("dialog")?.textContent).not.toContain("해리포터");
+    expect(document.querySelector('[data-rolecard-tab="records"]')?.textContent).toBe("답과 의심");
+    expect(document.querySelector("[data-answer-correct]")?.textContent).toBe("해리포터");
+    expect([...document.querySelectorAll("[data-answer-row]")].map((row) => row.textContent)).toEqual(["민지해리포터", "지우안경", "하윤미제출", "도현미제출"]);
+  });
+
+  it("제시어 공개 전에는 답 기록을 열지 않는다", () => {
+    renderRoleSheet(answersView("citizen"));
+    expect(document.querySelector('[data-rolecard-tab="records"], [data-answer-correct], [data-answer-row]')).toBeNull();
   });
 });
 

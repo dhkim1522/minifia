@@ -776,12 +776,12 @@ describe("서버 계약 소비자 스크립트의 낮 시작 → 토론 흐름 (
 
   it("smoke.mjs 의 전이 표가 하나이고 dayAnnounce → discussion 이며 낮 단계 목록에 errand 가 없다", () => {
     const text = scriptText("smoke.mjs");
-    expect(text).toMatch(/dayAnnounce: \["discussion"\]/);
+    expect(text).toMatch(/dayAnnounce: \["discussion", "answerReveal"\]/);
     expect(text).not.toMatch(/errand/);
     expect(text).not.toMatch(/PHASE_NEXT_BY_MODE|FIRST_DAY_PHASE/);
   });
 
-  it("smoke.mjs 의 전이 표가 서버의 nextPhaseOf·afterDayOf 와 같다: 표가 가리키는 모든 단계(기본 다음 단계·처형 없는 낮 분기)가 들어 있고, 낮 시작 발표 다음은 토론이다 (T-21-45)", () => {
+  it("smoke.mjs 의 전이 표가 서버의 기본 전이와 구판·새 판의 제시어 공개 분기를 포함한다", () => {
     const graph = smokeGraph;
     expect(Object.keys(graph).sort(), "표의 단계 목록").toEqual(
       ["lobby", "assigning", "roleReveal", "keyword", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "answerReveal", "night", "morning", "ended"].sort(),
@@ -806,9 +806,9 @@ describe("서버 계약 소비자 스크립트의 낮 시작 → 토론 흐름 (
       }
       expect(nexts, `${from} → ${want}`).toContain(want);
     }
-    // 첫날 정답 공개(23-05, D-02): answerReveal 다음은 night 하나, afterDayOf(state) 는 상태 인자 두 경우로 갈린다.
-    expect([...smokeGraph.answerReveal!]).toEqual([nextPhaseOf("answerReveal")]);
-    expect([...smokeGraph.answerReveal!]).toEqual(["night"]);
+    expect([...smokeGraph.dayAnnounce!]).toEqual([nextPhaseOf("dayAnnounce"), "answerReveal"]);
+    expect([...smokeGraph.answerReveal!]).toEqual([nextPhaseOf("answerReveal"), "discussion"]);
+    expect([...smokeGraph.answerReveal!]).toEqual(["night", "discussion"]);
     expect(afterDayOf({ day: 2 })).toBe("night");
     expect(afterDayOf({ day: 1, keyword: {} })).toBe("answerReveal");
     expect(afterDayOf({ day: 1 })).toBe("night");
@@ -822,7 +822,7 @@ describe("서버 계약 소비자 스크립트의 낮 시작 → 토론 흐름 (
     expect(nextPhaseOf("night")).toBe("morning");
   });
 
-  it("uat-test-room.mjs 의 전이 표도 하나이고 smoke 와 같은 첫날 순서(키워드 → 낮 시작 발표 → 토론 → 찬반 … 정답 공개 → 밤)다", () => {
+  it("uat-test-room.mjs 의 전이 표도 smoke 와 같고 토론 전에 제시어를 공개한다", () => {
     const text = scriptText("uat-test-room.mjs");
     const table = /const PHASE_NEXT = \{([\s\S]*?)\n\};/.exec(text)?.[1] ?? "";
     const parsed = Object.fromEntries([...table.matchAll(/(\w+): \[([^\]]*)\]/g)].map((m) => [m[1], m[2]!.split(",").map((x) => x.trim().replace(/"/g, "")).filter(Boolean)]));
@@ -830,6 +830,7 @@ describe("서버 계약 소비자 스크립트의 낮 시작 → 토론 흐름 (
     expect(Object.keys(parsed)).toEqual(expect.arrayContaining(["roleReveal", "keyword", "dayAnnounce", "discussion", "verdict", "answerReveal", "night", "morning"]));
     expect(text).toContain('await skipTo("keyword")');
     expect(text).toContain('await skipTo("answerReveal")');
+    expect(text.indexOf('await skipTo("answerReveal")')).toBeLessThan(text.indexOf('await skipTo("discussion")'));
     expect(text).not.toContain("errand");
     expect(text).not.toMatch(/mode(?:Pick)/); // 옛 판 종류 고르기 메시지를 더는 보내지 않는다
     expect(text).not.toContain("view.mode");

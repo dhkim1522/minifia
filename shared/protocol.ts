@@ -29,7 +29,7 @@ export const MAX_BODY_BYTES = 1024; // HTTP 본문 상한
 // discussion 다음에 지목(nomination) → 최후 변론(defense) → 찬반(verdict) → 처형(execution)이 이어지고(결정 0060),
 // 지목이 동률·0표면 바로 night 로 가고, 최다가 정확히 둘 동점이면 동점 결선 runoff 를 거친다(결정 0066-4, 분기는 shared/game/tick.ts). 종료 단계 ended 는 마감이 없다.
 // 키워드(keyword)는 첫날 역할 확인(roleReveal)과 낮 시작 발표(dayAnnounce) 사이의 35초 단계다. 키워드 기능이 켜진 판에서 거친다.
-// 정답 공개(answerReveal, D-02)는 첫날 처형 뒤(또는 처형 없는 첫날 뒤) 밤 직전에 끼는 3초(처형 없음이면 4.4초) 단계다 — 키워드가 있는 판의 첫날에만 거치고, 승패가 나면 건너뛴다.
+// 제시어 공개(answerReveal)는 첫날 마지막 답안 발표가 끝난 뒤 토론 전의 3초 단계다.
 // 순차 직업 주장 단계(claim)는 7페이즈에서 없어졌다 — 낮 시작 발표 다음이 바로 자유 채팅 토론이다(CHAT-06). 옛 공개 연출 단계도 없다(결정 0027).
 export type PhaseId =
   | "lobby" | "assigning" | "roleReveal" | "keyword" | "dayAnnounce" | "discussion"
@@ -136,9 +136,9 @@ export interface KeywordPresentation extends KeywordAnswerRow {
 export interface KeywordView {
   genre: string; // 장르 라벨(예: "영화")
   presentation?: KeywordPresentation; // 첫날 낮 시작의 현재 발표 한 줄
-  answers?: KeywordAnswerRow[]; // 이전 서버·튜토리얼 뷰의 답안 목록
+  answers?: KeywordAnswerRow[]; // 제시어 공개 뒤 기록 화면의 전체 답안
   answersUntil?: number; // 이전 서버의 답안 발표 마감
-  answer?: string; // 첫날 answerReveal 단계에서만 받는 정답
+  answer?: string; // 제시어 공개부터 기록에서도 볼 수 있는 정답
 }
 
 // ---- 낮 토론 계약(2페이즈) ----

@@ -25,12 +25,12 @@ const T0 = 1_700_000_000_000;
 const scene = (id: TutorialSceneId) => TUTORIAL_SCENES.find((s) => s.id === id)!;
 
 describe("장면 표 — 열 장면(D-16, UI-SPEC E 표)", () => {
-  it("id 열이 정확히 roles·keyword·answers·discussion·verdict·pick·will·night·postit·end", () => {
-    expect(TUTORIAL_SCENES.map((s) => s.id)).toEqual(["roles", "keyword", "answers", "discussion", "verdict", "pick", "will", "night", "postit", "end"]);
+  it("답안 발표 뒤 제시어를 보여 주고 토론으로 간다", () => {
+    expect(TUTORIAL_SCENES.map((s) => s.id)).toEqual(["roles", "keyword", "answers", "answerReveal", "discussion", "verdict", "pick", "will", "night", "postit", "end"]);
   });
 
   it("종류: 보기(roles·answers·will·end) · 하기(keyword·discussion·verdict·pick·night·postit)", () => {
-    expect(TUTORIAL_SCENES.map((s) => s.kind)).toEqual(["watch", "do", "watch", "do", "do", "do", "watch", "do", "do", "watch"]);
+    expect(TUTORIAL_SCENES.map((s) => s.kind)).toEqual(["watch", "do", "watch", "watch", "do", "do", "do", "watch", "do", "do", "watch"]);
   });
 
   it("하기 장면의 대상 id 와 12초 대행(P24-27) — postit 만 대상이 둘(suspect-btn → tag-4)", () => {
@@ -392,7 +392,7 @@ describe("첫날 실험방 연습", () => {
 
   it("첫날 안에 단서를 보고 의심딱지를 붙인 뒤 투표 한 번과 제시어 공개를 거친다", () => {
     expect(TUTORIAL_PLAYTEST_SCENES.map((scene) => scene.id)).toEqual([
-      "roles", "keyword", "answers", "postit", "discussion", "verdict", "answerReveal", "night", "end",
+      "roles", "keyword", "answers", "answerReveal", "postit", "discussion", "verdict", "night", "end",
     ]);
     const postit = tutorialView("postit", "b", T0, 0, playtest);
     expect(postit).toMatchObject({ map: "bar", playtest: true, day: { n: 1, suspects: [{ from: 5, to: 4 }] } });

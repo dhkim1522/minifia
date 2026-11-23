@@ -1451,7 +1451,7 @@ export async function closeRoleCard(page) {
 export async function resetAndLeave(page, tracker) {
   try {
     const open = await page.evaluate(() => [...document.querySelectorAll("dialog[open]")].map((d) => d.getAttribute("aria-label") ?? ""));
-    for (const label of open) if (label === "역할 카드" || label.endsWith(" 기록")) await closeSheet(page, label).catch(() => {});
+    for (const label of open) if (label === "역할 카드" || label === "답과 의심" || label.endsWith(" 기록")) await closeSheet(page, label).catch(() => {});
     await openTestSheet(page);
     await clickInDialog(page, TT_LABEL, "대기실로 되돌리기");
     await tracker.waitFor((v) => v.phase === "lobby", 3000, "대기실 복귀");
@@ -1675,8 +1675,8 @@ export async function pressEndDiscussion(page, on = true) {
  * 결과 알림 관찰을 심는다: 40ms 마다 [data-announce] 를 읽어 글자가 바뀔 때마다 글, 화면 너비, 크기, 줄 수를 쌓는다.
  * 처형 5초처럼 짧은 구간을 Playwright 호출 지연과 상관없이 놓치지 않으려고 쓴다. readAnnounceWatch 가 읽고 멈춘다.
  */
-export function armAnnounceWatch(page) {
-  return page.evaluate(() => {
+export function armAnnounceWatch(page, { nightSummary = false } = {}) {
+  return page.evaluate((includeNightSummary) => {
     window.__annWatch?.stop?.();
     const log = [];
     let last;
@@ -1686,18 +1686,19 @@ export function armAnnounceWatch(page) {
       return new Set([...range.getClientRects()].map((r) => Math.round(r.top / 2))).size;
     };
     const timer = setInterval(() => {
-      const el = document.querySelector("[data-announce] .mf-announce__text");
+      const summary = includeNightSummary ? document.querySelector('[data-phase-intro="night"] .mf-phase-intro__summary') : null;
+      const el = summary ?? document.querySelector("[data-announce] .mf-announce__text");
       const text = el ? (el.textContent ?? "").trim() : null;
       if (text === last) return;
       last = text;
       if (el) {
         const cs = getComputedStyle(el);
         const title = el.closest(".mf-phase-event__card")?.querySelector(".mf-phase-event__title");
-        log.push({ text, at: performance.now(), viewportWidth: window.innerWidth, fontPx: parseFloat(cs.fontSize), titlePx: title ? parseFloat(getComputedStyle(title).fontSize) : null, lineCount: lineCountOf(el), wordBreak: cs.wordBreak });
+        log.push({ text, at: performance.now(), viewportWidth: window.innerWidth, fontPx: parseFloat(cs.fontSize), titlePx: title ? parseFloat(getComputedStyle(title).fontSize) : null, lineCount: lineCountOf(el), wordBreak: cs.wordBreak, ...(summary ? { nightSummary: true } : {}) });
       } else log.push({ text: null, at: performance.now() });
     }, 40);
     window.__annWatch = { log, stop: () => clearInterval(timer) };
-  });
+  }, nightSummary);
 }
 
 /** armAnnounceWatch 가 쌓은 기록을 읽는다. 기본은 읽고 관찰을 멈춘다(stop false 면 계속 쌓는다). 심지 않았으면 빈 배열. */
@@ -1814,7 +1815,7 @@ export function readLetter(page) {
       lines: lineEls.map(textRect),
       lineTexts: lineEls.map((el) => (el.textContent ?? "").trim()),
       seal: rectOf(seal),
-      sealSize: seal ? Number(seal.getAttribute("width")) : null,
+      sealSize: seal ? seal.offsetWidth : null,
       head: head ? { text: (head.textContent ?? "").trim(), fontPx: parseFloat(headCs.fontSize), color: headCs.color } : null,
       paperBg: paper ? getComputedStyle(paper).backgroundColor : null,
       family: lineCs ? lineCs.fontFamily : null,

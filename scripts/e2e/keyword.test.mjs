@@ -4,7 +4,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   EARLY_GRACE_MS_COPY,
-  KEYWORD_NOTE_COPY,
   KEYWORD_MS_COPY,
   KEYWORD_BLOCKED_COPY,
   kw1PhaseColumns,
@@ -31,8 +30,8 @@ test("사본 상수: 단서 쓰기 35초·조기 진행 유예 1.5초", () => {
 });
 
 // ---- KW1 ----
-const DAY1 = ["lobby", "assigning", "roleReveal", "keyword", "dayAnnounce", "discussion", "verdict", "nomination", "defense", "execution", "answerReveal", "night", "morning", "dayAnnounce", "discussion", "verdict"];
-test("KW1: 첫날 역할 확인 → 키워드 → 낮 시작 … 처형 → 정답 공개 → 밤, 둘째 날 키워드·정답 공개 없음이면 통과", () => {
+const DAY1 = ["lobby", "assigning", "roleReveal", "keyword", "dayAnnounce", "answerReveal", "discussion", "verdict", "nomination", "defense", "execution", "night", "morning", "dayAnnounce", "discussion", "verdict"];
+test("KW1: 답안 발표 직후 제시어 공개와 토론, 둘째 날에 중복이 없으면 통과", () => {
   const r = kw1PhaseColumns({ seq: DAY1, endedDayOne: false });
   assert.equal(r.id, "KW1");
   assert.equal(r.ok, true);
@@ -45,16 +44,16 @@ test("KW1: 키워드가 없거나 순서가 어긋나거나 둘째 날에 다시
   assert.equal(kw1PhaseColumns({ seq: [...DAY1, "answerReveal"], endedDayOne: false }).ok, false);
   assert.equal(kw1PhaseColumns({ seq: ["lobby", "roleReveal", "dayAnnounce", "keyword", "discussion", "night"], endedDayOne: false }).ok, false);
 });
-test("KW1: 첫날 처형으로 끝난 판은 정답 공개 없이 ended 면 통과, 정답 공개가 끼면 실패", () => {
-  const ended = ["lobby", "roleReveal", "keyword", "dayAnnounce", "discussion", "verdict", "nomination", "defense", "execution", "ended"];
+test("KW1: 첫날 처형으로 끝난 판도 토론 전에만 제시어를 공개한다", () => {
+  const ended = ["lobby", "roleReveal", "keyword", "dayAnnounce", "answerReveal", "discussion", "verdict", "nomination", "defense", "execution", "ended"];
   assert.equal(kw1PhaseColumns({ seq: ended, endedDayOne: true }).ok, true);
   assert.equal(kw1PhaseColumns({ seq: [...ended.slice(0, -1), "answerReveal", "ended"], endedDayOne: true }).ok, false);
 });
 test("KW1: 열이 없으면 측정값 없음", () => assert.ok(noMeasure(kw1PhaseColumns({ seq: [], endedDayOne: false }))));
 
 // ---- KW2·KW3 ----
-test("KW2: 주제 줄·키워드·각주가 맞으면 통과, 하나씩 어긋나면 실패", () => {
-  const ok = { genre: "주제 · 영화", word: "기생충", note: KEYWORD_NOTE_COPY };
+test("KW2: 주제 줄과 제시어는 표시하고 단서 각주는 제거한다", () => {
+  const ok = { genre: "주제 · 영화", word: "기생충", note: null, placeholder: "단서 입력" };
   assert.equal(kw2CitizenCard(ok).ok, true);
   assert.equal(kw2CitizenCard({ ...ok, genre: "영화" }).ok, false);
   assert.equal(kw2CitizenCard({ ...ok, word: "???" }).ok, false);
@@ -149,11 +148,12 @@ test("KW8: 물리 좌석 순서, 한 줄 발표, 카메라와 토론 전환을 �
   }
   assert.ok(noMeasure(kw8AnswerTurns([], expectedOrder)));
 });
-test("KW9: 새로고침과 역할 기록에 첫날 집계를 반복하지 않는다", () => {
-  const ok = { autoOpened: false, recordRows: 0 };
+test("KW9: 새로고침 시 발표를 반복하지 않고 기록에서 답과 제시어를 읽을 수 있다", () => {
+  const ok = { autoOpened: false, recordRows: 4, total: 4, recordAnswer: "기생충", answer: "기생충" };
   assert.equal(kw9Reconnect(ok).ok, true);
   assert.equal(kw9Reconnect({ ...ok, autoOpened: true }).ok, false);
   assert.equal(kw9Reconnect({ ...ok, recordRows: 1 }).ok, false);
+  assert.equal(kw9Reconnect({ ...ok, recordAnswer: undefined }).ok, false);
   assert.ok(noMeasure(kw9Reconnect(null)));
 });
 
@@ -167,13 +167,13 @@ test("KW10: 공개 제시어가 같고 제목보다 작으며 밤에 남지 않�
   assert.equal(kw10Reveal({ ...ok, hidden: [{ who: "시민", hidden: false }] }).ok, false);
   assert.ok(noMeasure(kw10Reveal({ ...ok, answer: "" })));
 });
-test("KW11: 정답 공개 없이 바로 결과로 가고 제시어가 보이지 않는다", () => {
-  const ok = { phases: ["execution", "ended"], hostLine: "", keywordPresent: false };
+test("KW11: 처형 뒤 결과로 가고 제시어를 다시 발표하지 않는다", () => {
+  const ok = { phases: ["execution", "ended"], hostLine: "", keywordAnnouncement: false };
   assert.equal(kw11FirstDayEnd(ok).ok, true);
   assert.equal(kw11FirstDayEnd({ ...ok, phases: ["execution", "answerReveal", "ended"] }).ok, false);
   assert.equal(kw11FirstDayEnd({ ...ok, phases: ["execution", "night"] }).ok, false);
   assert.equal(kw11FirstDayEnd({ ...ok, hostLine: "제시어 · 기생충" }).ok, false);
-  assert.equal(kw11FirstDayEnd({ ...ok, keywordPresent: true }).ok, false);
+  assert.equal(kw11FirstDayEnd({ ...ok, keywordAnnouncement: true }).ok, false);
   assert.ok(noMeasure(kw11FirstDayEnd({ phases: [] })));
 });
 

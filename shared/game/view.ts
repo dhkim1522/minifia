@@ -54,7 +54,7 @@ import { WHISPER_PER_DAY, whisperUsedToday } from "./whisper";
  * ended 도 넣는다: day 에는 공개 정보(일차·구성·투표 기록)만 있어 누출이 없고, 결과 화면이 테이블을 다시 쓸 수 있다.
  */
 const DAY_PHASES: ReadonlySet<PhaseId> = new Set([
-  "answerReveal", // 첫날 정답 공개(23-05, D-23): 정답이 열리는 단계 — 처형 뒤 밤 직전
+  "answerReveal", // 첫날 답안 발표 직후 제시어 공개
   "keyword", // 첫날 키워드(D-23): view.day 가 있어야 day.keyword(장르 라벨)를 싣는다. 클라이언트 걷기·채팅 집합(MAP_PHASES·CHAT_PHASES)에는 넣지 않는다(D-01).
   "dayAnnounce",
   "discussion",
@@ -83,7 +83,10 @@ function buildDay(state: RoomState, presentation: KeywordPresentation | undefine
   if (state.keyword !== undefined && (state.phase === "keyword" || revealAnswer || presentation !== undefined)) {
     const kw: KeywordView = { genre: genreLabelOf(state.keyword.genre) ?? "" };
     if (presentation !== undefined) kw.presentation = presentation;
-    if (revealAnswer) kw.answer = state.keyword.word;
+    if (revealAnswer) {
+      kw.answer = state.keyword.word;
+      kw.answers = (state.keywordAnswers ?? []).map(({ order, seat, text }) => ({ order, seat, text }));
+    }
     day.keyword = kw;
   }
   // 이전 클라이언트의 토론 버튼에도 같은 건너뛰기 집계를 보낸다.

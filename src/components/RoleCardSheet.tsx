@@ -44,7 +44,9 @@ function journalRoleOf(role: RoleId | null): JournalRole | null {
 export function RoleCardSheet({ view, showBack, tab, onTab, unread, newCount, keepBackdrop, onClose }: RoleCardSheetProps): ReactElement {
   const role = view.me.role ?? null;
   const journalRole = showBack ? null : journalRoleOf(role);
-  const hasRecords = !showBack && role !== null && (view.day?.suspectLog?.length ?? 0) > 0;
+  const published = view.day?.keyword?.answer !== undefined;
+  const hasRecords = !showBack && role !== null && (published || (view.day?.suspectLog?.length ?? 0) > 0);
+  const recordsLabel = published ? "답과 의심" : TAB_LABEL.records;
   const baseId = useId();
   const tabId = (t: RoleCardTab): string => `${baseId}-tab-${t}`;
   const panelId = `${baseId}-panel`;
@@ -100,7 +102,7 @@ export function RoleCardSheet({ view, showBack, tab, onTab, unread, newCount, ke
         onClick={() => onTab(t)}
         onKeyDown={(e) => onTabKeyDown(e, t)}
       >
-        {TAB_LABEL[t]}
+        {t === "records" ? recordsLabel : TAB_LABEL[t]}
         {hasDot ? <span className="mf-rolecard__dot" aria-hidden="true" /> : null}
       </button>
     );
@@ -133,7 +135,7 @@ export function RoleCardSheet({ view, showBack, tab, onTab, unread, newCount, ke
     content = <Front view={view} role={role} />;
   }
 
-  const title = showingRecords ? TAB_LABEL.records : "역할 카드";
+  const title = showingRecords ? recordsLabel : "역할 카드";
   return (
     <Sheet
       label={title}
@@ -158,8 +160,25 @@ function RecordsPanel({ view }: { view: RoomView }): ReactElement {
   const players = new Map(view.players.map((p) => [p.seat, p]));
   const nick = (seat: number): string => players.get(seat)?.nickname ?? "";
   const days = suspectLogByDay(view);
+  const keyword = view.day?.keyword;
   return (
     <div className="mf-suspect-log">
+      {keyword?.answer !== undefined && (
+        <section className="mf-suspect-log__day" data-keyword-record="">
+          <div className="mf-suspect-log__head">
+            <span className="mf-suspect-log__dayname">첫날 제시어</span>
+            <strong className="mf-keyword-record__word" data-answer-correct="">{keyword.answer}</strong>
+          </div>
+          <ol className="mf-keyword-record__answers">
+            {keyword.answers?.map(({ seat, text }) => (
+              <li key={seat} className="mf-keyword-record__answer" data-answer-row="">
+                <PlayerName className="mf-keyword-record__name" seat={seat}>{nick(seat)}</PlayerName>
+                <span>{text ?? "미제출"}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
       {days.map(({ n, rows }) => {
         const counts = new Map<number, number>();
         for (const { to } of rows) counts.set(to, (counts.get(to) ?? 0) + 1);

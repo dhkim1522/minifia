@@ -640,7 +640,8 @@ test("EXPECTED_SCENE: 단계 열여섯 개(23-05 에서 answerReveal, 23-01 에�
     "answerReveal", "assigning", "dayAnnounce", "defense", "discussion", "ended", "execution", "keyword", "lobby", "morning", "night", "nomination", "roleReveal", "runoff", "showdown", "verdict",
   ]);
   assert.equal(EXPECTED_SCENE.keyword, "lobby", "키워드 카드는 역할 확인과 같은 PreGame 무대(23-01)");
-  for (const p of ["nomination", "defense", "execution", "runoff", "showdown", "answerReveal"]) assert.equal(EXPECTED_SCENE[p], "dusk", p);
+  for (const p of ["nomination", "defense", "execution", "runoff", "showdown"]) assert.equal(EXPECTED_SCENE[p], "dusk", p);
+  assert.equal(EXPECTED_SCENE.answerReveal, "day");
   assert.equal(EXPECTED_SCENE.verdict, "day", "찬반은 토론 장면 그대로(22-13 P22-3)");
   assert.equal(EXPECTED_SCENE.ended, "night");
   assert.equal(EXPECTED_SCENE.night, "night");
@@ -4448,14 +4449,13 @@ test("outfitUniqueChecks OU1·OU2: 한 판 옷이 모두 다르고 같은 옷 �
 
 import * as libAll from "./lib.mjs";
 
-test("단계 그래프 사본: 낮 시작 발표 다음은 토론이고 심부름 단계가 없다 (22-07: 판 종류 없이 하나)", () => {
+test("단계 그래프 사본: 첫날 답안 발표 뒤 제시어 공개로 갈 수 있고 심부름 단계가 없다", () => {
   const g = libAll.PHASE_GRAPH;
   assert.ok(g, "단계 그래프가 있어야 한다");
   assert.deepEqual(g.roleReveal, ["keyword"], "역할 확인 다음은 첫날 키워드 카드(23-01)");
   assert.deepEqual(g.keyword, ["dayAnnounce"]);
-  assert.deepEqual(g.dayAnnounce, ["discussion"]);
-  // 첫날 정답 공개(23-05, D-02): 처형 뒤·처형 없는 첫날 뒤 밤 직전에 끼고, 둘째 날부터는 곧장 밤이다
-  assert.deepEqual(g.answerReveal, ["night"]);
+  assert.deepEqual(g.dayAnnounce, ["discussion", "answerReveal"]);
+  assert.deepEqual(g.answerReveal, ["night", "discussion"]);
   assert.deepEqual(g.verdict.slice().sort(), ["answerReveal", "night", "nomination"]);
   assert.deepEqual(g.nomination.slice().sort(), ["answerReveal", "defense", "night"]);
   assert.deepEqual(g.execution.slice().sort(), ["answerReveal", "ended", "night"]);
@@ -4468,9 +4468,9 @@ test("basicOrderChecks(phases): 단계 그래프로 판정한다(errand 를 지�
   assert.ok(basicOrderChecks(ok).every((x) => x.ok), JSON.stringify(basicOrderChecks(ok)));
   assert.ok(basicOrderChecks(["roleReveal", "keyword", "dayAnnounce", "errand", "discussion"]).some((x) => !x.ok), "errand 가 없다"); // errand 0건
   assert.ok(basicOrderChecks(["lobby", "assigning", "roleReveal", "keyword", "dayAnnounce", "discussion", "verdict", "nomination", "defense", "execution", "night"]).every((x) => x.ok));
-  assert.ok(basicOrderChecks(["lobby", "assigning", "roleReveal", "keyword", "dayAnnounce", "discussion", "verdict", "nomination", "defense", "execution", "answerReveal", "night", "morning", "dayAnnounce"]).every((x) => x.ok), "첫날 …execution → answerReveal → night(23-05)");
+  assert.ok(basicOrderChecks(["lobby", "assigning", "roleReveal", "keyword", "dayAnnounce", "answerReveal", "discussion", "verdict", "nomination", "defense", "execution", "night", "morning", "dayAnnounce"]).every((x) => x.ok), "첫날 답안 발표 → 제시어 공개 → 토론");
   assert.ok(basicOrderChecks(["discussion", "verdict", "answerReveal", "night"]).every((x) => x.ok), "첫날 찬반 부결 → answerReveal → night");
-  assert.ok(basicOrderChecks(["answerReveal", "morning"]).some((x) => !x.ok), "정답 공개 다음은 밤이다(23-05)");
+  assert.ok(basicOrderChecks(["answerReveal", "morning"]).some((x) => !x.ok), "제시어 공개에서 아침으로 바로 갈 수 없음");
   assert.ok(basicOrderChecks(["roleReveal", "discussion"]).some((x) => !x.ok), "역할 확인 다음은 키워드 카드다");
   assert.ok(basicOrderChecks(["roleReveal", "dayAnnounce"]).some((x) => !x.ok), "키워드 카드를 건너뛰면 어긋난다(23-01)");
 });

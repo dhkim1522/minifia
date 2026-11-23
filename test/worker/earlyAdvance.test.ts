@@ -263,10 +263,8 @@ describe("연출 단계·낮 시작은 어떤 메시지로도 못 넘긴다 (D-1
     });
     afterEach(() => restore());
 
-    it("첫날 부결 뒤 정답 공개 마감은 줄지 않는다", async () => {
-      const { room, socks } = await gameAt(3, "verdict");
-      const actors = actorsOf(room);
-      await verdictAll(room.code, actors, Object.fromEntries(actors.map((a) => [a.seat, false])));
+    it("답안 발표 뒤 제시어 공개 마감은 줄지 않는다", async () => {
+      const { room, socks } = await gameAt(3, "answerReveal");
       await flushAll(socks);
       expect((await storedRoom(room.code)).phase).toBe("answerReveal");
       const origin = (await storedRoom(room.code)).phaseEndsAt!;

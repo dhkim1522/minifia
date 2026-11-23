@@ -8,7 +8,7 @@ import "../../styles/v2.css";
 // 로비 헤더의 [나가기]·[공유] 는 v1.0 Icon 을 그대로 쓴다(UI-SPEC 결정 현황) — 여기에 back·share 를 더하지 않는다.
 // 18페이즈: eyeOff(목격자 없음, eye 에 사선)·lock(옷장 잠금).
 // 의심 도구는 모서리가 접힌 느낌표 딱지로 표시한다.
-export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance" | "hanger" | "timeline" | "trophy" | "hourglass" | "mapBar" | "mapPlaza" | "shuffle" | "sound" | "soundOff" | "bell" | "bot" | "chevronRight" | "mask" | "shield" | "lens" | "eyeOff" | "lock" | "postit" | "ballot" | "menu" | "chat" | "users" | "toolbox" | "sunrise";
+export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance" | "hanger" | "timeline" | "trophy" | "hourglass" | "mapBar" | "mapPlaza" | "shuffle" | "sound" | "soundOff" | "bell" | "bot" | "chevronRight" | "mask" | "shield" | "lens" | "eyeOff" | "lock" | "postit" | "postitFilled" | "ballot" | "menu" | "chat" | "users" | "toolbox" | "sunrise";
 
 // ["c", cx, cy, r, filled?] 원 · ["p", d, filled?] 경로
 type Part = readonly ["c", number, number, number, boolean?] | readonly ["p", string, boolean?];
@@ -123,6 +123,7 @@ const ICONS: Readonly<Record<V2IconName, readonly Part[]>> = {
     ["p", "M19 15h-5v5"],
     ["p", "M11.5 7.5v3.2m0 2.8v.25"],
   ],
+  postitFilled: [["p", "M4 3h16v12l-6 6H4zm14 12h-4v4l4-4zm-7.5-8v5h2V7h-2zm0 7v2h2v-2h-2z", true]],
   // 18페이즈: eyeOff(목격자 없음) — eye 의 두 부품 + 사선
   eyeOff: [
     ["p", "M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"],
