@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { EXECUTION_MS, EXEC_ANNOUNCE_MS, PIN_OFF_EXEC_AT, WILL_REVEAL_MS } from "../../shared/game/phases";
 import { ANNOUNCE_MORNING_AT, ANNOUNCE_VICTIM_AT } from "../../src/game/dayView";
-import { LETTER_FOLD_AT_MS, LETTER_SEAL_GAP_MS, LETTER_WRITE_AT_MS } from "../../src/game/willLetter";
+import { LETTER_FOLD_AT_MS, LETTER_SEAL_AT_MS } from "../../src/game/willLetter";
 import { mulberry32, recipeDurationMs } from "../../src/audio/recipes";
 import {
   EMOTE_GATE_EMPTY,
@@ -147,20 +147,11 @@ describe("결과 대본 — resultScript (D-15)", () => {
 });
 
 describe("유언 편지 대본 — willScript (D-10)", () => {
-  it("쓰기 조각 60ms 마다, 인장은 쓰기 뒤 +gap, 접힘은 5000", () => {
-    const s = willScript({ writeMs: 1200 });
-    const quills = s.items.filter((i) => i.id === "will.quill");
-    expect(quills).toHaveLength(20);
-    expect(quills[0]!.at).toBe(LETTER_WRITE_AT_MS);
-    expect(quills[19]!.at + 60).toBeLessThanOrEqual(LETTER_WRITE_AT_MS + 1200);
-    expect(s.items.find((i) => i.id === "will.seal")!.at).toBe(LETTER_WRITE_AT_MS + 1200 + LETTER_SEAL_GAP_MS);
-    expect(s.items.find((i) => i.id === "will.seal")!.at).toBe(2100);
-    expect(s.items.find((i) => i.id === "will.fold")!.at).toBe(LETTER_FOLD_AT_MS);
-  });
-
-  it("writeMs 0 이하면 빈 목록", () => {
-    expect(willScript({ writeMs: 0 }).items).toEqual([]);
-    expect(willScript({ writeMs: -5 }).items).toEqual([]);
+  it("화면과 같은 시각에 인장과 접힘 소리 한 번씩", () => {
+    expect(willScript().items).toEqual([
+      { at: LETTER_SEAL_AT_MS, id: "will.seal" },
+      { at: LETTER_FOLD_AT_MS, id: "will.fold" },
+    ]);
   });
 });
 
@@ -202,7 +193,7 @@ describe("대본 입력 경계 (LS-11)", () => {
     expect(fields("ResultInput")).toEqual(["n", "win"]);
     expect(src).not.toContain("AwardInput"); // 시상 입력은 없다(D-19)
     expect(fields("LightInput")).toEqual(["win"]);
-    expect(fields("WillInput")).toEqual(["writeMs"]);
+    expect(src).not.toContain("WillInput");
   });
 
   it("전역 난수·시계·타이머를 쓰지 않는다", () => {

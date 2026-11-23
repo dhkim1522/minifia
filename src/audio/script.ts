@@ -4,7 +4,7 @@
 // 시각은 모두 "그 단계 기준 시각 T0 부터 ms" 다. 시계(T0 와 현재 시각)는 부르는 쪽(감독)이 준다.
 import { PIN_OFF_EXEC_AT, WILL_REVEAL_MS } from "../../shared/game/phases";
 import { ANNOUNCE_MORNING_AT, ANNOUNCE_VICTIM_AT } from "../game/dayView";
-import { LETTER_FOLD_AT_MS, LETTER_SEAL_GAP_MS, LETTER_WRITE_AT_MS } from "../game/willLetter";
+import { LETTER_FOLD_AT_MS, LETTER_SEAL_AT_MS } from "../game/willLetter";
 import type { BedId, SfxId } from "./recipes";
 
 export type Rng = () => number;
@@ -68,7 +68,6 @@ export const NIGHT_CUE = {
 } as const;
 
 /** 편지 쓰기 조각 길이 */
-export const QUILL_PIECE_MS = 60;
 
 // ───────────────────────── 판결 ─────────────────────────
 
@@ -203,20 +202,12 @@ export function lightCues(input: LightInput): Script & { duck: DuckSpan } {
 
 // ───────────────────────── 유언 편지 ─────────────────────────
 
-export interface WillInput {
-  writeMs: number;
-}
-
-/** 편지 T0 기준: 쓰기 조각 → 인장 → 접힘. writeMs 0 이하면 빈 목록 */
-export function willScript(input: WillInput): Script {
-  if (!(input.writeMs > 0)) return { items: [], duck: null };
-  const items: ScriptItem[] = [];
-  const pieces = Math.floor(input.writeMs / QUILL_PIECE_MS);
-  for (let j = 0; j < pieces; j += 1) items.push({ at: LETTER_WRITE_AT_MS + j * QUILL_PIECE_MS, id: "will.quill" });
-  items.push({ at: LETTER_WRITE_AT_MS + input.writeMs + LETTER_SEAL_GAP_MS, id: "will.seal" });
-  items.push({ at: LETTER_FOLD_AT_MS, id: "will.fold" });
-  items.sort((a, b) => a.at - b.at);
-  return { items, duck: null };
+/** 공개 편지의 인장과 접힘 소리 */
+export function willScript(): Script {
+  return {
+    items: [{ at: LETTER_SEAL_AT_MS, id: "will.seal" }, { at: LETTER_FOLD_AT_MS, id: "will.fold" }],
+    duck: null,
+  };
 }
 
 // ───────────────────────── 동작 소리 게이트 (12-10, D-14, T-12-39) ─────────────────────────

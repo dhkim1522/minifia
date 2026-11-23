@@ -1,382 +1,91 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { CSSProperties } from "react";
-import "../../styles/penFont.css";
 import "../../styles/letter.css";
-import {
-  LETTER_END_AT_MS,
-  LETTER_FONT_WAIT_MS,
-  LETTER_TIERS,
-  SEAL_GLYPH,
-  chooseTier,
-  paperHeight,
-  writeSchedule,
-} from "../../game/willLetter";
-import type { WriteSchedule } from "../../game/willLetter";
+import { LETTER_END_AT_MS, LETTER_FOLD_AT_MS, LETTER_FOLD_MS, LETTER_RISE_MS, LETTER_SEAL_AT_MS, LETTER_SEAL_MS, SEAL_GLYPH } from "../../game/willLetter";
 import { stationeryArt } from "../../net/assets";
 import type { WillLetter as WillLetterState } from "../../net/useWillLetter";
-import { V2Icon } from "./V2Icon";
-
-/** 인장 자리 피하기: 글 덩어리 윗변에서 from(px) 아래로 닿는 줄은 가로를 오른쪽에서 side(px) 만큼 좁혀(왼쪽 영역에서 가운데 맞춤) 인장 옆에 앉힌다 */
-export interface SealBand {
-  from: number;
-  side: number;
-}
-
-/** 글 크기(px)와 줄 높이(px) */
-export interface LetterTier {
-  font: number;
-  line: number;
-}
 
 export interface WillLetterProps {
-  /** useWillLetter 가 돌려준 편지 한 통 */
   letter: WillLetterState;
-  /** 모션 줄이기: 처음부터 완성된 모양, 막대 가득 정지 */
   reducedMotion: boolean;
-  /**
-   * 본문을 그 단계 글꼴 크기에서 보이는 줄로 나눈다. 기본은 숨은 측정 틀의 글자 사각형(Range)으로 나눈다.
-   * band 가 있으면 인장 자리: 글 덩어리 윗변에서 band.from 아래로 내려간 줄은 오른쪽을 band.side 만큼 비워 인장을 피한다
-   */
-  splitLines?: (text: string, tier: LetterTier, band: SealBand | null) => string[];
-  /** 채팅 입력줄 윗변의 y(편지 틀 기준 px). 모르면(null) 편지지는 340 으로 두고 CSS 기본 자리에 앉는다 */
-  getInputTop?: () => number | null;
-  /** 편지가 화면에 보이는 동안 true (알림을 위로 올리는 쪽이 읽는다) */
   onLive?: (live: boolean) => void;
 }
 
-const css = (vars: Record<string, string | number>): CSSProperties => vars as CSSProperties;
+const css = (vars: Record<string, string>): CSSProperties => vars as CSSProperties;
 
-/** 유언과 함께 뜨는 알림은 헤더 아래에서 시작한다. game.css .mf-announce.is-top과 같은 값. */
-const HOST_BOTTOM_FALLBACK = 62;
-const ANNOUNCE_TOP_GAP = 16;
-/** 알림 아래 간격(20), 입력줄과의 간격(4). 알림이 1줄일 때 높이 43(측정이 안 되는 환경의 추정값) */
-const ANNOUNCE_GAP = 20;
-const INPUT_GAP = 4;
-const ANNOUNCE_H_GUESS = 43;
-/** 가용 높이에서 빼는 값: 간격 합 40 + 접힘 안내 30 */
-const AVAIL_REST = 40 + 30;
-/** 머리글 아래(18 + 20×1.3 = 44, 여유 8)와 인장 윗변 위 간격 */
-const HEAD_BOTTOM = 52;
-const SEAL_BOX = 84 + 8;
-/** 인장과 편지지 회전이 차지하는 폭 및 글자 여유. */
-const SEAL_GAP = 14;
-/** 인장 옆 줄의 오른쪽을 비우는 폭: 종이 오른쪽에서 100 − 최소 안쪽 여백 16 + 회전·간격 12 */
-const BAND_SIDE = 96;
-/** 글 덩어리 아래 여백 */
-const BLOCK_BOTTOM = 24;
-
-/**
- * 글 덩어리 윗변 y(편지지 안). 기본은 편지지 세로 가운데이고(시안), 덩어리 아래끝이 인장 윗변을 침범하면 머리글 아래까지 올려 인장 위에 맞춘다.
- * 인장 위에 아예 못 들어가는 7줄 같은 긴 글은 가운데에 둔다(마지막 줄이 짧아 대개 인장 왼쪽에 있다).
- */
-export function blockTop(paperH: number, lines: number, line: number): number {
-  const h = lines * line;
-  const centered = (paperH - h) / 2;
-  const limit = paperH - SEAL_BOX - SEAL_GAP;
-  if (centered + h <= limit) return centered;
-  if (limit - HEAD_BOTTOM >= h) return limit - h;
-  return Math.max(0, centered);
-}
-
-/**
- * 측정 틀의 글 요소(el)에서 보이는 줄을 나눈다. 남은 글을 그 줄의 가로(인장 자리 줄은 좁게)로 놓아 보고 첫 줄의 Range 글자 사각형 top 으로 끊는 일을 되풀이한다.
- * 줄바꿈 규칙(keep-all·anywhere)은 브라우저가 정한다. 사각형을 못 읽는 환경은 한 줄(텍스트 노드는 그대로).
- */
-function splitByRects(el: HTMLElement, text: string, tier: LetterTier, band: SealBand | null): string[] {
-  if (typeof document.createRange !== "function") return [text];
-  el.style.fontSize = `${tier.font}px`;
-  el.style.lineHeight = `${tier.line}px`;
-  el.style.width = "";
-  const full = el.getBoundingClientRect().width;
-  const range = document.createRange();
-  const out: string[] = [];
-  let rest = text.trim();
-  let seenRects = false;
-  while (rest !== "" && out.length < 60) {
-    const narrow = band !== null && (out.length + 1) * tier.line > band.from;
-    el.style.width = narrow ? `${Math.max(1, full - band.side)}px` : "";
-    el.textContent = "";
-    const node = el.appendChild(document.createTextNode(rest));
-    let lineTop: number | null = null;
-    let end = rest.length;
-    let offset = 0;
-    for (const ch of Array.from(rest)) {
-      range.setStart(node, offset);
-      range.setEnd(node, offset + ch.length);
-      const rect = typeof range.getClientRects === "function" ? range.getClientRects()[0] : undefined;
-      if (rect !== undefined && rect.width > 0) {
-        seenRects = true;
-        if (lineTop === null) lineTop = rect.top;
-        else if (Math.abs(rect.top - lineTop) > tier.line / 2) {
-          end = offset;
-          break;
-        }
-      }
-      offset += ch.length;
-    }
-    if (!seenRects) return [text];
-    const line = rest.slice(0, end).trim();
-    if (line === "") break;
-    out.push(line);
-    rest = rest.slice(end).trim();
-  }
-  el.textContent = "";
-  el.style.width = "";
-  if (rest !== "") out.push(rest);
-  return out.length > 0 ? out : [text];
-}
-
-interface Plan {
-  lines: string[];
-  tier: LetterTier;
-  paperH: number;
-  blockTop: number;
-  /** 인장 옆으로 좁힌 줄이 있으면 그 줄을 가리키는 기준(글 덩어리 윗변에서 from 아래) */
-  bandFrom: number | null;
-  /** 인장 아래 공간을 비울 수 없는 편지의 인장은 머리글 오른쪽으로 옮긴다. */
-  compactSeal: boolean;
-  schedule: WriteSchedule | null;
-  /** 입력줄 윗변을 알 때만: 묶음 윗변 y, 묶음 높이 */
-  box?: { top: number; h: number };
-}
-
-type FontState = "wait" | "ok" | "fallback";
-
-// 유언 편지(결정 0063-3·0063-4, UI-SPEC C-1~C-3·C-5, 시안 WillCenter envelope). 줄 쳐진 편지지가 올라오고(700ms) 0.8초부터 줄이 차례로 써지고
-// 쓰기가 끝나면 우측 하단에 실링왁스 인장이 찍히고 5초에 접힌다. 본문·이름은 React 텍스트 노드로만 그린다(사용자 글, T-09.1-29).
-// 눈에 보이는 머리글·글 줄·인장·안내는 aria-hidden 이고 스크린리더는 보이지 않는 한 줄만 읽는다. 초점을 받지도 가두지도 않는다(T-09.1-30).
-// 순서: ① 글꼴 로드를 최대 LETTER_FONT_WAIT_MS 기다린다(넘으면 대체 글꼴) ② 숨은 틀에서 글 단계·줄·편지지 높이를 정한다
-// ③ T0 까지 기다렸다 나타난다. 모든 지연은 T0 기준 시각에서 지난 시간 e 를 뺀 값이라 늦게 준비되거나 탭을 가렸다 돌아와도 시간표대로 끝난다
-// (animationend 에 기대지 않고, 접힘·제거도 T0 기준 타이머와 visibilitychange 시계로 정한다).
-export function WillLetter({ letter, reducedMotion, splitLines, getInputTop, onLive }: WillLetterProps) {
+// 편지지가 올라오면 줄을 자연스럽게 나눈 본문 전체가 보인다. 접힘과 채팅 카드는 애니메이션 종료가 아닌 같은 T0 시계를 따른다.
+export function WillLetter({ letter, reducedMotion, onLive }: WillLetterProps) {
   const { text, name, t0 } = letter;
-  const shellRef = useRef<HTMLDivElement>(null);
-  const [font, setFont] = useState<FontState>("wait");
-  const [plan, setPlan] = useState<Plan | null>(null);
-  const [run, setRun] = useState<{ key: number; e: number } | null>(null);
-  const [kick, setKick] = useState(0);
+  const [run, setRun] = useState<{ key: number; elapsed: number } | null>(null);
   const [gone, setGone] = useState(false);
 
-  // ① 글꼴: 편지 상태가 생기면 부르고 1초까지만 기다린다. 실패·1초 초과·글꼴 API 없음은 대체 글꼴
   useEffect(() => {
-    const fonts = typeof document === "undefined" ? undefined : (document as Document & { fonts?: { load?: (font: string, text: string) => Promise<unknown[]> } }).fonts;
-    if (fonts === undefined || fonts === null || typeof fonts.load !== "function") {
-      setFont("fallback");
-      return;
-    }
-    let alive = true;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const wait = new Promise<FontState>((resolve) => {
-      timer = setTimeout(() => resolve("fallback"), LETTER_FONT_WAIT_MS);
-    });
-    const load = fonts.load(`${LETTER_TIERS[0].font}px "Nanum Pen Script"`, text).then(
-      (list): FontState => (list.length > 0 ? "ok" : "fallback"),
-      (): FontState => "fallback",
-    );
-    void Promise.race([load, wait]).then((state) => {
-      if (alive) setFont(state);
-    });
-    return () => {
-      alive = false;
-      clearTimeout(timer);
+    const start = () => {
+      const elapsed = Date.now() - t0;
+      if (elapsed >= LETTER_END_AT_MS) setGone(true);
+      else if (elapsed >= 0) setRun({ key: 1, elapsed });
     };
-  }, [text]);
-
-  // ② 글꼴이 정해진 뒤(측정 틀에 대체 글꼴 클래스가 반영된 커밋) 글 단계·줄·편지지 높이를 정한다
-  useLayoutEffect(() => {
-    if (font === "wait") return;
-    const shell = shellRef.current;
-    const textEl = shell?.querySelector<HTMLElement>("[data-measure-text]") ?? null;
-    const split = (tier: LetterTier, band: SealBand | null): string[] => (splitLines !== undefined ? splitLines(text, tier, band) : textEl !== null ? splitByRects(textEl, text, tier, band) : [text]);
-    const announceH = shell?.querySelector("[data-measure-announce]")?.getBoundingClientRect().height ?? 0;
-    const ah = announceH > 0 ? announceH : ANNOUNCE_H_GUESS;
-    // 큰 글 위 끝: 방 틀의 --mf-host-bottom(띠 면 아랫변)을 상속으로 읽고 16 을 더한다
-    const hostBottom = shell !== null ? Number.parseFloat(getComputedStyle(shell).getPropertyValue("--mf-host-bottom")) : Number.NaN;
-    const announceTop = (hostBottom > 0 ? hostBottom : HOST_BOTTOM_FALLBACK) + ANNOUNCE_TOP_GAP;
-    const rawInputTop = getInputTop?.() ?? null;
-    const inputTop = rawInputTop !== null && rawInputTop > 0 ? rawInputTop : null;
-    const avail = inputTop === null ? Number.POSITIVE_INFINITY : inputTop - announceTop - ah - AVAIL_REST;
-
-    type Placement = Pick<Plan, "tier" | "lines" | "blockTop" | "bandFrom" | "paperH" | "compactSeal">;
-    const defaultHeight = paperHeight(avail);
-    const heights = Number.isFinite(avail) && avail > defaultHeight ? [defaultHeight, avail] : [defaultHeight];
-    const fit = (p: number, tier: LetterTier, plain: string[]): Placement | undefined => {
-      const sealTop = p - SEAL_BOX - SEAL_GAP;
-      const textHeight = plain.length * tier.line;
-      const top = blockTop(p, plain.length, tier.line);
-      const base = { tier, paperH: p, compactSeal: false };
-      if (top >= HEAD_BOTTOM && top + textHeight <= sealTop + 0.5) {
-        return { ...base, lines: plain, blockTop: top, bandFrom: null };
-      }
-      // 가로가 넓은 일반 줄도 세로로 못 들어가면 인장 옆에서 다시 재지 않는다.
-      if (HEAD_BOTTOM + textHeight > p - BLOCK_BOTTOM) return undefined;
-      const band: SealBand = { from: sealTop - HEAD_BOTTOM, side: BAND_SIDE };
-      const banded = split(tier, band);
-      if (HEAD_BOTTOM + banded.length * tier.line > p - BLOCK_BOTTOM) return undefined;
-      return { ...base, lines: banded, blockTop: HEAD_BOTTOM, bandFrom: band.from };
-    };
-
-    let chosen: Placement | undefined;
-    for (const tier of LETTER_TIERS) {
-      const lines = split(tier, null);
-      for (const height of heights) {
-        chosen = fit(height, tier, lines);
-        if (chosen !== undefined) break;
-      }
-      if (chosen !== undefined) break;
-    }
-    if (chosen === undefined) {
-      // 짧은 뷰포트의 긴 본문은 인장을 머리글로 옮겨 편지지 너비를 전부 쓴다.
-      const height = Math.max(defaultHeight, Number.isFinite(avail) ? avail : defaultHeight);
-      const compactBottom = 14;
-      const fullWidth = chooseTier((tier) => split(tier, null).length, height - HEAD_BOTTOM - compactBottom);
-      const lines = split(fullWidth, null);
-      chosen = {
-        tier: fullWidth,
-        lines,
-        paperH: Math.max(height, HEAD_BOTTOM + lines.length * fullWidth.line + compactBottom),
-        blockTop: HEAD_BOTTOM,
-        bandFrom: null,
-        compactSeal: true,
-      };
-    }
-    const top = announceTop + ah + ANNOUNCE_GAP;
-    setPlan({
-      ...chosen,
-      schedule: writeSchedule(chosen.lines),
-      ...(inputTop !== null && inputTop - INPUT_GAP - top > 0 ? { box: { top, h: inputTop - INPUT_GAP - top } } : {}),
-    });
-    // 한 번만 정한다 — 이후 화면 크기가 바뀌어도 줄을 다시 나누지 않는다(5초짜리 장면)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [font]);
-
-  // ③ 쓸 것이 없으면 걷고, T0 전이면 T0 까지 기다렸다 켠다. 이미 지난 만큼 e 가 들어간다(글꼴이 늦게 준비된 경우)
-  useEffect(() => {
-    if (plan === null) return;
-    if (plan.schedule === null) {
-      setGone(true);
-      return;
-    }
-    const e = Date.now() - t0;
-    if (e >= LETTER_END_AT_MS) {
-      setGone(true);
-      return;
-    }
-    if (e < 0) {
-      const id = setTimeout(() => setKick((k) => k + 1), -e);
-      return () => clearTimeout(id);
-    }
-    setRun((r) => r ?? { key: 1, e });
-  }, [plan, kick, t0]);
-
-  // 제거는 T0 기준 시각(탭이 가려져 타이머가 밀려도 돌아오면 아래 visibilitychange 가 정리한다)
-  useEffect(() => {
-    const id = setTimeout(() => setGone(true), Math.max(0, t0 + LETTER_END_AT_MS - Date.now()));
-    return () => clearTimeout(id);
-  }, [t0]);
-
-  // 탭을 가렸다 돌아오면 지난 구간을 건너뛴다: 지난 시간 e 를 다시 구해 지연을 새로 준다(요소를 새로 만들어 애니메이션을 e 부터)
-  useEffect(() => {
-    const onVisible = (): void => {
+    const remaining = t0 - Date.now();
+    const reveal = remaining > 0 ? setTimeout(start, remaining) : undefined;
+    if (reveal === undefined) start();
+    const dismiss = setTimeout(() => setGone(true), Math.max(0, t0 + LETTER_END_AT_MS - Date.now()));
+    const onVisible = () => {
       if (document.visibilityState === "hidden") return;
-      const e = Date.now() - t0;
-      if (e >= LETTER_END_AT_MS) setGone(true);
-      else if (e >= 0) setRun((r) => (r === null ? r : { key: r.key + 1, e }));
+      const elapsed = Date.now() - t0;
+      if (elapsed >= LETTER_END_AT_MS) setGone(true);
+      else if (elapsed >= 0) setRun((previous) => ({ key: (previous?.key ?? 0) + 1, elapsed }));
     };
     document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
+    return () => {
+      clearTimeout(reveal);
+      clearTimeout(dismiss);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [t0]);
 
-  const shown = run !== null && !gone;
+  const shown = run !== null && !gone && text.trim() !== "";
   useEffect(() => {
     onLive?.(shown);
     return () => onLive?.(false);
   }, [shown, onLive]);
 
-  // 측정 틀: 계획이 서기 전에만 둔다. 편지지와 같은 좌우 폭에서 본문을 나눠 보고, 아침 알림 글자의 높이도 같은 모양으로 잰다
-  const shell =
-    plan === null ? (
-      <div ref={shellRef} className={font === "fallback" ? "mf-letter-measure is-fallback" : "mf-letter-measure"} aria-hidden="true" data-letter-measure="">
-        <p className="mf-letter-measure__text" data-measure-text="" />
-        <div className="mf-letter-measure__announce" data-measure-announce="">
-          <div className="mf-announce__body">
-            {letter.announce.icon !== undefined && <V2Icon name={letter.announce.icon} size={56} />}
-            <span className="mf-announce__text">{letter.announce.text}</span>
-          </div>
-        </div>
-      </div>
-    ) : null;
-
-  if (run === null || !shown || plan === null || plan.schedule === null) return shell;
-  const { schedule } = plan;
-  const e = run.e;
-  const ms = (n: number): string => `${n - e}ms`;
-  const rootCls = ["mf-letter", reducedMotion ? "is-still" : "", font === "fallback" ? "is-fallback" : ""].filter((c) => c !== "").join(" ");
-  const rootVars: Record<string, string> = {};
-  if (plan.box !== undefined) {
-    rootVars["--lw-top"] = `${plan.box.top}px`;
-    rootVars["--lw-h"] = `${plan.box.h}px`;
-  }
+  if (!shown || run === null) return null;
+  const delay = (at: number) => String(at - run.elapsed) + "ms";
   return (
-    <>
-      {shell}
-      <div className={rootCls} data-will-letter="" role="status" style={css(rootVars)}>
-        <span className="mf-letter__read" data-will-read="">
-          {`${name} 님의 유언: ${text}`}
-        </span>
-        <div key={run.key} className="mf-letter__fold" aria-hidden="true" style={css({ "--lw-fold-delay": ms(schedule.foldAt) })}>
-          <div className="mf-letter__rise" style={css({ "--lw-rise-delay": ms(0) })}>
-            <div
-              className={`mf-letter__paper${plan.compactSeal ? " is-compact-seal" : ""}`}
-              style={css({ "--lw-font": `${plan.tier.font}px`, "--lw-line": `${plan.tier.line}px`, "--lw-paper-h": `${plan.paperH}px`, "--lw-pos": `${plan.blockTop}px` })}
-            >
+    <div className={reducedMotion ? "mf-letter is-still" : "mf-letter"} data-will-letter="" role="status"
+      style={css({
+        "--lw-rise-delay": delay(0), "--lw-rise-duration": `${LETTER_RISE_MS}ms`,
+        "--lw-fold-delay": delay(LETTER_FOLD_AT_MS), "--lw-fold-duration": `${LETTER_FOLD_MS}ms`, "--lw-read-duration": `${LETTER_FOLD_AT_MS}ms`,
+      })}>
+      <span className="mf-letter__read" data-will-read="">{name} 님의 유언: {text}</span>
+      <div key={run.key} className="mf-letter__fold" aria-hidden="true">
+        <div className="mf-letter__rise">
+          <div className="mf-letter__paper">
+            <div className="mf-letter__heading">
               <p className="mf-letter__head" data-will-head="">
                 <span className="mf-letter__author">{name}</span>{" "}<span>님의 유언</span>
               </p>
-              <div className="mf-letter__text" style={{ top: plan.blockTop, height: plan.lines.length * plan.tier.line }}>
-                {plan.lines.map((line, i) => {
-                  const w = schedule.lines[i];
-                  if (w === undefined) return null;
-                  return (
-                    <p
-                      key={i}
-                      className="mf-letter__line"
-                      data-will-line=""
-                      data-write-at={w.at}
-                      data-write-steps={w.steps}
-                      style={css({
-                        "--lw-delay": ms(w.at),
-                        "--lw-ms": `${w.ms}ms`,
-                        "--lw-steps": w.steps,
-                        ...(plan.bandFrom !== null && (i + 1) * plan.tier.line > plan.bandFrom ? { marginRight: BAND_SIDE } : {}),
-                      })}
-                    >
-                      {line}
-                    </p>
-                  );
-                })}
-              </div>
-              <Seal at={schedule.sealAt} delay={ms(schedule.sealAt)} />
+              <Seal delay={delay(LETTER_SEAL_AT_MS)} />
             </div>
-          </div>
-          <div className="mf-letter__guide">
-            <p className="mf-letter__guide-text" data-will-guide="">
-              채팅에도 남아요
-            </p>
-            <div className="mf-letter__bar">
-              <div className="mf-letter__fill" style={css({ "--lw-delay": ms(0) })} />
+            <div className="mf-letter__text">
+              <p className="mf-letter__line" data-will-line="">{text}</p>
             </div>
           </div>
         </div>
+        <div className="mf-letter__guide">
+          <p className="mf-letter__guide-text" data-will-guide="">채팅에도 남아요</p>
+          <div className="mf-letter__bar"><div className="mf-letter__fill" /></div>
+        </div>
       </div>
-    </>
+    </div>
   );
 }
 
-function Seal({ at, delay }: { at: number; delay: string }) {
+function Seal({ delay }: { delay: string }) {
   const [failed, setFailed] = useState(false);
   return (
-    <div className="mf-letter__seal" data-will-seal="" data-seal-at={at} aria-hidden="true" style={css({ "--lw-delay": delay })}>
+    <div className="mf-letter__seal" data-will-seal="" data-seal-at={LETTER_SEAL_AT_MS} aria-hidden="true"
+      style={css({ "--lw-delay": delay, "--lw-seal-duration": `${LETTER_SEAL_MS}ms` })}>
       {failed ? <VectorSeal /> : (
         <img src={stationeryArt("seal")} alt="" width={84} height={84} draggable={false} onError={() => setFailed(true)} />
       )}

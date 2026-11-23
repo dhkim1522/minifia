@@ -3,101 +3,14 @@ import { describe, expect, it } from "vitest";
 import type { DayView, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
 import type { RoomState } from "../../shared/game/room";
 import { morningMsOf } from "../../shared/game/discussion";
-import {
-  chooseTier,
-  letterT0,
-  LETTER_END_AT_MS,
-  LETTER_FOLD_AT_MS,
-  LETTER_FOLD_MS,
-  LETTER_FONT_WAIT_MS,
-  LETTER_LINE_GAP_MS,
-  LETTER_MS_PER_CHAR,
-  LETTER_PAPER_MAX_H,
-  LETTER_PAPER_MIN_H,
-  LETTER_RISE_MS,
-  LETTER_SEAL_GAP_MS,
-  LETTER_SEAL_MS,
-  LETTER_TIERS,
-  LETTER_WRITE_AT_MS,
-  LETTER_WRITE_MAX_MS,
-  oneParagraph,
-  paperHeight,
-  SEAL_GLYPH,
-  writeSchedule,
-} from "../../src/game/willLetter";
+import { letterT0, LETTER_END_AT_MS, LETTER_FOLD_AT_MS, LETTER_FOLD_MS, LETTER_RISE_MS, LETTER_SEAL_AT_MS, LETTER_SEAL_MS, oneParagraph, SEAL_GLYPH } from "../../src/game/willLetter";
 
-describe("상수", () => {
-  it("시안 값 그대로", () => {
-    expect([LETTER_RISE_MS, LETTER_WRITE_AT_MS, LETTER_LINE_GAP_MS, LETTER_MS_PER_CHAR, LETTER_WRITE_MAX_MS]).toEqual([700, 800, 100, 190, 2300]);
-    expect([LETTER_SEAL_GAP_MS, LETTER_SEAL_MS, LETTER_FOLD_AT_MS, LETTER_FOLD_MS, LETTER_END_AT_MS, LETTER_FONT_WAIT_MS]).toEqual([100, 500, 5000, 420, 5420, 1000]);
-    expect([LETTER_PAPER_MAX_H, LETTER_PAPER_MIN_H]).toEqual([340, 220]);
-    expect(LETTER_TIERS).toEqual([
-      { font: 28, line: 34 },
-      { font: 25, line: 31 },
-      { font: 22, line: 28 },
-    ]);
+describe("유언 시간표", () => {
+  it("편지가 나타난 뒤 봉랍을 찍고 채팅 공개 시각에 접힌다", () => {
+    expect([LETTER_RISE_MS, LETTER_SEAL_AT_MS, LETTER_SEAL_MS]).toEqual([700, 760, 500]);
+    expect(LETTER_SEAL_AT_MS + LETTER_SEAL_MS).toBeLessThan(LETTER_FOLD_AT_MS);
+    expect([LETTER_FOLD_AT_MS, LETTER_FOLD_MS, LETTER_END_AT_MS]).toEqual([5000, 420, 5420]);
     expect(SEAL_GLYPH).toBe("M");
-  });
-  it("접힘이 끝나는 시각 = 접힘 시작 + 접힘 길이", () => {
-    expect(LETTER_FOLD_AT_MS + LETTER_FOLD_MS).toBe(LETTER_END_AT_MS);
-  });
-});
-
-describe("writeSchedule", () => {
-  it("두 줄(8자·4자): W 2280, 첫 줄 800, 줄 사이 100, 인장 3180", () => {
-    const s = writeSchedule(["현우 님 말투가", "이상해요"])!;
-    expect(s.writeMs).toBe(2280);
-    expect(s.lines).toHaveLength(2);
-    expect(s.lines[0]).toMatchObject({ at: 800, steps: 8 });
-    expect(s.lines[1]).toMatchObject({ steps: 4 });
-    expect(s.lines[1]!.at).toBe(s.lines[0]!.at + s.lines[0]!.ms + 100);
-    // 두 줄 ms 합 = W − 100, 비율 8:4
-    expect(s.lines[0]!.ms + s.lines[1]!.ms).toBe(2280 - 100);
-    expect(Math.abs(s.lines[0]!.ms - 2 * s.lines[1]!.ms)).toBeLessThanOrEqual(2);
-    expect(s.lines[1]!.at + s.lines[1]!.ms).toBe(800 + 2280);
-    expect(s.sealAt).toBe(3180);
-    expect(s.foldAt).toBe(5000);
-    expect(s.endAt).toBe(5420);
-  });
-  it("한 줄 3자: W 570, 인장 1470", () => {
-    const s = writeSchedule(["가나다"])!;
-    expect(s.writeMs).toBe(570);
-    expect(s.lines).toEqual([{ at: 800, ms: 570, steps: 3 }]);
-    expect(s.sealAt).toBe(1470);
-  });
-  it("100자는 상한 2300", () => {
-    const s = writeSchedule(["가".repeat(100)])!;
-    expect(s.writeMs).toBe(2300);
-    expect(s.sealAt).toBe(800 + 2300 + 100);
-  });
-  it("자소(이모지 등) 기준으로 센다", () => {
-    expect(writeSchedule(["👨‍👩‍👧가"])!.lines[0]!.steps).toBe(2);
-  });
-  it("빈 배열·공백뿐이면 null", () => {
-    expect(writeSchedule([])).toBeNull();
-    expect(writeSchedule(["", "  "])).toBeNull();
-  });
-});
-
-describe("chooseTier", () => {
-  const measure = (n1: number, n2: number, n3: number) => (t: { font: number }) => (t.font === 28 ? n1 : t.font === 25 ? n2 : n3);
-  it("28px 글씨가 들어가면 1단계", () => {
-    expect(chooseTier(measure(7, 5, 4), 284)).toMatchObject({ tier: 1, font: 28, line: 34, lines: 7, overflow: false });
-  });
-  it("1단계가 넘으면 2단계", () => {
-    expect(chooseTier(measure(11, 6, 4), 284)).toMatchObject({ tier: 2, font: 25, line: 31, lines: 6, overflow: false });
-  });
-  it("2단계도 넘으면 3단계", () => {
-    expect(chooseTier(measure(12, 12, 8), 284)).toMatchObject({ tier: 3, font: 22, line: 28, lines: 8, overflow: false });
-  });
-  it("3단계로도 넘으면 3단계 + overflow", () => {
-    expect(chooseTier(measure(20, 14, 13), 284)).toMatchObject({ tier: 3, lines: 13, overflow: true });
-  });
-});
-
-describe("paperHeight", () => {
-  it("가용 높이를 220~340 으로 자른다", () => {
-    expect([paperHeight(400), paperHeight(268), paperHeight(200), paperHeight(340), paperHeight(220)]).toEqual([340, 268, 220, 340, 220]);
   });
 });
 

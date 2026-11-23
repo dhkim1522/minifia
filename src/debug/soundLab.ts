@@ -172,7 +172,6 @@ const BAD = "#ff8a80";
 /** 최악 합 시험이 한꺼번에 요청하는 효과음 수 */
 const WORST_SFX = 6;
 /** 유언 시험의 쓰기 길이(ms, LETTER_WRITE_MAX_MS 안) */
-const WILL_WRITE_MS = 2000;
 const POLL_MS = 250;
 
 /** 노드 수가 많은 효과음 순(같으면 SFX_IDS 순)의 앞 여섯 — 최악 합 시험 */
@@ -345,7 +344,7 @@ export function mount(root: HTMLElement, _params: URLSearchParams, deps: LabDeps
     mineLabel,
   );
   const willLine = line();
-  willLine.append(el("span", {}, "유언 편지", "flex:1 0 100%;"), scriptBtn("편지 재생", "will", () => play("will", willScript({ writeMs: WILL_WRITE_MS }))));
+  willLine.append(el("span", {}, "유언 편지", "flex:1 0 100%;"), scriptBtn("편지 재생", "will", () => play("will", willScript())));
   const resultLine = line();
   resultLine.append(el("span", {}, "결과", "flex:1 0 100%;"));
   for (const n of [4, 8]) {

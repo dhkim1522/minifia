@@ -9,7 +9,7 @@ import { RECIPES } from "../../src/audio/recipes";
 import { MORNING_SLASH_AT, nightCues, NIGHT_CUE, willScript } from "../../src/audio/script";
 import { KILL_FX_START_MS } from "../../src/components/KillFx";
 import { ANNOUNCE_MORNING_AT, ANNOUNCE_VICTIM_AT, POLICE_CARD_AT } from "../../src/game/dayView";
-import { LETTER_FOLD_AT_MS, LETTER_MS_PER_CHAR, LETTER_SEAL_GAP_MS, LETTER_WRITE_AT_MS, LETTER_WRITE_MAX_MS } from "../../src/game/willLetter";
+import { LETTER_FOLD_AT_MS, LETTER_SEAL_AT_MS } from "../../src/game/willLetter";
 import { SIGNAL_KINDS, type LocalSignal } from "../../src/audio/signals";
 import { nightDarkOf } from "../../src/game/nightDark";
 import { planTensionCues } from "../../src/world/tension";
@@ -476,40 +476,32 @@ describe("LS-8: 암살음은 피해자 본인만, 아침 도착 뒤", () => {
 
 // ───────────────────────── 유언 편지 (C-5) ─────────────────────────
 
-describe("유언 편지: t0 기준으로 quill → seal → fold", () => {
+describe("유언 편지: t0 기준으로 인장과 접힘 소리", () => {
   const MORNING = av("morning", { endsAt: NOW + 9_000, morning: { eliminated: true, saved: false } });
   const abs = (out: DirectOutput, now: number): { at: number; id: string }[] => out.scripts.flatMap((s) => s.items.map((i) => ({ at: now + i.at, id: i.id }))).concat(out.now.map((c) => ({ at: now, id: c.id })));
 
   it("t0 가 앞에 있으면 willScript 의 모든 줄이 t0 + at 에 선다 (글은 입력에 없다)", () => {
     const t0 = NOW + 600;
-    const writeMs = 1_900;
-    const out = directEvent({ kind: "letter", t0, writeMs }, MORNING, clock());
+    const out = directEvent({ kind: "letter", t0 }, MORNING, clock());
     expect(out.scripts.map((s) => s.key)).toEqual(["letter:1"]);
-    expect(abs(out, NOW).sort((a, b) => a.at - b.at)).toEqual(willScript({ writeMs }).items.map((i) => ({ at: t0 + i.at, id: i.id })));
+    expect(abs(out, NOW).sort((a, b) => a.at - b.at)).toEqual(willScript().items.map((i) => ({ at: t0 + i.at, id: i.id })));
     const ids = out.scripts[0]!.items.map((i) => i.id);
-    expect(ids.filter((id) => id === "will.quill").length).toBe(Math.floor(writeMs / 60));
-    expect(ids.slice(-2)).toEqual(["will.seal", "will.fold"]);
+    expect(ids).toEqual(["will.seal", "will.fold"]);
     const seal = out.scripts[0]!.items.find((i) => i.id === "will.seal")!;
     const fold = out.scripts[0]!.items.find((i) => i.id === "will.fold")!;
-    expect(seal.at).toBe(600 + LETTER_WRITE_AT_MS + writeMs + LETTER_SEAL_GAP_MS);
+    expect(seal.at).toBe(600 + LETTER_SEAL_AT_MS);
     expect(fold.at).toBe(600 + LETTER_FOLD_AT_MS);
   });
 
   it("편지가 늦게 떠서 t0 가 이미 지났으면 지난 줄은 빼고 남은 줄만 난다", () => {
-    const out = directEvent({ kind: "letter", t0: NOW - 2_000, writeMs: 1_900 }, MORNING, clock());
-    for (const i of out.scripts[0]!.items) expect(i.at).toBeGreaterThanOrEqual(0);
-    expect(out.scripts[0]!.items.at(-1)).toEqual({ at: LETTER_FOLD_AT_MS - 2_000, id: "will.fold" });
-    expect(out.scripts[0]!.items.some((i) => i.id === "will.quill")).toBe(true);
+    const out = directEvent({ kind: "letter", t0: NOW - 2_000 }, MORNING, clock());
+    expect(out.scripts[0]!.items).toEqual([{ at: LETTER_FOLD_AT_MS - 2_000, id: "will.fold" }]);
   });
 
-  it("쓰기 길이 상한은 상수 (190 × 글자, 최대 2300)", () => {
-    expect(Math.min(LETTER_WRITE_MAX_MS, LETTER_MS_PER_CHAR * 4)).toBe(760);
-  });
-
-  it("편지가 없거나 writeMs 가 0 이하거나 아침이 아니면 없다", () => {
-    expect(quiet(directEvent({ kind: "letter", t0: NOW, writeMs: 0 }, MORNING, clock()))).toBe(true);
-    expect(quiet(directEvent({ kind: "letter", t0: NOW, writeMs: 1000 }, av("night"), clock()))).toBe(true);
-    expect(quiet(directEvent({ kind: "letter", t0: NOW, writeMs: 1000 }, null, clock()))).toBe(true);
+  it("접힌 뒤이거나 아침이 아니면 소리를 만들지 않는다", () => {
+    expect(quiet(directEvent({ kind: "letter", t0: NOW - LETTER_FOLD_AT_MS - 1_000 }, MORNING, clock()))).toBe(true);
+    expect(quiet(directEvent({ kind: "letter", t0: NOW }, av("night"), clock()))).toBe(true);
+    expect(quiet(directEvent({ kind: "letter", t0: NOW }, null, clock()))).toBe(true);
   });
 });
 

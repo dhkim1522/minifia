@@ -277,16 +277,6 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
   const reducedMotion = useReducedMotion();
   // 유언 편지: 편지가 화면에 보이는 동안(letterLive) 아침 알림은 편지가 대신 쥔다. 편지가 걷히면 알림도 함께 걷힌다(알림 시간은 편지보다 짧다)
   const [letterLive, setLetterLive] = useState(false);
-  const letterInputTop = (): number | null => {
-    const root = rootRef.current;
-    if (root === null) return null;
-    const room = root.getBoundingClientRect();
-    const input = inputRef.current?.getBoundingClientRect();
-    const dock = panelRef.current?.getBoundingClientRect();
-    // 채팅을 접어 둔 때도 편지와 안내가 참가자 탭 위에 들어가게 한다.
-    const floor = input?.height ? input.top : dock?.height ? dock.top : room.bottom;
-    return floor - room.top;
-  };
   const morningLetter = view.phase === "morning" ? letter : null;
   const morningPolice = view.phase === "morning" ? policeResult : null;
   const nightWithoutExecution = view.phase === "night" && announce?.text === DAY_COPY.noExecution;
@@ -917,9 +907,9 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
           </PhaseEvent>
         ) : null
       ) : !introActive ? (
-        <ResultAnnounce text={shownAnnounce?.text || null} {...(shownAnnounce?.icon !== undefined ? { icon: shownAnnounce.icon } : {})} {...(shownAnnounce?.label !== undefined ? { label: shownAnnounce.label } : {})} {...(shownAnnounce?.still === true ? { still: true } : {})} {...(morningLetter !== null && letterLive ? { placement: "top" as const } : {})} />
+        <ResultAnnounce text={shownAnnounce?.text || null} {...(shownAnnounce?.icon !== undefined ? { icon: shownAnnounce.icon } : {})} {...(shownAnnounce?.label !== undefined ? { label: shownAnnounce.label } : {})} still={shownAnnounce?.still === true} withLetter={morningLetter !== null && letterLive} />
       ) : null}
-      {morningLetter !== null ? <WillLetter key={`${morningLetter.t0}:${morningLetter.seat}`} letter={morningLetter} reducedMotion={reducedMotion} getInputTop={letterInputTop} onLive={setLetterLive} /> : null}
+      {morningLetter !== null ? <WillLetter key={`${morningLetter.t0}:${morningLetter.seat}`} letter={morningLetter} reducedMotion={reducedMotion} onLive={setLetterLive} /> : null}
       {morningPolice !== null ? (
         <PhaseEvent kind="investigation-result" title="조사 결과" interactive={false}>
           <PoliceResultCard

@@ -432,11 +432,11 @@ describe("useSound: 방 view 의 차이가 감독을 거쳐 엔진 요청이 된
       view: RoomView | null;
       epoch: number;
       kill?: { nonce: number; at: number } | null;
-      letter?: { t0: number; writeMs: number } | null;
+      letterAt?: number | null;
       policeCard?: number | null;
     }
     const mountDay = (rig: ReturnType<typeof makeRig>, initial: P) =>
-      renderHook((p: P) => useSound({ engine: rig.engine, view: p.view, epoch: p.epoch, offset: 0, now: rig.fake.clock.now, random: () => 0, kill: p.kill ?? null, letter: p.letter ?? null, policeCard: p.policeCard ?? null }), {
+      renderHook((p: P) => useSound({ engine: rig.engine, view: p.view, epoch: p.epoch, offset: 0, now: rig.fake.clock.now, random: () => 0, kill: p.kill ?? null, letterAt: p.letterAt ?? null, policeCard: p.policeCard ?? null }), {
         initialProps: initial,
       });
     const morning = (t0: number, m: { eliminated?: number; saved?: true } = {}): RoomView => roomView("morning", { phaseEndsAt: t0 + 7_000, day: { n: 1, roles: [], morning: m } });
@@ -481,21 +481,20 @@ describe("useSound: 방 view 의 차이가 감독을 거쳐 엔진 요청이 된
       expect(logIds(rig2)).not.toContain("kill.slash");
     });
 
-    it("유언 편지: t0 기준으로 will.quill 들 → will.seal → will.fold, 다음 단계로 넘어가면 남은 줄이 취소된다", () => {
+    it("유언 편지는 인장과 접힘 효과음을 해당 시각에 재생한다", () => {
       const rig = makeRig();
       const t0 = rig.fake.clock.now();
       const { rerender } = mountDay(rig, { view: roomView("night", { phaseEndsAt: t0 + 10_000 }), epoch: 1 });
       rerender({ view: morning(t0, { eliminated: 1 }), epoch: 1 });
-      rerender({ view: morning(t0, { eliminated: 1 }), epoch: 1, letter: { t0: t0 + 700, writeMs: 1_000 } });
+      rerender({ view: morning(t0, { eliminated: 1 }), epoch: 1, letterAt: t0 + 700 });
       act(() => rig.fake.clock.advance(1_400));
-      expect(logIds(rig)).not.toContain("will.quill");
-      act(() => rig.fake.clock.advance(200)); // t0 + 800 = 1500
-      expect(logIds(rig)).toContain("will.quill");
-      act(() => rig.fake.clock.advance(1_500)); // 3100: 쓰기 끝(1500 + 1000)과 인장(+100) 뒤
+      expect(logIds(rig)).not.toContain("will.seal");
+      act(() => rig.fake.clock.advance(200));
       expect(logIds(rig)).toContain("will.seal");
       expect(logIds(rig)).not.toContain("will.fold");
-      act(() => rig.fake.clock.advance(3_000)); // 6100 > t0 + 700 + 5000
+      act(() => rig.fake.clock.advance(4_500));
       expect(logIds(rig).filter((id) => id === "will.fold")).toHaveLength(1);
+      expect(logIds(rig)).not.toContain("will.quill");
     });
 
     it("경찰 카드: 새 id 가 서면 POLICE_CARD_AT(2400ms) 뒤 ui.card 한 번", () => {

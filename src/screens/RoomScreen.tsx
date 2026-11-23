@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { isAlive } from "../../shared/game/alive";
 import { MAP_PHASES } from "../../shared/game/movement";
@@ -8,8 +8,6 @@ import { emitSignal } from "../audio/signals";
 import { useSound } from "../audio/useSound";
 import { hostChimeOf } from "../game/hostLine";
 import { nightDarkOf } from "../game/nightDark";
-import { LETTER_MS_PER_CHAR, LETTER_WRITE_MAX_MS, oneParagraph } from "../game/willLetter";
-import { countGraphemes } from "../../shared/nickname";
 import { Button } from "../components/Button";
 import { ConfirmSheet } from "../components/ConfirmSheet";
 import { Icon } from "../components/Icon";
@@ -248,13 +246,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   // 12-09: 밤 큐의 갈림 불리언 하나. 시각 맥박(TensionVignette)이 실제로 큐를 내는 조건과 같은 식(GameMap 의 nightDark && !reducedMotion).
   // 소리 쪽에는 이 불리언만 간다 — 역할 값은 가지 않고, 두 갈래의 소리 id·큐 개수는 같다(LS-3).
   const visualCues = view !== null && view.playtest !== true && nightDarkOf(view) && !reducedMotion;
-  // 개인 사건은 숫자만 넘긴다: 유언 편지(시작 t0 + 쓰는 길이), 경찰 카드 도착 번호, 암살 본인의 killFx. 편지 글·조사 결과·좌석은 가지 않는다.
-  const letterT0 = letter?.t0 ?? null;
-  const letterText = letter?.text ?? "";
-  const letterSound = useMemo(
-    () => (letterT0 === null ? null : { t0: letterT0, writeMs: Math.min(LETTER_WRITE_MAX_MS, LETTER_MS_PER_CHAR * countGraphemes(oneParagraph(letterText))) }),
-    [letterT0, letterText],
-  );
+  // 편지의 시작 시각만 보내 인장과 접힘 소리를 시각 연출에 맞춘다.
   const sound = useSound({
     active: view !== null,
     hook: soundHook,
@@ -263,7 +255,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
     offset: connection.offset,
     visualCues,
     kill: killFx,
-    letter: letterSound,
+    letterAt: letter?.t0 ?? null,
     policeCard: policeResult?.id ?? null,
   });
 

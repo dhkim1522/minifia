@@ -1694,7 +1694,7 @@ export function armAnnounceWatch(page, { nightSummary = false } = {}) {
       if (el) {
         const cs = getComputedStyle(el);
         const title = el.closest(".mf-phase-event__card")?.querySelector(".mf-phase-event__title");
-        log.push({ text, at: performance.now(), viewportWidth: window.innerWidth, fontPx: parseFloat(cs.fontSize), titlePx: title ? parseFloat(getComputedStyle(title).fontSize) : null, lineCount: lineCountOf(el), wordBreak: cs.wordBreak, ...(summary ? { nightSummary: true } : {}) });
+        log.push({ text, at: performance.now(), viewportWidth: window.innerWidth, fontPx: parseFloat(cs.fontSize), titlePx: title ? parseFloat(getComputedStyle(title).fontSize) : null, lineCount: lineCountOf(el), wordBreak: cs.wordBreak, ...(summary ? { nightSummary: true } : {}), ...(el.closest(".mf-announce.is-with-letter") ? { withLetter: true } : {}) });
       } else log.push({ text: null, at: performance.now() });
     }, 40);
     window.__annWatch = { log, stop: () => clearInterval(timer) };
@@ -1718,7 +1718,7 @@ export function readAnnounceWatch(page, { stop = true } = {}) {
 export function armLetterWatch(page) {
   return page.evaluate(() => {
     window.__letterWatch?.stop?.();
-    const w = { morningAt: null, appearAt: null, announceTopAt: null, announceText: null, sealImage: null, read: null, cardAt: null, cardBase: 0, goneAt: null };
+    const w = { morningAt: null, appearAt: null, contentAt: null, announceTopAt: null, announceText: null, announceSize: null, sealImage: null, read: null, cardAt: null, cardBase: 0, goneAt: null };
     const timer = setInterval(() => {
       const now = performance.now();
       const stage = document.querySelector("[data-game-stage]");
@@ -1735,6 +1735,14 @@ export function armLetterWatch(page) {
           const seal = letter.querySelector("[data-will-seal] img");
           if (seal?.complete && seal.naturalWidth > 0) w.sealImage = seal.currentSrc;
         }
+        if (w.contentAt === null) {
+          const rise = letter.querySelector(".mf-letter__rise");
+          const paragraphs = [...letter.querySelectorAll("[data-will-line]")];
+          if (rise && Number(getComputedStyle(rise).opacity) >= 0.98 && paragraphs.length > 0 && paragraphs.every((p) => {
+            const style = getComputedStyle(p);
+            return p.textContent.trim().length > 0 && Number(style.opacity) >= 0.98 && /^(none|inset\(0(?:px|%)\))$/.test(style.clipPath);
+          })) w.contentAt = now;
+        }
         w.goneAt = null;
       } else if (w.appearAt !== null && w.goneAt === null) w.goneAt = now;
       if (w.appearAt !== null && w.announceTopAt === null) {
@@ -1742,6 +1750,7 @@ export function armLetterWatch(page) {
         if (top) {
           w.announceTopAt = now;
           w.announceText = (top.textContent ?? "").trim();
+          w.announceSize = Number.parseFloat(getComputedStyle(top).fontSize);
         }
       }
       if (w.appearAt !== null && w.cardAt === null && cards > w.cardBase) w.cardAt = now;
@@ -1792,15 +1801,12 @@ export function readLetter(page) {
   return page.evaluate(() => {
     const root = document.querySelector("[data-will-letter]");
     if (!root) return null;
-    const rectOf = (el) => {
-      if (!el) return null;
-      const r = el.getBoundingClientRect();
-      return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
-    };
-    const textRect = (el) => {
+    const rect = (r) => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height });
+    const rectOf = (el) => el ? rect(el.getBoundingClientRect()) : null;
+    const textRects = (el) => {
       const range = document.createRange();
       range.selectNodeContents(el);
-      return rectOf(range);
+      return [...range.getClientRects()].filter((r) => r.width > 0 && r.height > 0).map(rect);
     };
     const paper = root.querySelector(".mf-letter__paper");
     const lineEls = [...root.querySelectorAll("[data-will-line]")];
@@ -1808,11 +1814,12 @@ export function readLetter(page) {
     const head = root.querySelector("[data-will-head]");
     const headCs = head ? getComputedStyle(head) : null;
     const lineCs = lineEls[0] ? getComputedStyle(lineEls[0]) : null;
+    const lines = lineEls.flatMap(textRects);
     return {
       vw: window.innerWidth,
       vh: window.innerHeight,
       paper: rectOf(paper),
-      lines: lineEls.map(textRect),
+      lines,
       lineTexts: lineEls.map((el) => (el.textContent ?? "").trim()),
       seal: rectOf(seal),
       sealSize: seal ? seal.offsetWidth : null,
@@ -1820,7 +1827,9 @@ export function readLetter(page) {
       paperBg: paper ? getComputedStyle(paper).backgroundColor : null,
       family: lineCs ? lineCs.fontFamily : null,
       lineFontPx: lineCs ? parseFloat(lineCs.fontSize) : null,
-      lineCount: lineEls.length,
+      lineHeightPx: lineCs ? parseFloat(lineCs.lineHeight) : null,
+      align: lineCs?.textAlign ?? null,
+      lineCount: new Set(lines.map((line) => Math.round(line.top / 2))).size,
       fallback: root.classList.contains("is-fallback"),
       text: (root.querySelector("[data-will-read]")?.textContent ?? "").trim(),
       announceTop: !!document.querySelector(".mf-announce.is-top"),

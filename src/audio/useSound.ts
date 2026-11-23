@@ -45,8 +45,8 @@ export interface UseSoundOptions {
   visualCues?: boolean;
   /** 암살당한 본인의 아침 신호(useDayFx killFx): 새 nonce 가 서면 at+50ms 에 kill.slash 한 번. 재접속·남의 화면에는 null (12-09, LS-8) */
   kill?: { nonce: number; at: number } | null;
-  /** 유언 편지 시작 t0(로컬 ms)와 쓰는 길이 — 숫자뿐, 편지 글은 이 훅에 오지 않는다 (12-09, C-5) */
-  letter?: { t0: number; writeMs: number } | null;
+  /** 유언 편지 시작 시각(로컬 ms) */
+  letterAt?: number | null;
   /** 경찰 카드 도착 번호(useDayFx policeResult.id). 결과·좌석은 오지 않는다 (12-09, LS-5) */
   policeCard?: number | null;
 }
@@ -72,7 +72,7 @@ export function useSound(options: UseSoundOptions = {}): SoundView {
   const engine = options.engine ?? getEngine();
   const active = options.active ?? true;
   const hook = options.hook ?? false;
-  const { view = null, epoch = 0, offset = 0, visualCues = false, kill = null, letter = null, policeCard = null } = options;
+  const { view = null, epoch = 0, offset = 0, visualCues = false, kill = null, letterAt = null, policeCard = null } = options;
   const clockNow = options.now ?? Date.now;
   const random = options.random ?? Math.random;
   // 감독에 먹인 직전 상태. 방을 떠나거나(정리) 개발 모드 이중 효과 실행에서 비워 첫 스냅샷처럼 다룬다
@@ -155,14 +155,12 @@ export function useSound(options: UseSoundOptions = {}): SoundView {
     if (killNonce > 0) fire({ kind: "kill", at: killAt });
     // eslint 규칙 없음 — fire 는 ref 만 읽는다
   }, [engine, active, killNonce, killAt]);
-  const seenLetter = useRef<number | null>(letter?.t0 ?? null);
-  const letterT0 = letter?.t0 ?? null;
-  const letterWriteMs = letter?.writeMs ?? 0;
+  const seenLetter = useRef(letterAt);
   useEffect(() => {
-    if (!active || letterT0 === null || letterT0 === seenLetter.current) return;
-    seenLetter.current = letterT0;
-    fire({ kind: "letter", t0: letterT0, writeMs: letterWriteMs });
-  }, [engine, active, letterT0, letterWriteMs]);
+    if (!active || letterAt === null || letterAt === seenLetter.current) return;
+    seenLetter.current = letterAt;
+    fire({ kind: "letter", t0: letterAt });
+  }, [engine, active, letterAt]);
   const seenPolice = useRef<number | null>(policeCard);
   useEffect(() => {
     if (!active || policeCard === null || policeCard === seenPolice.current) return;

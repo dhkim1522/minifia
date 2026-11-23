@@ -880,9 +880,9 @@ export function showdownChecks(input) {
  * AN1 단독 발표 32~36px 또는 카드 제목 20px·본문 16px · AN2 한두 줄 · AN3 word-break keep-all.
  * opts.maxLines = 3 은 큰 글이 띠·소리 단추를 피해 좁아진 자리(.mf-announce.is-top, 18.1-13 결정 0083-10)에서 8자 이름이 세 줄로 감기는 것을 허용한다. 글자 크기·keep-all 은 그대로다.
  */
-export function announceChecks(m, { maxLines = 2, titled = false } = {}) {
+export function announceChecks(m, { maxLines = 2, titled = false, compact = false } = {}) {
   const viewportWidth = m?.viewportWidth ?? 360;
-  const fontPx = titled ? 16 : Math.min(36, Math.max(32, viewportWidth / 10));
+  const fontPx = titled || compact ? 16 : Math.min(36, Math.max(32, viewportWidth / 10));
   const label1 = titled ? "카드 제목 20px > 결과 문장 16px" : `결과 알림 글자 ${fmt(fontPx)}px`;
   const label2 = maxLines >= 3 ? "결과 알림이 세 줄 이하(띠·소리 단추를 피해 좁아진 폭)" : "결과 알림이 한두 줄";
   const label3 = "결과 알림 word-break keep-all";

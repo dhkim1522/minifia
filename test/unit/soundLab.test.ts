@@ -475,7 +475,7 @@ describe("mount — 한 화면 전체 (E)", () => {
     q('[data-lab-script="will"]')!.click();
     rig.fake.clock.advance(6000);
     const ids = rig.engine.log().map((e) => e.id);
-    expect(ids).toEqual(expect.arrayContaining(["will.quill", "will.seal", "will.fold"]));
+    expect(ids).toEqual(["will.seal", "will.fold"]);
   });
 
   it("결과: 4명/8명 × 승/패 네 단추, 승은 result.win 패는 result.lose, 시상 소리는 없다", () => {

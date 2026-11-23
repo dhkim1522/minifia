@@ -2573,12 +2573,12 @@ async function morningLetterChecks(ctx, sc, rec, game, { appearMaxMs, announceRe
       await sleep(100);
     }
   });
-  rec(sc, "LT3", "편지가 있는 아침의 알림은 위(.mf-announce.is-top)에 서 있다", topOk.ok, topOk.detail);
-
-  // 등장(700ms)·쓰기·인장(최대 3.7초)이 끝난 뒤 한 장을 잰다
   w = await readLetterWatch(hp, { stop: false });
+  rec(sc, "LT3", "편지가 있는 아침의 사망 알림은 본문보다 작은 상단 상태 표시다", topOk.ok && w?.announceSize === 16, `${topOk.detail} ${w?.announceSize ?? "측정 없음"}px`);
+
+  // 등장과 인장이 안정된 뒤, 유언을 읽어야 하는 실제 초반 영역을 잰다.
   if (w?.appearAt != null) {
-    const wait = 3900 - (w.now - w.appearAt);
+    const wait = 1400 - (w.now - w.appearAt);
     if (wait > 0) await sleep(wait);
   }
   const snap = await readLetter(hp);
@@ -2591,7 +2591,9 @@ async function morningLetterChecks(ctx, sc, rec, game, { appearMaxMs, announceRe
   }
   if (snap) {
     rec(sc, "LT12", "머리글이 '{이름} 님의 유언' 이고 글 줄을 이으면 저장한 유언과 같다(줄이 잘리지 않았다)", snap.head?.text === `${name} 님의 유언` && snap.lines.length > 0 && wills.some((w) => (snap.lineTexts ?? []).join("").replace(/\s/g, "") === w.replace(/\s/g, "")), `머리글 ${snap.head?.text}, 줄 ${JSON.stringify(snap.lineTexts)}`);
-    infoRow(ctx, sc, "LT13", "참고: 편지 글꼴·단계(판정 아님)", `글꼴 ${snap.family}, ${snap.lineFontPx}px, 줄 ${snap.lineCount}개, 편지지 높이 ${Math.round(snap.paperH)}, 대체 글꼴 ${snap.fallback}`);
+    rec(sc, "LT13", "편지 본문은 22px 이상의 고딕 글꼴에 왼쪽 정렬과 1.4배 이상 행간을 쓴다",
+      snap.lineFontPx >= 22 && snap.lineHeightPx >= snap.lineFontPx * 1.4 - 0.1 && ["left", "start"].includes(snap.align) && /system-ui|Gothic|Sans KR/.test(snap.family) && !/Nanum Pen/.test(snap.family),
+      `글꼴 ${snap.family}, ${snap.lineFontPx}px/${snap.lineHeightPx}px, ${snap.align}`);
   }
 
   // 편지가 걷힐 때까지 기다린 뒤 카드·제거 시각을 본다
@@ -2605,6 +2607,8 @@ async function morningLetterChecks(ctx, sc, rec, game, { appearMaxMs, announceRe
     }
   });
   w = await readLetterWatch(hp);
+  const readingDelay = w?.contentAt != null && w?.appearAt != null ? Math.round(w.contentAt - w.appearAt) : null;
+  rec(sc, "LT14", "편지 등장 뒤 1초 안에 본문 전체를 읽을 수 있다", readingDelay !== null && readingDelay <= 1000, `전체 표시 ${readingDelay ?? "측정 없음"}ms`);
   const sealImage = w?.sealImage;
   rec(sc, "LT2", "유언 편지의 봉랍 그림이 로드된다", !!sealImage && new URL(sealImage).pathname === "/stationery/seal.webp", sealImage ?? "이미지 없음");
   const cardGap = w?.appearAt != null && w?.cardAt != null ? Math.round(w.cardAt - w.appearAt) : null;
@@ -2701,7 +2705,7 @@ async function nightAssassin(ctx) {
     rec(sc, "MA1", "아침에 암살 현장 분필([data-chalk])이 있다", !!chalk && /^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/.test(chalk.chalk), `chalk ${chalk?.chalk ?? "없음"}`);
     rec(sc, "MA2", `아침 알림이 '${victim} 님이 밤사이 탈락했어요' 이다`, morning?.text === `${victim} 님이 밤사이 탈락했어요`, `알림 ${log.filter((a) => a.text).map((a) => a.text).join(" → ") || "없음"}`);
     // 편지가 있는 아침의 큰 글은 띠·소리 단추를 피해 좁은 자리(.is-top)라 8자 이름이 세 줄까지 감길 수 있다(18.1-13)
-    if (morning) recMany(rec, sc, announceChecks(morning, { maxLines: 3 }), " (아침)");
+    if (morning) recMany(rec, sc, announceChecks(morning, { maxLines: 3, compact: morning.withLetter === true }), " (아침)");
     // 유언 편지(09.1-11): 일반 화면은 아침 0.4초에 편지가 뜨고 T0 + 5.0초에 접히며 카드가 채팅에 나온다. 편지가 걷힌 뒤에 아래 카드·G 검사를 본다.
     await morningLetterChecks(ctx, sc, rec, game, { appearMaxMs: ANNOUNCE_MORNING_AT + 600, announceRe: /님이 밤사이 탈락했어요$/, wills: BOT_WILL_TEXTS, name: victim });
     const cards = await nightUntil(hp, (x) => x.cards.some((c) => c.kind === "will") && x.cards.some((c) => c.kind === "note"), 7000);
@@ -3043,7 +3047,7 @@ async function nightVictim(ctx, shared) {
     rec(sc, "VC11", n.tableNight ? "공통 밤 무대는 개인용 맥박 큐를 기록하지 않는다" : "시민 밤에 맥박 큐가 2~4개 기록된다", n.tableNight ? cueCount === 0 : cueCount >= 2 && cueCount <= 4, `큐 ${cueCount}개`);
     const { log, morning: victimAnn } = await waitMorningAnnounce(hp, 6000, /^암살당했습니다$/);
     rec(sc, "VC6", "피해자 본인 화면 알림이 '암살당했습니다' 이다", !!victimAnn, `알림 ${log.filter((a) => a.text).map((a) => a.text).join(" → ") || "없음"}`);
-    if (victimAnn) recMany(rec, sc, announceChecks(victimAnn), " (피해자)");
+    if (victimAnn) recMany(rec, sc, announceChecks(victimAnn, { compact: victimAnn.withLetter === true }), " (피해자)");
     await morningLetterChecks(ctx, sc, rec, game, { appearMaxMs: 700 + 600, announceRe: /^암살당했습니다$/, wills: [VICTIM_WILL], name: nickOf(ht.last(), hostSeat) });
     const kill = await attempt(async () => {
       const start = performance.now();

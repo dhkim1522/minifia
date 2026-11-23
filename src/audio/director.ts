@@ -412,11 +412,11 @@ export function directEmote(signal: EmoteSignal, cur: AudioView | null, gate: Em
 /**
  * 숫자뿐인 개인 사건(12-09). 글·결과·좌석은 받지 않는다 — 시각은 로컬 시계의 함수다.
  *   kill: killFx 가 선 본인의 화면에서만 들어온다(의사가 살린 사람·남의 화면·재접속에는 입력이 없다, LS-8). killFx.at(로컬 ms) + 50ms 에 한 번.
- *   letter: 편지 시작 t0(로컬 ms)와 쓰는 길이 writeMs — willScript 를 t0 기준으로 옮긴다. 편지가 늦게 떠서 이미 지난 줄은 버린다.
+ *   letter: 편지 시작 t0(로컬 ms)에 맞춰 인장과 접힘 소리를 재생한다. 이미 지난 소리는 건너뛴다.
  *   policeCard: 경찰 카드 도착 — POLICE_CARD_AT 에 ui.card 한 번(모든 카드가 같은 소리, LS-5).
  * 아침 단계가 아니면 모두 무음이다(밤 중 암살음 0).
  */
-export type PersonalEvent = { kind: "kill"; at: number } | { kind: "letter"; t0: number; writeMs: number } | { kind: "policeCard" };
+export type PersonalEvent = { kind: "kill"; at: number } | { kind: "letter"; t0: number } | { kind: "policeCard" };
 
 export function directEvent(event: PersonalEvent, cur: AudioView | null, local: Pick<LocalClock, "now">): DirectOutput {
   const out = emptyOutput();
@@ -427,7 +427,7 @@ export function directEvent(event: PersonalEvent, cur: AudioView | null, local: 
       break;
     case "letter": {
       const shift = event.t0 - local.now;
-      emitTimed(letterKey(cur), willScript({ writeMs: event.writeMs }).items.map((i) => ({ ...i, at: i.at + shift })), out);
+      emitTimed(letterKey(cur), willScript().items.map((i) => ({ ...i, at: i.at + shift })), out);
       break;
     }
     case "policeCard":

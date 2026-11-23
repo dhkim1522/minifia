@@ -99,7 +99,8 @@ describe("v3 공통 글꼴과 글자 역할", () => {
 
   it("일반 인용은 본문 규격을 쓰고 유언 인용에 손글씨를 적용한다", () => {
     expect(body(".mv-quote")).toContain("var(--type-body)");
-    expect(body(".mv-quote--will")).toContain("font: 400 28px/1.25 var(--font-hand)");
+    expect(body(".mv-quote--will")).toContain("font: 600 clamp(22px, 5.6vw, 24px)/1.5 var(--font-ui)");
+    expect(body(".mv-quote--will")).toContain("text-align: start");
     expect(body(".mv-quote--will")).toContain("line-clamp: none");
     expect(body(".mv-stamp")).toContain("var(--font-ui)");
     expect(V2_CSS).not.toContain("var(--font-serif)");
