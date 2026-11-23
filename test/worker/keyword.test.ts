@@ -201,7 +201,7 @@ describe("키워드 답 접수 (D-07·D-10)", () => {
     expect(summary(await settle(citizen.sock, m3))).toBe("[state:keyword]");
   }, 40_000);
 
-  it("첫 제출자의 의자부터 한 답씩 보내고, 현재 발표자에게 붙인 딱지를 토론까지 유지한다", async () => {
+  it("첫 제출자의 의자부터 한 답씩 보내고, 발표자와 다른 상대에게 붙인 딱지를 토론까지 유지한다", async () => {
     const { room, socks } = await inKeyword({ bots: 1 });
     const actors = actorsOf(room);
     const [a, b, c, d] = actors as [typeof actors[0], typeof actors[0], typeof actors[0], typeof actors[0]];
@@ -226,12 +226,14 @@ describe("키워드 답 접수 (D-07·D-10)", () => {
     assertCurrent(0);
 
     send(d.sock, { t: "suspect", target: b.seat });
-    await nextFrame(d.sock, (m) => m.t === "error" && m.code === "BAD_MESSAGE");
+    for (const sock of socks) {
+      await nextFrame(sock, (m) => m.t === "state" && m.view.day?.suspects?.some((s) => s.from === d.seat && s.to === b.seat) === true);
+    }
     send(a.sock, { t: "suspect", target: c.seat });
     for (const sock of socks) {
       const marked = await nextFrame(sock, (m) => m.t === "state" && m.view.day?.suspects?.some((s) => s.from === a.seat && s.to === c.seat) === true);
       if (marked.t !== "state") throw new Error("expected state");
-      expect(marked.view.me.suspectTo).toBe(sock === a.sock ? c.seat : undefined);
+      expect(marked.view.me.suspectTo).toBe(sock === a.sock ? c.seat : sock === d.sock ? b.seat : undefined);
     }
     for (let i = 1; i < rows.length; i += 1) {
       send(room.host, { t: "testSkip" });
@@ -244,7 +246,7 @@ describe("키워드 답 접수 (D-07·D-10)", () => {
     for (const sock of socks) {
       await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "discussion");
       expect(lastViewOf(sock).day?.keyword?.answers).toEqual(rows.map((row, index) => ({ ...row, order: index + 1 })));
-      expect(lastViewOf(sock).day?.suspects).toEqual([{ from: a.seat, to: c.seat }]);
+      expect(lastViewOf(sock).day?.suspects).toEqual([{ from: d.seat, to: b.seat }, { from: a.seat, to: c.seat }]);
     }
     const stored = (await storedRoom(room.code)) as AnswerRoom;
     expect(stored.answerSubmits).toBeUndefined();

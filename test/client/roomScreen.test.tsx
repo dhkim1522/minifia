@@ -963,7 +963,9 @@ describe("RoomScreen: 단계 안내", () => {
     expect(stage.props?.scene?.table).toMatchObject({ mode: "eye", centerTable: true });
     expect(stage.props?.scene?.table?.focus).toBeUndefined();
     expect(container.querySelector("[data-phase-gauge]")).toBeNull();
-    expect(container.querySelector("[data-phase-panel-paused]")?.hasAttribute("inert")).toBe(true);
+    expect(container.querySelector("[data-phase-panel-paused]")?.hasAttribute("inert")).toBe(false);
+    fireEvent.click(container.querySelector('[data-dock-tab="people"]')!);
+    expect(container.querySelector("[data-suspect-holdable]")).not.toBeNull();
     fireEvent.click(container.querySelector("[data-answer-suspect]")!);
     expect(send).not.toHaveBeenCalled();
 

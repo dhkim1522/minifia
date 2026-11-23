@@ -38,7 +38,13 @@ import { resolveVerdict } from "./verdict";
 
 /** 낮 시작 발표 진입: 일차 +1. 연장은 없다(결정 0017-5). */
 export function enterDayAnnounce(state: RoomState): RoomState {
-  return { ...state, day: (state.day ?? 0) + 1 };
+  const previousDay = state.day ?? 0;
+  const day = previousDay + 1;
+  // 이미 지나간 옛 기록은 그대로 두고 이번에 넘어가는 날부터 현재 표시를 이어 간다.
+  if (state.notesCarryFrom === undefined && (state.notes?.length ?? 0) > 0) {
+    return { ...state, day, notesCarryFrom: Math.max(1, previousDay) };
+  }
+  return { ...state, day };
 }
 
 /** [0, n) 정수를 돌려주는 난수 함수. roles.ts 의 randInt 와 같은 계약이다. */

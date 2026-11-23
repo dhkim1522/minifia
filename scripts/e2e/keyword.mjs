@@ -601,7 +601,7 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
         const [neutralRed, neutralGreen, neutralBlue] = markedColor.match(/\d+/g)?.map(Number) ?? [];
         const enabled = await observer.page.locator('[data-answer-suspect][aria-pressed="true"]:enabled').waitFor({ timeout: 1200 }).then(() => true, () => false);
         rec(`${id}/answers`, "KW8-COLOR", "붙이기는 적색, 해제는 누를 수 있는 중립색이다",
-          red > green + 20 && red > blue + 12 && Math.max(neutralRed, neutralGreen, neutralBlue) - Math.min(neutralRed, neutralGreen, neutralBlue) <= 24 && enabled,
+          red === 242 && green === 85 && blue === 106 && Math.max(neutralRed, neutralGreen, neutralBlue) - Math.min(neutralRed, neutralGreen, neutralBlue) <= 24 && enabled,
           JSON.stringify({ readyColor, markedColor }));
         markedSeat = current.seat;
         markedBy = observer;

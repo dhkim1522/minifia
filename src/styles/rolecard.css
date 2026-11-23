@@ -137,7 +137,7 @@
 .mf-suspect__row { display: flex; align-items: center; gap: var(--space-xs); min-height: 32px; padding: 0 var(--space-sm); border-radius: var(--radius-md); }
 .mf-suspect__nick { flex: 1 1 0; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 20px; }
 .mf-suspect__nick--to { color: var(--gray-50); font-weight: 700; }
-.mf-suspect__total { flex: none; color: var(--gray-300); }
+.mf-suspect__total { flex: none; color: var(--crimson-300); }
 
 /* ---- 헤더 [내 역할] 아이콘 단추(UI-SPEC V-1, 16페이즈) ---- */
 /* 44×44 정사각(radius-badge), 면 night-800 + 1px night-600 테두리, 글 없음. 단추 상자가 곧 면이다. 면의 점이 밖으로 나오므로 overflow 는 보인다.

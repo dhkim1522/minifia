@@ -9,7 +9,8 @@
 }
 
 .mf-reveal__stage[hidden] { display: none; }
-[data-phase-panel-paused] :is(.mf-answer-presentation, .mf-table-controls) { visibility: hidden; }
+[data-phase-panel-paused] .mf-answer-presentation,
+[data-phase-panel-paused]:not(.mf-game__panel--dock) .mf-table-controls { visibility: hidden; }
 
 .mf-phase-intro__title {
   display: block;

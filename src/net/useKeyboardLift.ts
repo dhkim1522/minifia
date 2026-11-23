@@ -1,16 +1,16 @@
 // 채팅 패널의 키보드 배치 훅 (07-UI-SPEC "패널과 키보드" 배치 규칙, 리서치 Pattern 6·Pitfall 8·9).
 // - useKeyboardLift: 입력칸에 포커스가 있을 때만 visualViewport 로 키보드 높이(lift)를 읽어 CSS 변수로 쓴다.
 //
-// UI-SPEC "검사 실패 때 내리는 순서" 1단계(visualViewport 대신 innerHeight 변화로 대체)를 쓸 자리가 이 파일이다.
 // 쓰지 않는 것: window.scrollTo 로 억지 복구, 캔버스 크기를 키보드에 맞춰 바꾸기(UI-SPEC "쓰지 않을 것").
-// iOS 26.0 의 visualViewport 높이 불일치(Pitfall 8)는 포커스 게이트 + 블러 즉시 0 으로 막는다. 실기기 확인은 07-21 몫이다(가정 A3).
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+// 입력 초점이 끝나면 WebKit 이 이전 visualViewport 값을 보내더라도 즉시 원위치로 돌린다.
+import { useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { KB_OPEN_MIN_LIFT } from "../game/chatUi";
 
-/** 유언·쪽지 시트 층(09-17). 이 안의 textarea 도 채팅 입력칸과 같은 키보드 lift 규칙을 받는다 — 시트 부품(WillSheet)은 바꾸지 않고 선택자로 알아본다 */
+/** 유언·쪽지·한마디 시트의 글 입력칸도 채팅과 같은 키보드 위치를 쓴다. */
 const SHEET_LAYER = ".mf-will-layer";
-const inSheetLayer = (t: EventTarget | null): boolean => t instanceof Element && t.closest(SHEET_LAYER) !== null;
+const inSheetLayer = (t: EventTarget | null): boolean =>
+  (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) && t.closest(SHEET_LAYER) !== null;
 
 /** 포커스·블러 뒤에 값을 한 번씩 더 읽는 시각(WebKit 은 이벤트 직후 값이 틀리고 지연 뒤 맞는 경우가 있다) */
 const REREAD_MS = [100, 300, 1000] as const;
@@ -30,7 +30,8 @@ export function useKeyboardLift(opts: {
 
   useEffect(() => {
     if (!enabled) return;
-    let focused = document.activeElement !== null && document.activeElement === inputRef.current;
+    const isInput = (el: EventTarget | null) => el !== null && (el === inputRef.current || inSheetLayer(el));
+    let focused = isInput(document.activeElement);
     let raf = 0;
     let timers: ReturnType<typeof setTimeout>[] = [];
 
@@ -47,12 +48,22 @@ export function useKeyboardLift(opts: {
     };
 
     const read = () => {
-      const vv = window.visualViewport;
-      if (!focused || !vv) {
+      if (!focused || !isInput(document.activeElement)) {
+        focused = false;
+        markSheet(false);
         write(0, 0);
         return;
       }
-      write(Math.max(0, window.innerHeight - (vv.height + vv.offsetTop)), vv.offsetTop);
+      const viewport = window.visualViewport;
+      const visibleTop = viewport?.offsetTop ?? 0;
+      const visibleBottom = visibleTop + (viewport?.height ?? window.innerHeight);
+      const room = target.current?.getBoundingClientRect();
+      // 레이아웃 높이도 줄이는 키보드에서는 innerHeight와 visualViewport.height가 같아질 수 있다.
+      // 방은 키보드가 열려도 높이를 고정하므로 패널을 배치한 실제 방의 가장자리를 기준으로 잰다.
+      const roomBottom = room && room.height > 0 ? room.bottom : window.innerHeight;
+      const roomTop = room && room.height > 0 ? room.top : 0;
+      markSheet(inSheetLayer(document.activeElement));
+      write(Math.max(0, roomBottom - visibleBottom), Math.max(0, visibleTop - roomTop));
     };
 
     // 한 프레임에 한 번만 계산한다
@@ -78,9 +89,8 @@ export function useKeyboardLift(opts: {
       inSheetRef.current = on;
       setInSheet(on);
     };
-    const isInput = (e: Event) => e.target !== null && (e.target === inputRef.current || inSheetLayer(e.target));
     const onFocus = (e: Event) => {
-      if (!isInput(e)) {
+      if (!isInput(e.target)) {
         // 시트가 닫히며 초점이 다른 요소(시트를 연 버튼)로 옮겨 가면 입력칸 blur 가 오지 않을 수 있다 — 입력 초점이 끝난 것으로 본다
         if (focused) {
           focused = false;
@@ -95,7 +105,7 @@ export function useKeyboardLift(opts: {
       rereadLater();
     };
     const onBlur = (e: Event) => {
-      if (!isInput(e)) return;
+      if (!isInput(e.target)) return;
       focused = false;
       markSheet(false);
       if (raf) {
@@ -109,6 +119,8 @@ export function useKeyboardLift(opts: {
     const vv = window.visualViewport;
     vv?.addEventListener("resize", schedule);
     vv?.addEventListener("scroll", schedule);
+    window.addEventListener("resize", schedule);
+    window.addEventListener("scroll", schedule);
     // focus·blur 는 거품이 없으므로 캡처로 듣는다(입력칸이 나중에 그려져도 잡는다)
     document.addEventListener("focus", onFocus, true);
     document.addEventListener("blur", onBlur, true);
@@ -118,6 +130,8 @@ export function useKeyboardLift(opts: {
     return () => {
       vv?.removeEventListener("resize", schedule);
       vv?.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+      window.removeEventListener("scroll", schedule);
       document.removeEventListener("focus", onFocus, true);
       document.removeEventListener("blur", onBlur, true);
       if (raf) cancelAnimationFrame(raf);

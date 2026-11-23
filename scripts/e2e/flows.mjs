@@ -946,6 +946,28 @@ async function chatKeyboardFlow(ctx) {
     const tap = await tapWorld(page, tracker, mySeat, walkTarget.x, walkTarget.z);
     rec(sc, "KB14", "닫힌 뒤의 탭부터 평소처럼 걷는다(링·구간이 생김)", tap.move !== null && tap.ringMs !== null, `구간 ${tap.move ? "받음" : "없음"} · 링 ${tap.ringMs === null ? "없음" : `${Math.round(tap.ringMs)}ms`}`);
   }
+
+  // WebView처럼 레이아웃과 가상 뷰포트가 같이 줄어도 고정된 방 끝을 기준으로 채팅을 올린다.
+  await input.fill("쓰던 글");
+  await page.evaluate(() => window.__mfVv.set(null));
+  try {
+    await page.setViewportSize({ width: w, height: h - KB_LIFT });
+    await sleep(300);
+    const resized = await readKeyboardState(page, mySeat);
+    rec(sc, "KB15", "창과 가상 화면이 함께 줄어도 입력줄과 패널이 키보드 위에 있다",
+      !!resized && resized.innerHeight === resized.vv.height && resized.kbOpen === "true" && resized.focusOnInput
+      && near(resized.panel.bottom, resized.vv.height, 1) && resized.input.bottom <= resized.vv.height + KB_EPS
+      && resized.roomH === closed.roomH,
+      `창 ${resized?.innerHeight} · 방 ${resized?.roomH} · 올림 ${resized?.lift} · 입력줄 아래 ${r1(resized?.input.bottom)}`);
+  } finally {
+    await page.setViewportSize({ width: w, height: h });
+  }
+  await sleep(300);
+  const resizedBack = await readKeyboardState(page, mySeat);
+  rec(sc, "KB16", "키보드만 닫으면 입력 초점과 초안은 그대로이고 패널은 아래로 돌아간다",
+    !!resizedBack && resizedBack.kbOpen === null && resizedBack.focusOnInput
+    && near(resizedBack.panel.bottom, closed.panel.bottom, 1) && (await input.inputValue()) === "쓰던 글");
+  await input.blur();
   await checkState(ctx, "chat-keyboard", "lobby");
   await leaveLobby(page);
 }

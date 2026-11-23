@@ -32,7 +32,7 @@
 .mf-table-controls button:focus-visible { outline: 2px solid var(--gray-50); outline-offset: 1px; }
 .mf-table-controls .mf-player-portrait { flex: none; width: 20px; height: 20px; }
 .mf-table-controls__name { max-width: 100%; text-align: center; overflow-wrap: anywhere; line-height: 1.12; }
-.mf-table-controls__count { position: absolute; inset: 1px 1px auto auto; display: inline-flex; align-items: center; border-radius: var(--radius-pill); padding: 0 3px; color: var(--gray-50); background: var(--crimson-700); }
+.mf-table-controls__count { position: absolute; inset: 1px 1px auto auto; display: inline-flex; align-items: center; border-radius: var(--radius-pill); padding: 0 3px; color: var(--night-950); background: var(--crimson-300); }
 @media (max-width: 359px) {
   .mf-table-controls button { padding: 2px 3px; }
   .mf-table-controls .mf-player-portrait { width: 18px; height: 18px; }

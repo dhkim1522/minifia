@@ -97,7 +97,7 @@ const RATE_WINDOW_MS = 1000;
 const RATE_MAX_MESSAGES = 20;
 
 const PHASE_INPUT = new Set<ClientMessage["t"]>([
-  "roleReady", "firstBallot", "nightDone", "pick", "endDiscussion", "phaseSkip", "point", "suspect",
+  "roleReady", "firstBallot", "nightDone", "pick", "endDiscussion", "phaseSkip", "point",
   "verdict", "move", "typing", "emote", "badge", "whisper", "will", "note", "answer",
 ]);
 // DO storage.delete(keys[]) 의 한 번 최대 키 수.
@@ -339,7 +339,7 @@ export class Room extends DurableObject<Env> {
 
     if (this.room && phaseIntroActive(this.room.phaseStartsAt, Date.now()) && PHASE_INPUT.has(msg.t)) {
       if (msg.t !== "move" && msg.t !== "typing" && msg.t !== "emote" && sender !== null) {
-        this.sendRejection(ws, sender.playerId, msg.t === "suspect" ? "BAD_MESSAGE" : "WRONG_PHASE");
+        this.sendRejection(ws, sender.playerId, "WRONG_PHASE");
       }
       return;
     }

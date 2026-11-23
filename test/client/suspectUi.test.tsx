@@ -111,11 +111,12 @@ function mountHook(first: HookProps) {
 }
 
 describe("useSuspect — 보임·옮기기", () => {
-  it("첫날과 둘째 날 토론에 산 사람에게 보이고 찬반·유령에게는 숨긴다", () => {
+  it("산 사람은 토론·찬반·밤에 사용할 수 있고 유령에게는 숨긴다", () => {
     const segs = { 0: at(0), 1: at(50) };
     expect(mountHook({ view: makeView(), segs }).result.current.api.visible).toBe(true);
     expect(mountHook({ view: makeView({ day: 1 }), segs }).result.current.api.visible).toBe(true);
-    expect(mountHook({ view: makeView({ phase: "verdict" }), segs }).result.current.api.visible).toBe(false);
+    expect(mountHook({ view: makeView({ phase: "verdict" }), segs }).result.current.api.visible).toBe(true);
+    expect(mountHook({ view: makeView({ phase: "night" }), segs }).result.current.api.visible).toBe(true);
     expect(mountHook({ view: makeView({ dead: [0] }), segs }).result.current.api.visible).toBe(false);
   });
   it("used 는 me.suspectTo 유무(0 도 사용함)", () => {
@@ -453,10 +454,10 @@ describe("GameMap — [의심] 단추 보임 (P24-1·P24-2)", () => {
     expect(suspectBtn(container)?.getAttribute("aria-label")).toBe("의심!");
     expect(stageEl(container).getAttribute("data-suspect-mode")).toBe("off");
   });
-  it("첫날 토론에는 보이고 찬반·유령 화면에서 숨긴다", () => {
+  it("첫날 토론과 찬반에 보이고 유령 화면에서 숨긴다", () => {
     expect(suspectBtn(mountMap(makeView({ day: 1 })).container)).not.toBeNull();
     cleanup();
-    expect(suspectBtn(mountMap(makeView({ phase: "verdict" })).container)).toBeNull();
+    expect(suspectBtn(mountMap(makeView({ phase: "verdict" })).container)).not.toBeNull();
     cleanup();
     expect(suspectBtn(mountMap(makeView({ dead: [0] })).container)).toBeNull();
   });

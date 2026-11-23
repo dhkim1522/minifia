@@ -1,8 +1,8 @@
 // 의심 포스트잇 워커 통합 시험(24-01, 결정 0089-10, D-01~D-06·D-22·D-25·D-26): 실제 방 DO 로 둘째 날 토론에서 붙이기·옮기기·거절·간격을 돈다.
 import { describe, expect, it } from "vitest";
 import type { NoteRow } from "../../shared/game/postit";
-import type { ServerMessage } from "../../shared/protocol";
-import { connect, editRoom, framesOf, hello, killSeats, mapPlayers, mark, send, settle, startedGame, storedRoom, summary, toPhase } from "./helpers";
+import type { PhaseId, ServerMessage } from "../../shared/protocol";
+import { advanceTo, connect, editRoom, framesOf, hello, killSeats, lastViewOf, mapPlayers, mark, send, settle, startedGame, storedRoom, summary, toPhase } from "./helpers";
 import type { Actor, Game } from "./helpers";
 
 type StateMsg = Extract<ServerMessage, { t: "state" }>;
@@ -14,7 +14,7 @@ async function notesOf(code: string): Promise<NoteRow[]> {
 }
 
 /** 실제 착석 상태를 유지한 채 원하는 일차와 단계로 옮긴다. */
-async function discussionAt(day: number, phase: "discussion" | "verdict" = "discussion"): Promise<Game> {
+async function discussionAt(day: number, phase: PhaseId = "discussion"): Promise<Game> {
   const g = await startedGame("discussion");
   await toPhase(g.code, phase, (room) => ({ ...room, day }));
   for (const s of g.socks) await settle(s, mark(s));
@@ -57,6 +57,26 @@ describe("의심 포스트잇 — 트레이서 (D-01·D-03·D-04·D-06)", () => 
     await suspectFrom(g, from, to.seat);
     expect(await notesOf(g.code)).toEqual([{ n: 2, from: from.seat, to: to.seat }]);
   });
+
+  it("밤 전환 배너가 떠도 손님의 표시를 보내고 다음 날까지 유지한다", async () => {
+    const g = await discussionAt(2);
+    const actor = g.actors[1]!;
+    const target = g.actors[2]!;
+    const marks = [{ from: actor.seat, to: target.seat }];
+    await toPhase(g.code, "night", (room) => ({ ...room, phaseStartsAt: Date.now() + 30_000 }));
+    const night = await suspectFrom(g, actor, target.seat);
+    for (const [i, frames] of night.entries()) {
+      const view = states(frames)[0]?.view;
+      expect(view?.phase).toBe("night");
+      expect(view?.day?.suspects).toEqual(marks);
+      expect(view?.me.suspectTo).toBe(g.actors[i] === actor ? target.seat : undefined);
+    }
+    await toPhase(g.code, "morning", (room) => ({ ...room, phaseStartsAt: undefined }));
+    await advanceTo(g.code, g.socks, "dayAnnounce");
+    expect(lastViewOf(actor.sock).day).toMatchObject({ n: 3, suspects: marks });
+    expect(lastViewOf(actor.sock).me.suspectTo).toBe(target.seat);
+    expect(await notesOf(g.code)).toEqual([{ n: 2, ...marks[0] }]);
+  });
 });
 
 // ---- 거절 균일성 · 연타 간격 · 같은 대상 무변화 · 봇 (24-01 Task 2: D-02·D-05·D-25·D-26) ----
@@ -73,10 +93,16 @@ describe("의심 포스트잇 — 거절 균일성 (D-26, T-24-02)", () => {
     });
   };
 
-  it("찬반 단계는 거절된다", async () => {
-    const g = await discussionAt(2, "verdict");
-    expectRejected(g, g.actors[1]!, await suspectFrom(g, g.actors[1]!, g.actors[2]!.seat), "verdict");
+  it("결과 단계는 거절된다", async () => {
+    const g = await discussionAt(2, "ended");
+    expectRejected(g, g.actors[1]!, await suspectFrom(g, g.actors[1]!, g.actors[2]!.seat), "ended");
     expect(await notesOf(g.code)).toEqual([]);
+  });
+
+  it("밤에도 탈락한 사람이 의심 표시로 생존자에게 신호를 보낼 수 없다", async () => {
+    const g = await discussionAt(2, "night");
+    await killSeats(g, [g.actors[1]!.seat]);
+    expectRejected(g, g.actors[1]!, await suspectFrom(g, g.actors[1]!, g.actors[2]!.seat), "night");
   });
 
   it("죽은 대상은 거절된다", async () => {

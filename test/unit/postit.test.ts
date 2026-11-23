@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   NOTE_FIRST_DAY,
   NOTE_MAX_VISIBLE,
-  NOTE_PHASES,
   NOTE_REACH_FX,
   NOTE_REACH_ON_PCT,
   SUSPECT_MIN_GAP_MS,
+  activeNotes,
   noteAllowedNow,
   stickNote,
   withinNoteReach,
@@ -16,6 +16,8 @@ import type { Segment } from "../../shared/game/world";
 import { ROOM_TTL_MS } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import type { PhaseId } from "../../shared/protocol";
+import { enterDayAnnounce } from "../../shared/game/tick";
+import { PHASE_DEFS } from "../../shared/game/phases";
 
 const T0 = 1_000_000;
 
@@ -58,17 +60,15 @@ const world = (xs: Record<string, number> = { p0: 0, p1: 200, p2: 300, p3: 100, 
 const out = (r: ReturnType<typeof stickNote>): string => (r.ok ? `ok|${(r.state.notes ?? []).map((x) => `${x.n}:${x.from}>${x.to}`).join(",")}` : r.error);
 
 describe("postit — 상수 (D-02·D-22·D-25)", () => {
-  it("토론 하나 · 봇은 둘째 날부터 · 240 fx · 켜는 문턱 92% · 보이는 3장 · 간격 600ms", () => {
-    expect(`${[...NOTE_PHASES].join(",")}|${NOTE_FIRST_DAY}|${NOTE_REACH_FX}|${NOTE_REACH_ON_PCT}|${NOTE_MAX_VISIBLE}|${SUSPECT_MIN_GAP_MS}`).toBe("discussion|2|240|92|3|600");
+  it("봇은 둘째 날부터 · 240 fx · 켜는 문턱 92% · 보이는 3장 · 간격 600ms", () => {
+    expect(`${NOTE_FIRST_DAY}|${NOTE_REACH_FX}|${NOTE_REACH_ON_PCT}|${NOTE_MAX_VISIBLE}|${SUSPECT_MIN_GAP_MS}`).toBe("2|240|92|3|600");
   });
 });
 
 describe("noteAllowedNow", () => {
-  it("낮 토론만 참이다", () => {
-    expect(noteAllowedNow("discussion")).toBe(true);
-    expect(noteAllowedNow("verdict")).toBe(false);
-    expect(noteAllowedNow("dayAnnounce")).toBe(false);
-    expect(noteAllowedNow("keyword")).toBe(false);
+  it("역할 확인부터 아침까지 허용하고 대기실·착석·결과는 제외한다", () => {
+    const phases = Object.keys(PHASE_DEFS) as PhaseId[];
+    expect(phases.filter((phase) => !noteAllowedNow(phase))).toEqual(["lobby", "assigning", "ended"]);
   });
 
   it("첫 토론부터 같은 거리와 한 장 이동 규칙을 쓴다", () => {
@@ -119,7 +119,7 @@ describe("stickNote — 붙이기 (D-01·D-03)", () => {
     expect(out(stickNote(state, world(), "p0", 1, T0))).toBe("ok|2:0>1");
   });
 
-  it("첫날 발표에서는 마감 전에 현재 발표자만 멀리서도 붙이고 다음 차례에 옮긴다", () => {
+  it("첫날 발표에서는 다른 참가자에게도 붙이고 발표 차례와 관계없이 옮기거나 뗀다", () => {
     const state: RoomState = {
       ...room("dayAnnounce", 1),
       map: "bar",
@@ -128,9 +128,9 @@ describe("stickNote — 붙이기 (D-01·D-03)", () => {
       keywordAnswers: [{ order: 1, seat: 2, text: "답" }, { order: 2, seat: 1, text: null }],
       keywordPresentationIndex: 0,
     };
-    expect(out(stickNote(state, world(), "p0", 1, T0))).toBe("BAD_MESSAGE");
+    expect(out(stickNote(state, world(), "p0", 1, T0))).toBe("ok|1:0>1");
     expect(out(stickNote(state, world(), "p2", 2, T0))).toBe("BAD_MESSAGE");
-    expect(out(stickNote(state, world(), "p0", 2, T0 + 5000))).toBe("BAD_MESSAGE");
+    expect(out(stickNote(state, world(), "p0", 2, T0 + 5000))).toBe("ok|1:0>2");
     const first = stickNote(state, world(), "p0", 2, T0);
     expect(out(first)).toBe("ok|1:0>2");
     if (!first.ok) throw new Error(first.error);
@@ -138,9 +138,13 @@ describe("stickNote — 붙이기 (D-01·D-03)", () => {
     if (!removed.ok) throw new Error(removed.error);
     expect(removed.state.notes).toEqual([{ n: 1, from: 0, to: 2, removed: true }]);
     const next = { ...first.state, keywordPresentationIndex: 1 };
-    expect(out(stickNote(next, world(), "p0", 2, T0))).toBe("BAD_MESSAGE");
-    expect(out(stickNote(next, world(), "p0", 2, T0, true))).toBe("BAD_MESSAGE");
+    expect(stickNote(next, world(), "p0", 2, T0)).toEqual({ ok: true, state: next });
+    expect(stickNote(next, world(), "p0", 2, T0, true)).toEqual({ ok: true, state: { ...next, notes: removed.state.notes } });
     expect(out(stickNote(next, world(), "p0", 1, T0))).toBe("ok|1:0>1");
+  });
+
+  it("고정 좌석은 역할 확인 중에 월드 구간 없이도 상대를 표시할 수 있다", () => {
+    expect(out(stickNote({ ...room("roleReveal", 1), map: "bar" }, { segs: {} }, "p0", 2, T0))).toBe("ok|1:0>2");
   });
 });
 
@@ -150,8 +154,8 @@ describe("stickNote — 거절은 사유를 드러내지 않는다 (D-02·D-22·
     return state;
   };
   const cases: Array<[string, () => ReturnType<typeof stickNote>]> = [
-    ["찬반 단계", () => stickNote(room("verdict"), world(), "p0", 1, T0)],
-    ["낮 시작 발표", () => stickNote(room("dayAnnounce"), world(), "p0", 1, T0)],
+    ["대기실", () => stickNote(room("lobby"), world(), "p0", 1, T0)],
+    ["결과", () => stickNote(room("ended"), world(), "p0", 1, T0)],
     ["죽은 행위자", () => stickNote(dead(room(), 0), world(), "p0", 1, T0)],
     ["죽은 대상", () => stickNote(dead(room(), 1), world(), "p0", 1, T0)],
     ["자기 자신", () => stickNote(room(), world(), "p0", 0, T0)],
@@ -186,6 +190,19 @@ describe("stickNote — 옮기기와 같은 대상 (D-01·D-27)", () => {
   it("다른 일차의 줄은 건드리지 않는다(어제 줄은 남고 오늘 줄이 따로 생긴다)", () => {
     const state = room("discussion", 3, 6, [{ n: 2, from: 0, to: 1 }]);
     expect(out(stickNote(state, world(), "p0", 3, T0))).toBe("ok|2:0>1,3:0>3");
+  });
+  it("새 일차에도 마지막 표시 한 장만 유지하고 이미 만료된 옛 기록은 살리지 않는다", () => {
+    const legacy = room("morning", 2, 6, [{ n: 1, from: 1, to: 0 }, { n: 2, from: 0, to: 1 }]);
+    const nextDay = enterDayAnnounce(legacy);
+    expect(activeNotes(nextDay)).toEqual([{ n: 2, from: 0, to: 1 }]);
+    const moved = stickNote(nextDay, world(), "p0", 3, T0);
+    if (!moved.ok) throw new Error(moved.error);
+    const nextAgain = enterDayAnnounce(moved.state);
+    expect(activeNotes(nextAgain)).toEqual([{ n: 3, from: 0, to: 3 }]);
+    const removed = stickNote(nextAgain, world(), "p0", 3, T0, true);
+    if (!removed.ok) throw new Error(removed.error);
+    expect(activeNotes(removed.state)).toEqual([]);
+    expect(removed.state.notes).toEqual([...legacy.notes!, { n: 3, from: 0, to: 3, removed: true }]);
   });
   it("같은 대상을 다시 붙이면 들어온 state 와 같은 객체다(저장·방송 없음의 근거)", () => {
     const state = room("discussion", 2, 6, [{ n: 2, from: 0, to: 1 }]);

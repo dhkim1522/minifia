@@ -202,6 +202,8 @@ export interface RoomState {
   whispers?: WhisperRecord[];
   /** 서버 전용 이름(결정 0089-10, 24 D-01·D-06·D-07). 의심 포스트잇 — stickNote 만 쓴다. view 는 day.suspects·day.suspectLog·me.suspectTo 로 필드별 복사한다. 다시 하기·대기실 되돌리기는 허용 목록 복사라 담지 않고 beginGame 도 뺀다(D-08). */
   notes?: NoteRow[];
+  /** 이어지는 의심 표시가 활성화된 첫 일차. 이미 만료된 이전 규칙의 기록을 다시 붙이지 않는다. */
+  notesCarryFrom?: number;
   hostId: string;
   nextJoinSeq: number;
   players: Player[];
@@ -483,7 +485,8 @@ export function beginGame(
   // 의심 포스트잇(notes)도 같은 구조 분해로 뺀다 — 새 판에 어제 판의 종이가 따라오지 않게(벨트, D-08).
   const {
     keyword: _prevKeyword, answerSubmits: _prevSubmits, keywordAnswers: _prevAnswers,
-    keywordPresentationIndex: _prevPresentation, keywordReveal: _prevReveal, notes: _prevNotes, barChairs: _prevChairs, phaseSkipVotes: _prevSkip, ...rest
+    keywordPresentationIndex: _prevPresentation, keywordReveal: _prevReveal, notes: _prevNotes, notesCarryFrom: _prevNotesCarryFrom,
+    barChairs: _prevChairs, phaseSkipVotes: _prevSkip, ...rest
   } = state;
   const keyword = pickKeyword !== undefined ? pickKeyword(randInt) : undefined;
   // 옷장 조작이 없는 실험방은 좌석별 외형과 기본 코트로 인물을 구분한다.

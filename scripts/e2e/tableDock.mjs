@@ -54,6 +54,12 @@ export function makeFirstBallotDockFlow({ recorder, startHost, openGuest, checkR
       await openTestSheet(page);
       await setBots(page, tracker, 6);
       await startGame(page, tracker);
+      await openTableDockPane(page, "people");
+      const openingTarget = await showPeopleTarget(page, `[data-table-seat="${seat}"][data-suspect-holdable]`);
+      await holdCard(page, openingTarget, ctx.size.mobile !== false, () => sleep(800));
+      await tracker.waitFor((view) => view.me.suspectTo === seat, 3500, "역할 카드에서 의심 표시");
+      rec(id, "FB-ROLE-SUSPECT", "역할을 확인하는 동안에도 참가자 카드로 의심을 표시할 수 있다", tracker.last().phase === "roleReveal");
+      await page.locator('[data-dock-tab="people"]').click();
       await skipTo(page, tracker, "discussion");
       await guest.tracker.waitFor((view) => view.phase === "discussion", 4000, "친구 화면의 첫 토론");
       await openTableDockPane(guest.page, "people");
@@ -97,6 +103,10 @@ export function makeFirstBallotDockFlow({ recorder, startHost, openGuest, checkR
       const target = secondPageSeat ?? seat;
       const pick = await showPeopleTarget(page, `[data-first-ballot] [data-pick="${target}"]`);
       const hold = hostBallot.locator("[data-first-ballot-hold]");
+      await holdCard(page, pick, touch, () => sleep(800));
+      await tracker.waitFor((view) => view.me.suspectTo === target, 4000, "첫날 지목 중 의심 표시");
+      rec(id, "FB-SUSPECT", "지목 중 길게 누르면 같은 카드에 의심만 표시하고 투표는 제출하지 않는다",
+        tracker.last().phase === "verdict" && tracker.last().me.firstBallot === undefined);
       await pick.click();
       await tracker.waitFor((view) => view.me.firstBallot === target, 4000, "첫날 지목 서버 반영");
       await page.locator("[data-people-prev]").click();
@@ -209,6 +219,16 @@ export function makeNightDockFlow({ recorder, openGame, closeGame, checkRoomWidt
       const selected = hp.locator(face(secondSeat));
       rec(id, "ND2", "후보 카드를 가로로 밀면 선택 없이 페이지를 넘긴다", ht.last().me.pick === undefined &&
         await hp.locator('[data-face][aria-pressed="true"]').count() === 0);
+      let markColor;
+      await holdCard(hp, selected, ctx.size.mobile !== false, async () => {
+        markColor = await selected.locator("[data-suspect-hold]").evaluate((el) => getComputedStyle(el).stroke);
+        await sleep(800);
+      });
+      await ht.waitFor((view) => view.me.suspectTo === secondSeat, 3500, "밤에 의심 표시");
+      await observer.tracker.waitFor((view) => view.day?.suspects?.some((note) => note.to === secondSeat && note.from === game.hostSeat),
+        3500, "밤의 공개 의심 표시");
+      rec(id, "ND-SUSPECT", "밤 길게 누르기에는 #F2556A가 보이며 의심만 붙고 직업 행동은 선택되지 않는다",
+        markColor === "rgb(242, 85, 106)" && ht.last().me.pick === undefined && observer.tracker.last().me.pick === undefined, markColor);
       await selected.click();
       await ht.waitFor(view => view.me.pick === secondSeat, 3000, "둘째 페이지 밤 선택 서버 반영");
       await swipe(hp, face(cards[1].find(c => c.seat !== secondSeat).seat), 1, ctx.size.mobile !== false, "x");
@@ -238,6 +258,14 @@ export function makeNightDockFlow({ recorder, openGame, closeGame, checkRoomWidt
       await hp.locator('[data-game-stage][data-phase="morning"]').waitFor({ timeout: 8000 });
       rec(id, "ND6", "아침이 열리면 밤 참가자 선택과 밤 전용 무대 표식이 사라진다",
         await hp.locator("[data-night-targets], [data-table-night]").count() === 0);
+      if (ht.last().players.find((p) => p.seat === observer.seat)?.alive !== false &&
+          ht.last().players.find((p) => p.seat === game.hostSeat)?.alive !== false) {
+        await openTableDockPane(observer.page, "people");
+        const target = await showPeopleTarget(observer.page, `[data-table-seat="${game.hostSeat}"][data-suspect-holdable]`);
+        await holdCard(observer.page, target, ctx.size.mobile !== false, () => sleep(800));
+        await observer.tracker.waitFor((view) => view.me.suspectTo === game.hostSeat, 3500, "아침 의심 표시");
+        rec(id, "ND-MORNING-SUSPECT", "아침 참가자 카드에서도 길게 눌러 의심을 표시할 수 있다", observer.tracker.last().me.suspectTo === game.hostSeat);
+      }
     } finally {
       await closeGame(game);
     }

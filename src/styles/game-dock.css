@@ -100,12 +100,18 @@
   background: var(--noir-inset);
   color: var(--noir-accent);
 }
+.mf-game-dock .mf-table-controls--cards button[data-suspect-tag][aria-pressed="true"] {
+  border-color: var(--crimson-300);
+  box-shadow: inset 0 0 0 1px var(--crimson-300);
+}
+.mf-game-dock .mf-table-controls--cards [data-suspect-tag] .mv-face__mark { color: var(--crimson-300); }
 .mf-game-dock .mf-table-controls--cards .mv-face__count { top: 4px; left: 4px; right: auto; bottom: auto; }
 .mf-game-dock .mf-table-controls--cards .mf-table-controls__count { top: 4px; left: 4px; right: auto; }
+.mf-game-dock .mf-table-controls--cards[data-face-list] button:has(.mv-face__count) .mf-table-controls__count {
+  inset: auto 4px 4px auto;
+}
 .mf-game-dock .mf-table-controls--cards [data-suspect-mine] {
-  color: var(--noir-paper);
-  background: var(--crimson-700);
-  box-shadow: 0 0 0 1px var(--crimson-300);
+  box-shadow: 0 0 0 1px var(--night-950), 0 0 0 2px var(--crimson-300);
 }
 .mf-game-dock [data-suspect-holdable] {
   -webkit-tap-highlight-color: transparent;
@@ -204,6 +210,11 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 3px;
   padding: 3px;
+}
+
+.mf-game-dock[data-dock-people-only] .mf-game-dock__tabs {
+  justify-self: center;
+  grid-template-columns: minmax(100px, 1fr);
 }
 
 .mf-game-dock__tabs button {

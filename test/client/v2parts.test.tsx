@@ -382,9 +382,11 @@ describe("v2.css 이름표 스타일 계약 (MAP-07, 결정 0052-2)", () => {
   // 16-07: 심부름 장소 타일(처리함 테두리·정지 후광)·[처리] 알약(면)·배지의 놋쇠는 UI-SPEC V-20~V-22 가 정한 것이라 .mv-errand-(pin|act|arrow) 규칙을 같이 뺀다(errandParts.test 가 따로 지킨다).
   // 16-08: 시작 카드(.mv-errand-start*)의 테두리·제목·진행 점(.mv-errand-dot)의 놋쇠도 UI-SPEC V-19·V-23 이 정한 것이라 같이 뺀다.
   // 22-11: 유언 시트 남은 초의 마지막 5초 진홍(.mv-will__secs[data-tone=urgent])도 같은 시간 신호(timerTone)라 같이 뺀다(UI-SPEC P22-8).
+  // 결정 0125: 의심 모드의 테두리와 내 의심 표시 점은 홀드와 같은 진홍으로 통일한다.
   // 나머지 규칙(이름표·채팅·시간 링 기본 등)은 7페이즈 규칙 그대로다.
+  const SUSPECT_ACCENT = /^\s*(?:\.mv-tool\.mv-chat__suspect\[aria-pressed="true"\] \.mv-tool__face|\.mv-chat__suspect \.mv-chat__will-dot)\s*\{/;
   const WITHOUT_PHASE8_PARTS = V2_CSS.replace(/\/\*[\s\S]*?\*\//g, "").replace(/[^{}]*\{[^{}]*\}/g, (rule) =>
-    /^\s*\.mv-(badge|stamp|rolechip)|^\s*\.mv-chat__sys\.is-hot|^\s*\.mv-will--mafia|^\s*\.mv-chat__card--mafia|^\s*\.mv-ring\.is-(warn|urgent)|^\s*\.mf-turn\[data-turn-tone=|^\s*\.mv-host|^\s*\.is-call\.mv-verdict__btn|^\s*\.mv-errand-(pin|act|arrow|start|dot)|^\s*\.mv-will__secs\[data-tone/.test(rule) ? "" : rule,
+    SUSPECT_ACCENT.test(rule) || /^\s*\.mv-(badge|stamp|rolechip)|^\s*\.mv-chat__sys\.is-hot|^\s*\.mv-will--mafia|^\s*\.mv-chat__card--mafia|^\s*\.mv-ring\.is-(warn|urgent)|^\s*\.mf-turn\[data-turn-tone=|^\s*\.mv-host|^\s*\.is-call\.mv-verdict__btn|^\s*\.mv-errand-(pin|act|arrow|start|dot)|^\s*\.mv-will__secs\[data-tone/.test(rule) ? "" : rule,
   );
 
   it("hex 색이 없고 놋쇠 토큰을 쓰지 않으며, 진홍은 crimson-300 글자색 하나뿐이다 (07-UI-SPEC Color: 진홍 글자 예약, 면·큰 글자 금지) — 8페이즈 부품 규칙 제외", () => {
@@ -393,6 +395,11 @@ describe("v2.css 이름표 스타일 계약 (MAP-07, 결정 0052-2)", () => {
     const crimson = [...WITHOUT_PHASE8_PARTS.matchAll(/--crimson-\d+/g)].map((m) => m[0]);
     expect(crimson.every((c) => c === "--crimson-300")).toBe(true);
     expect(/(background|border)[a-z-]*:[^;{}]*--crimson-/.test(WITHOUT_PHASE8_PARTS), "진홍 면·테두리").toBe(false);
+  });
+
+  it("의심의 활성 테두리와 내 표시 점은 crimson-300을 쓴다", () => {
+    expect(rulesFor(V2_CSS, '.mv-tool.mv-chat__suspect[aria-pressed="true"] .mv-tool__face').join(";")).toContain("border-color: var(--crimson-300)");
+    expect(rulesFor(V2_CSS, ".mv-chat__suspect .mv-chat__will-dot").join(";")).toContain("background: var(--crimson-300)");
   });
 
   it("8페이즈 부품 규칙을 뺀 검사 본문이 실제로 비어 있지 않고, 뺀 규칙은 놋쇠·진홍을 가진다(검사가 빈 문자열을 지나가지 않는다)", () => {

@@ -41,6 +41,7 @@ import { showdownViewOf } from "./showdown";
 import { PHASE_DEFS } from "./phases";
 import { phaseSkipOpensAt, phaseSkipStatus } from "./phaseSkip";
 import { firstBallotCount, firstPlaytestDay } from "./playtest";
+import { activeNotes, noteAllowedNow, type NoteRow } from "./postit";
 import { RULES } from "./ruleset";
 import { isReady } from "./rematch";
 import { rolesInPlay } from "./roles";
@@ -73,7 +74,7 @@ const DAY_PHASES: ReadonlySet<PhaseId> = new Set([
  * 낮 정보. 허용 목록 리터럴로만 만든다 — 조건을 채울 때만 키를 만들고, 서버 전용 필드는 싣지 않는다.
  * 읽는 쪽이 기본값을 쥔다: 일차 없으면 1(RESEARCH Pattern 6).
  */
-function buildDay(state: RoomState, presentation: KeywordPresentation | undefined, phaseSkip: RoomView["phaseSkip"]): DayView {
+function buildDay(state: RoomState, presentation: KeywordPresentation | undefined, phaseSkip: RoomView["phaseSkip"], marks: readonly NoteRow[]): DayView {
   const day: DayView = {
     n: state.day ?? 1,
     roles: rolesInPlay(state.players.length),
@@ -155,12 +156,9 @@ function buildDay(state: RoomState, presentation: KeywordPresentation | undefine
   // 암살 현장 분필(MORN-01, 결정 0061-14): 방 DO 가 채운 좌표를 그날 낮 동안 모두에게 같은 값으로 싣는다. 필드별 복사이고, 없으면 키 자체가 없다.
   // 구출·무효 밤에는 DO 가 채우지 않으므로 어디에도 드러나지 않는다(결정 0044-22). 다음 밤 진입 훅이 지운다.
   if (state.chalk !== undefined) day.chalk = { x: state.chalk.x, z: state.chalk.z };
-  // 의심 포스트잇(결정 0089-10, D-06·D-07): 오늘 줄(suspects, 배열 순서 = 쌓는 순서)과 판 내내 전체 기록(suspectLog)은 모두에게 같은 공개 값이다. 줄마다 필드별 리터럴로 복사하고 줄이 없으면 키가 없다.
-  // 새 일차 진입에서 n === day 필터로 종이가 비어 떨어진다. 판 규칙 스위치로 막지 않는다(늘 켜짐).
-  const today = state.day ?? 1;
+  // 현재 쌓임과 날짜별 전체 기록은 공개한다. 서버 저장 행에서 정해진 필드만 복사한다.
   const notes = state.notes ?? [];
-  const todayNotes = notes.filter((x) => x.n === today && x.removed !== true);
-  if (todayNotes.length > 0) day.suspects = todayNotes.map((x) => ({ to: x.to, from: x.from }));
+  if (marks.length > 0) day.suspects = marks.map((x) => ({ to: x.to, from: x.from }));
   if (notes.length > 0) day.suspectLog = notes.map((x) => ({ n: x.n, from: x.from, to: x.to }));
   return day;
 }
@@ -221,6 +219,7 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   const me = state.players.find((p) => p.id === playerId);
   if (!me) throw new Error("buildView: player is not in this room");
   const presentation = keywordPresentationOf(state, now);
+  const marks = activeNotes(state).filter((mark) => state.players.some((p) => p.seat === mark.to && isAlive(p)));
   const skipOpensAt = phaseSkipOpensAt(state);
   const skipStatus = skipOpensAt === undefined ? undefined : phaseSkipStatus(state, playerId);
   const phaseSkip = skipOpensAt !== undefined && skipStatus !== undefined && skipStatus.total > 0
@@ -344,9 +343,9 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     myInfo.note = state.nightNote;
   }
 
-  // 내가 오늘 붙인 의심 대상. 공개 차례와 토론의 생존자 본인에게 보낸다.
-  if ((state.phase === "discussion" || presentation !== undefined) && isAlive(me)) {
-    const mine = (state.notes ?? []).find((x) => x.n === (state.day ?? 1) && x.from === me.seat && x.removed !== true);
+  // 내가 붙인 현재 의심 대상. 게임 중 생존자 본인만 편집할 수 있다.
+  if (noteAllowedNow(state.phase) && isAlive(me)) {
+    const mine = marks.find((x) => x.from === me.seat);
     if (mine !== undefined) myInfo.suspectTo = mine.to;
   }
 
@@ -427,7 +426,9 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     mapChoice: ROOM_MAP_ID,
   };
   if (state.phase !== "lobby") view.map = ROOM_MAP_ID;
-  if (DAY_PHASES.has(state.phase)) view.day = buildDay(state, presentation, phaseSkip);
+  if (DAY_PHASES.has(state.phase) || (state.phase === "roleReveal" && (state.notes?.length ?? 0) > 0)) {
+    view.day = buildDay(state, presentation, phaseSkip, marks);
+  }
   if (state.phase === "lobby" && state.bench !== undefined) {
     const reservedAnimals = state.bench.flatMap((p) => p.animal === undefined ? [] : [p.animal]).sort();
     if (reservedAnimals.length > 0) view.reservedAnimals = reservedAnimals;

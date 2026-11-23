@@ -58,6 +58,44 @@ describe("useKeyboardLift: 포커스 게이트 lift (CHAT-05)", () => {
     expect(result.current.lift()).toBe(336);
   });
 
+  it("키보드가 visualViewport와 레이아웃 창을 함께 줄여도 고정된 방 높이에서 들어 올린다", () => {
+    const vv = installVV(INNER_H);
+    vi.spyOn(target, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 390, INNER_H));
+    const { result } = mount();
+    act(() => input.focus());
+    frame();
+
+    vv.height = 508;
+    window.innerHeight = 508;
+    act(() => void window.dispatchEvent(new Event("resize")));
+    frame();
+    expect(result.current.open).toBe(true);
+    expect(result.current.lift()).toBe(336);
+
+    vv.height = INNER_H;
+    window.innerHeight = INNER_H;
+    act(() => void window.dispatchEvent(new Event("resize")));
+    frame();
+    expect(document.activeElement).toBe(input);
+    expect(result.current.lift()).toBe(0);
+    expect(result.current.open).toBe(false);
+  });
+
+  it("visualViewport가 없을 땐 고정 방과 창 높이의 차이를 읽는다", () => {
+    Object.defineProperty(window, "visualViewport", { value: undefined, configurable: true });
+    vi.spyOn(target, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 20, 390, 800));
+    const { result } = mount();
+    act(() => input.focus());
+    frame();
+    expect(result.current.open).toBe(false);
+
+    window.innerHeight = 510;
+    act(() => void window.dispatchEvent(new Event("resize")));
+    frame();
+    expect(result.current.lift()).toBe(310);
+    expect(result.current.open).toBe(true);
+  });
+
   it("포커스가 없으면 같은 vv 값이어도 0px, open false (주소창 접힘으로 떠오르지 않음)", () => {
     const vv = installVV(508);
     const { result } = mount();

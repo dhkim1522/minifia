@@ -62,9 +62,10 @@ interface GameDockProps {
   chat: ReactNode;
   people?: TableControlsProps | undefined;
   tools: ReactNode;
+  peopleOnly?: boolean;
 }
 
-export function GameDock({ scope, initialPane, peopleAction, preserveWriting, keepLooking, keepToolsOpen, paused, inputRef, chatStore, channel, mySeat, latest, chat, people, tools }: GameDockProps) {
+export function GameDock({ scope, initialPane, peopleAction, preserveWriting, keepLooking, keepToolsOpen, paused, inputRef, chatStore, channel, mySeat, latest, chat, people, tools, peopleOnly = false }: GameDockProps) {
   const id = useId();
   const [selection, setSelection] = useState({ scope, pane: initialPane, waiting: false, action: peopleAction?.kind });
   const voting = peopleAction?.kind === "vote";
@@ -90,7 +91,7 @@ export function GameDock({ scope, initialPane, peopleAction, preserveWriting, ke
   const rosterGesture = useRef<RosterGesture | undefined>(undefined);
   const rosterHandledAt = useRef(-Infinity);
   const [holding, setHolding] = useState<{ scope: string; page: number; seat: number }>();
-  const holdAction = paused ? undefined : roster?.suspectHold;
+  const holdAction = roster?.suspectHold;
   const holdingSeat = holding?.scope === scope && holding.page === page && holdAction?.seats.has(holding.seat) ? holding.seat : undefined;
 
   const clearRosterGesture = () => {
@@ -232,12 +233,12 @@ export function GameDock({ scope, initialPane, peopleAction, preserveWriting, ke
   }
 
   return (
-    <div className="mf-game-dock" data-table-dock="" data-dock-open={pane} onKeyDown={(event) => {
+    <div className="mf-game-dock" data-table-dock="" data-dock-open={pane} data-dock-people-only={peopleOnly ? "" : undefined} onKeyDown={(event) => {
       if (event.key !== "Escape" || event.defaultPrevented || event.nativeEvent.isComposing || pane === "closed") return;
       event.stopPropagation();
       close();
     }}>
-      {pane === "closed" && latest?.seat !== undefined ? (
+      {!paused && pane === "closed" && latest?.seat !== undefined ? (
         <button type="button" className="mf-game-dock__peek" aria-label={`${latest.name ? `${latest.name} 님의 메시지` : "최근 메시지"}, ${latest.text}, 채팅 열기`} data-dock-peek="" onClick={() => {
           tabs.current.chat?.focus({ preventScroll: true });
           open("chat");
@@ -248,7 +249,7 @@ export function GameDock({ scope, initialPane, peopleAction, preserveWriting, ke
         </button>
       ) : null}
       {pane !== "closed" ? (
-        <div ref={paneRef} id={id} className="mf-game-dock__pane" data-dock-pane={pane} role="region"
+        <div ref={paneRef} id={id} className="mf-game-dock__pane" data-dock-pane={pane} role="region" inert={paused && pane !== "people"}
           aria-label={pane === "chat" ? "채팅" : pane === "people" ? title : "도구"}>
           <button type="button" className="mf-game-dock__handle" data-dock-handle="" aria-label="하단 패널 닫기"
             onPointerDown={startSwipe} onPointerUp={(event) => endSwipe(event, 1, close)}
@@ -295,14 +296,14 @@ export function GameDock({ scope, initialPane, peopleAction, preserveWriting, ke
         </div>
       ) : null}
       <nav className="mf-game-dock__tabs" aria-label="게임 하단 조작">
-        {TABS.map(({ id: tab, label, icon }) => {
+        {TABS.filter(({ id: tab }) => !peopleOnly || tab === "people").map(({ id: tab, label, icon }) => {
           const vote = tab === "people" && voting;
           const pending = tab === "people" && actionNeedsConfirmation && !armed;
           const count = tab === "chat" ? unread : 0;
           return (
             <button key={tab} ref={(node) => { tabs.current[tab] = node; }} type="button" data-dock-tab={tab} data-dock-vote={vote ? "" : undefined}
               data-dock-pending={pending ? "" : undefined}
-              disabled={!contents[tab]} aria-label={vote ? "지목" : pending ? "밤 대상 선택" : count > 0 ? `${label}, 읽지 않은 메시지 ${count}개` : label}
+              disabled={!contents[tab] || (paused && tab !== "people")} aria-label={vote ? "지목" : pending ? "밤 대상 선택" : count > 0 ? `${label}, 읽지 않은 메시지 ${count}개` : label}
               aria-expanded={pane === tab} aria-controls={pane === tab ? id : undefined}
               onPointerDown={(event) => {
                 holdInputUntilTap(event);
@@ -312,7 +313,7 @@ export function GameDock({ scope, initialPane, peopleAction, preserveWriting, ke
               onClick={(event) => afterSwipe(event, () => open(pane === tab && !pending ? "closed" : tab))}
               {...(tab === "people" ? { onPointerUp: (event: PointerEvent<HTMLButtonElement>) => endSwipe(event, -1, () => open(tab)), onPointerCancel: () => { gesture.current = undefined; } } : {})}>
               <V2Icon name={icon} size={21} />
-              {vote ? <span>지목</span> : pending ? <span>밤 선택</span> : tab === "people" && pane === "people" ? <span>참가자</span> : null}
+              {vote ? <span>지목</span> : pending ? <span>밤 선택</span> : tab === "people" && (peopleOnly || pane === "people") ? <span>참가자</span> : null}
               {count > 0 ? <span data-dock-unread="" className="mf-game-dock__unread" aria-hidden="true">{count}</span> : null}
             </button>
           );

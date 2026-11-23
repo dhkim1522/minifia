@@ -36,6 +36,7 @@ import type { WillSheetProps } from "../components/v2/WillSheet";
 import { TensionVignette } from "../components/TensionVignette";
 import { TableControls } from "../components/TableControls";
 import type { TableControlsProps } from "../components/TableControls";
+import { GameDock } from "../components/GameDock";
 import type { PeopleAction } from "../components/GameDock";
 import { WorldStage } from "../components/WorldStage";
 import type { WorldPick, WorldStageProps } from "../components/WorldStage";
@@ -46,7 +47,7 @@ import { todOf, todWordOf } from "../game/timeOfDay";
 import { nightDarkOf } from "../game/nightDark";
 import { BADGE_TEXT, chipsOf, claimLook, floatLabel } from "../game/badgeView";
 import { WHISPER_TEXT } from "../game/whisperView";
-import { SUSPECT_TEXT, suspectStacks } from "../game/suspectView";
+import { SUSPECT_TEXT, suspectStacks, suspectVisible } from "../game/suspectView";
 import { DAY_COPY, headerFor } from "../game/dayView";
 import { callTargetsOf } from "../game/hostLine";
 import { blockModeOf, isMyTurn, turnStageOf, turnTopLine } from "../game/pickTurn";
@@ -245,7 +246,7 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
   const tableFocusAt = tableFocus !== undefined && tableChoice?.key === tableKey ? tableChoice.focusAt : undefined;
   const toastText = playtest && toast.props.visible ? toast.props.text : undefined;
   const playtestPanel = presentation !== undefined || tableOn || toastText !== undefined || view.me.chat === "ghost" || view.phase === "discussion" || view.phase === "night" && view.spectate === undefined || view.phase === "verdict" || view.phase === "defense" && view.day?.candidate === view.me.seat;
-  const noPanel = panelless === true || (playtest && !playtestPanel);
+  const noPanel = panelless === true || (playtest && !playtestPanel && !(tableDock && suspectVisible(view)));
   const { rootRef, headerRef, panelRef, inputRef, kbOpen: kbLifted, kbInSheet, turnCompact: compactTurn, stageInsets: measuredInsets } = useMapInsets(blockModeOf(view) !== null, noPanel, !inOpening && !inEnding);
   // 튜토리얼(24 D-31): 아래 여백에 bottomExtra 를 더한다. 키보드 높이를 프레임마다 읽는 getter 는 그대로 살린다. 실제 판은 0 이라 측정값 그대로다.
   const stageInsets = useMemo(
@@ -475,10 +476,10 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
   // 귓속말(09.1.1-09, UI-SPEC B): 모드·한 줄 시트·보내기는 useWhisper 가 쥔다. 모드에서는 나를 뺀 산 사람의 이름표가 버튼이 된다(낮 토론이라 지목·밤 선택의 pickSeats 와 겹치지 않는다).
   const whisper = useWhisper({ view, send, canSend, rejected: whisperRejects, guard: sendGuard });
   // [의심](24-03, D-10): 모드·근처 판정(서버 구간)·보내기는 useSuspect 가 쥔다. 귓속말 모드와 동시에 켜지지 않는다(D-24) — 한쪽 단추가 먼저 다른 쪽을 끈다.
-  const suspect = useSuspect({ view, store, offset, send, canSend, guard: sendGuard });
-  const canSuspectSpeaker = canSend && !suspect.coolingDown && me !== undefined && meAlive && speaker !== undefined && isAlive(speaker);
+  const suspect = useSuspect({ view, store, offset, send, canSend: connected, guard: sendGuard });
+  const canSuspectSpeaker = canSend && !suspect.disabled && speaker !== undefined && suspect.targets.has(speaker.seat);
   const suspectSpeaker = (): void => {
-    if (!canSuspectSpeaker || speaker === undefined || speaker.seat === view.me.seat) return;
+    if (!canSuspectSpeaker || speaker === undefined) return;
     if (view.phaseEndsAt !== null && Date.now() + offset >= view.phaseEndsAt) return;
     if (suspect.change(speaker.seat) === false) show(SEND_FAIL_TEXT);
   };
@@ -498,7 +499,7 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
         seats: suspect.targets,
         hit: "body",
         // 연결이 끊긴 동안은 버튼이 aria-disabled 이고 눌러도 보내지 않는다
-        ...(canSend ? {} : { disabled: true as const }),
+        ...(connected ? {} : { disabled: true as const }),
         ...(view.me.suspectTo === undefined ? {} : { mine: view.me.suspectTo }),
         label: (nickname, seat) => SUSPECT_TEXT.target(nickname, seat !== undefined && seat === view.me.suspectTo),
         onPick: (seat) => {
@@ -770,24 +771,31 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
     group: "첫날 지목",
     onPick: chooseFirst,
   } : undefined;
-  const dockTarget = firstTarget ?? (dockVoting || dockSuspect ? pick : undefined);
-  const dockTitle = firstTarget ? "첫날 지목" : dockSuspect ? "딱지 붙이기" : runoff ? "결선 지목" : "처형 지목";
+  const dockTarget = dockSuspect ? pick : firstTarget ?? (dockVoting ? pick : undefined);
+  const dockTitle = dockSuspect ? "딱지 붙이기" : firstTarget ? "첫날 지목" : runoff ? "결선 지목" : "처형 지목";
   const firstHold = firstTarget ? (
     <button type="button" className="mf-game-dock__hold" data-first-ballot-hold="" disabled={firstTarget.disabled} aria-label="오늘은 안 뽑기" aria-pressed={firstChoice === null} onClick={() => chooseFirst(null)}>
       안 뽑기
     </button>
   ) : undefined;
+  const suspectHold = (tableDock || inOpening) && suspect.visible && connected && !whisper.mode && layerKind === null ? {
+    seats: suspect.targets,
+    onRelease: (seat: number) => {
+      if (suspect.change(seat) === false) show(SEND_FAIL_TEXT);
+    },
+  } : undefined;
   const dockAction: PeopleAction | undefined = dockTarget ? {
     kind: dockSuspect ? "suspect" : "vote",
     title: dockTitle,
     ...(dockSuspect ? { onLeave: suspect.off } : {}),
-    ...(firstTarget ? { firstBallot: true, footer: firstHold } : {}),
+    ...(!dockSuspect && firstTarget ? { firstBallot: true, footer: firstHold } : {}),
     ...(dockSuspect && suspect.used ? { footer: <p className="mf-game-dock__hint" role="status">{SUSPECT_TEXT.editHint}</p> } : {}),
     roster: {
       players: tablePlayers,
       pick: layerKind === null ? dockTarget : { ...dockTarget, disabled: true },
       notes: suspectStack,
       myNoteTarget: view.me.suspectTo,
+      suspectHold,
       onChoose: dockTarget.onPick,
     },
   } : undefined;
@@ -799,15 +807,7 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
     ...(pick && (!tableDock || (!dockSuspect && !tableBallot)) ? { pick } : {}),
     notes: suspectStack,
     myNoteTarget: view.me.suspectTo,
-    ...(tableDock && suspect.visible && canSend && !whisper.mode && layerKind === null ? {
-      suspectHold: {
-        seats: suspect.targets,
-        onRelease: (seat) => {
-          if (view.phaseEndsAt !== null && Date.now() + offset >= view.phaseEndsAt) return;
-          if (suspect.change(seat) === false) show(SEND_FAIL_TEXT);
-        },
-      },
-    } : {}),
+    suspectHold,
     onChoose: tableDock && (tableBallot || dockSuspect || firstBallotOpen) ? lookAtTableSeat : chooseTableSeat,
   };
   const standaloneRoster = firstBallotOpen ? dockAction?.roster : tableOn && (!kbLifted || (tableBallot && pick !== undefined)) ? tableRoster : undefined;
@@ -893,7 +893,14 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
       {ending ? (
         <ResultScreen {...ending} store={store} chat={chat} send={send} canSend={canSend} offset={offset} epoch={epoch}
           menuButton={headerAction} stageHost={setResultStage} />
-      ) : inOpening ? <div className="mf-pregame__content">{opening}</div> : <>
+      ) : inOpening ? <div className="mf-pregame__content">
+        <div className="mf-pregame__phase">{opening}</div>
+        {tableCameraOn && suspect.visible ? <div className="mf-pregame__participants">
+          <GameDock scope={tableKey} initialPane="closed" preserveWriting={false} keepLooking={false} keepToolsOpen={false}
+            paused={false} chatStore={chat} channel={null} mySeat={view.me.seat} chat={null} tools={null} people={tableRoster} peopleOnly />
+          <div className="mf-sr-only" role="status" data-suspect-said="">{suspect.said}</div>
+        </div> : null}
+      </div> : <>
       {!playtest ? <TopToast {...toast.props} /> : null}
       {/* 붙인 사람에게만 읽히는 한 줄(P24-8) — 서버 view(me.suspectTo)가 확인한 뒤에만 채워진다. 화면에는 안 보인다 */}
       {suspect.visible ? (

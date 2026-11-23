@@ -2,7 +2,7 @@
 // ① 마피아와 시민이 같은 suspect 를 보냈을 때 받는 프레임 종류·순서와 view 키 집합이 같고, ② 거절 응답이 사유와 역할에 따라 달라지지 않으며,
 // ③ 서버 전용 이름 notes 는 어떤 프레임의 어떤 키 경로에도 없다. keywordLeak.test.ts 의 마피아·시민 프레임 대조 모양을 따른다.
 import { describe, expect, it } from "vitest";
-import type { ServerMessage } from "../../shared/protocol";
+import type { PhaseId, ServerMessage } from "../../shared/protocol";
 import { framesOf, killSeats, mark, send, settle, startedGame, summary, toPhase, withRole } from "./helpers";
 import type { Actor, Game } from "./helpers";
 
@@ -16,8 +16,8 @@ function keyPathsOf(value: unknown, prefix = ""): string[] {
   return Object.entries(value as Record<string, unknown>).flatMap(([key, child]) => [`${prefix}.${key}`, ...keyPathsOf(child, `${prefix}.${key}`)]);
 }
 const uniqSorted = (paths: string[]): string[] => [...new Set(paths)].sort();
-/** 키 경로 어느 마디에도 서버 전용 이름 notes 가 없다. */
-const hasNotesKey = (value: unknown): boolean => keyPathsOf(value).some((path) => path.split(".").some((seg) => seg.replace(/\[\]$/, "") === "notes"));
+/** 키 경로 어느 마디에도 의심 표시의 서버 저장 키가 없다. */
+const hasNotesKey = (value: unknown): boolean => keyPathsOf(value).some((path) => path.split(".").some((seg) => /^(notes|notesCarryFrom)(\[\])?$/.test(seg)));
 
 /**
  * 역할에 따라 키가 달라지는 me 키(마피아의 동료·기록, 경찰·의사·마피아의 기록). 이 밖의 me 키는 마피아·시민이 같아야 한다.
@@ -37,7 +37,7 @@ const viewShape = (msg: StateMsg): { top: string[]; me: string[]; day: string[];
 const sleep = (ms: number): Promise<void> => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /** 실제 착석 상태에서 원하는 일차와 단계로 옮긴다. */
-async function gameAt(day: number, phase: "discussion" | "verdict" = "discussion"): Promise<Game> {
+async function gameAt(day: number, phase: PhaseId = "discussion"): Promise<Game> {
   const g = await startedGame("discussion");
   await toPhase(g.code, phase, (room) => ({ ...room, day }));
   for (const s of g.socks) await settle(s, mark(s));
@@ -107,7 +107,7 @@ describe("① 마피아·시민이 같은 suspect 를 보내면 프레임 종류
     await suspectFrom(g, c, tC.seat);
     await sleep(700); // 연타 간격(600ms)을 넘긴 뒤 옮긴다
     await suspectFrom(g, m, tC.seat);
-    await toPhase(g.code, "verdict", (room) => room);
+    await toPhase(g.code, "verdict", (room) => ({ ...room, notesCarryFrom: 2 }));
     for (const s of g.socks) await settle(s, mark(s));
     for (const a of g.actors) {
       const frames = framesOf(a.sock);
@@ -159,11 +159,11 @@ describe("② 거절 응답은 사유와 역할에 따라 달라지지 않는다
     await rejectedSame(g, m, c, m.seat, c.seat, "discussion");
   });
 
-  it("찬반 단계: 마피아·시민 응답이 같다", async () => {
-    const g = await gameAt(2, "verdict");
+  it("결과 단계: 마피아·시민 응답이 같다", async () => {
+    const g = await gameAt(2, "ended");
     const { m, c } = pickPair(g);
     const t = otherThan(g, m, c);
-    await rejectedSame(g, m, c, t.seat, t.seat, "verdict");
+    await rejectedSame(g, m, c, t.seat, t.seat, "ended");
   });
 
   it("거절된 판에서도 notes 키는 어떤 프레임에도 없다", async () => {

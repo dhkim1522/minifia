@@ -166,7 +166,10 @@ describe("rematch 허용 목록 리터럴 (D-15, 누설 L39)", () => {
 
   it("4명 모두 준비 → round+1 의 assigning, 모두 역할을 받고, 방과 사람 행의 키 집합이 허용 목록과 정확히 같다", () => {
     const players = four().map((p, i) => ({ ...p, look: (["coat", "mafia", "police", "doctor"] as const)[i] }));
-    const s = endedRoom(players, { testMode: true, testRole: "police", testBotVote: { exec: "yes" }, mapChoice: "bar" });
+    const s = endedRoom(players, {
+      testMode: true, testRole: "police", testBotVote: { exec: "yes" }, mapChoice: "bar",
+      notesCarryFrom: 2, notes: [{ n: 2, from: 0, to: 1 }],
+    });
     const r = rematch(s, "p0", 1, NOW, seededRandInt(9));
     expect(r.ok).toBe(true);
     if (!r.ok) return;

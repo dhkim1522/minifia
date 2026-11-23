@@ -26,7 +26,7 @@ export interface SuspectDayRows {
   rows: NoteRow[];
 }
 
-/** 낮 토론에서는 산 상대가 있는 생존자가 의심 표시를 편집할 수 있다. */
+/** 플레이 중에는 산 상대가 있는 생존자가 의심 표시를 편집할 수 있다. */
 export function suspectVisible(view: RoomView): boolean {
   if (!noteAllowedNow(view.phase)) return false;
   const me = view.players.find((p) => p.seat === view.me.seat);
@@ -51,12 +51,16 @@ export function suspectTargets(
   prev?: ReadonlySet<number>,
 ): ReadonlySet<number> {
   const out = new Set<number>();
+  if (view.map === "bar") {
+    for (const p of view.players) if (p.seat !== view.me.seat && isAlive(p)) out.add(p.seat);
+    return out;
+  }
   const mine = segOf(view.me.seat);
   if (mine === undefined) return out;
   for (const p of view.players) {
     if (p.seat === view.me.seat || !isAlive(p)) continue;
     const pct = prev?.has(p.seat) === true ? 100 : NOTE_REACH_ON_PCT;
-    if (withinNoteReach(mine, segOf(p.seat), serverNow, pct, view.map === "bar")) out.add(p.seat);
+    if (withinNoteReach(mine, segOf(p.seat), serverNow, pct)) out.add(p.seat);
   }
   return out;
 }

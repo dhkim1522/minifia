@@ -57,14 +57,14 @@
 /* 의심딱지의 이름표는 키보드·화면 읽기용이다. 터치는 아래 무대가 몸을 판정한다. */
 .mf-world__pick--body { pointer-events: none; }
 .mf-world [data-suspect-target] .mv-tag {
-  --suspect-rim: color-mix(in srgb, var(--crimson-300) 58%, var(--gray-50));
+  --suspect-rim: var(--crimson-300);
   outline: 1px solid var(--suspect-rim);
   animation: mf-suspect-rim 1.2s ease-in-out infinite;
 }
 .mf-world .mv-suspect-count {
-  background: color-mix(in srgb, var(--crimson-700) 78%, var(--night-900));
+  background: var(--crimson-300);
   border-color: var(--crimson-300);
-  color: var(--gray-50);
+  color: var(--night-950);
 }
 @keyframes mf-suspect-rim {
   0%, 100% { box-shadow: 0 0 3px 0 var(--suspect-rim); }

@@ -137,13 +137,15 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
     onCallUsed?.();
   };
   const nightTitle = myRole === "police" ? "조사할 사람" : myRole === "doctor" ? "보호할 사람" : myRole === "mafia" ? "암살할 사람" : "밤 대상";
+  const nightSeats = new Set(nightPlayers.map((player) => player.seat));
   const nightAction: PeopleAction | undefined = dock && !introActive && !pauseNightEvent && nightPlayers.length > 0 ? {
     kind: "night",
     title: nightTitle,
     roster: {
-      players: nightPlayers,
+      players: view.players.filter((player) => nightSeats.has(player.seat) || dock.roster.suspectHold?.seats.has(player.seat))
+        .sort((a, b) => a.seat - b.seat),
       pick: {
-        seats: new Set(nightPlayers.map((player) => player.seat)),
+        seats: nightSeats,
         ...(nightPick !== undefined ? { mine: nightPick } : {}),
         ...(!canSend || willOpen || noteOpen ? { disabled: true } : {}),
         label: (name) => `${name} 고르기`,
@@ -155,6 +157,9 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
         ...(myRole === "mafia" && view.me.nightSure !== undefined ? { sure: view.me.nightSure } : {}),
         ...(call?.faces !== undefined ? { callSeats: call.faces } : {}),
       },
+      notes: dock.roster.notes,
+      myNoteTarget: dock.roster.myNoteTarget,
+      suspectHold: dock.roster.suspectHold,
       onChoose: pickFace,
     },
   } : undefined;
@@ -187,7 +192,7 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
     if (canSend) onOpenWill?.(opener);
     onCallUsed?.();
   };
-  const roomChat = (part?: RoomChatDockProps["part"]) => (
+  const roomChat = (part?: RoomChatDockProps["part"], actions?: ReactNode) => (
     <RoomChatDock
       binding={{ ...binding, ...(binding.onSend && !chatLocked ? { onSend: sendChat } : {}), ...(!canReact ? { emotes: [] } : {}) }}
       kbOpen={kbOpen}
@@ -198,55 +203,41 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
       inputRef={inputRef}
       callInput={call?.chat}
       onInputFocus={onCallUsed}
-      suspect={discussion ? suspect : undefined}
-      will={penOn ? { open: willOpen, saved: willSaved, call: call?.will === true, request: openWillFrom } : undefined}
+      suspect={suspect}
+      will={showChat && penOn ? { open: willOpen, saved: willSaved, call: call?.will === true, request: openWillFrom } : undefined}
+      actions={actions}
     />
   );
-  const roleTools = showRoleTool ? (
-    <div className="mf-room-toolbar">
-      {showNoteRow ? (
-        <button
-          type="button"
-          className="mf-room-tool"
-          aria-label="쪽지"
-          aria-pressed={noteOpen}
-          aria-disabled={noteReady && canSend ? undefined : "true"}
-          aria-describedby={noteReady ? undefined : noteHintId}
-          data-note-button=""
-          onClick={(e) => {
-            if (noteReady && canSend) onOpenNote?.(e.currentTarget);
-          }}
-        >
-          <V2Icon name="note" size={22} />
-          {dock ? <span>쪽지</span> : null}
-        </button>
-      ) : (
-        <button
-          type="button"
-          className={call?.will ? "mf-room-tool is-call" : "mf-room-tool"}
-          aria-label={willSaved ? "유언, 저장됨" : "유언"}
-          aria-pressed={willOpen}
-          aria-disabled={!canSend || undefined}
-          data-will-button=""
-          data-call={call?.will ? "" : undefined}
-          data-will-saved={willSaved ? "" : undefined}
-          onClick={(event) => openWillFrom(event.currentTarget)}
-        >
-          <V2Icon name="quill" size={22} />
-          {dock ? <span>유언</span> : null}
-          {willSaved ? <i className="mv-chat__will-dot" aria-hidden="true" /> : null}
-        </button>
-      )}
-    </div>
-  ) : null;
-  const chatTools = showChat && (penOn || (discussion && suspect !== undefined) || (canReact && binding.onEmote !== undefined && ((playtest && discussion) || (binding.emotes?.length ?? 0) > 0)));
+  const roleTool = !showRoleTool ? null : showNoteRow ? (
+    <button type="button" className="mf-room-tool" aria-label="쪽지" aria-pressed={noteOpen}
+      aria-disabled={noteReady && canSend ? undefined : "true"} aria-describedby={noteReady ? undefined : noteHintId}
+      data-note-button="" onClick={(event) => {
+        if (noteReady && canSend) onOpenNote?.(event.currentTarget);
+      }}>
+      <V2Icon name="note" size={22} />
+      {dock ? <span>쪽지</span> : null}
+    </button>
+  ) : (
+    <button type="button" className={call?.will ? "mf-room-tool is-call" : "mf-room-tool"}
+      aria-label={willSaved ? "유언, 저장됨" : "유언"} aria-pressed={willOpen} aria-disabled={!canSend || undefined}
+      data-will-button="" data-call={call?.will ? "" : undefined} data-will-saved={willSaved ? "" : undefined}
+      onClick={(event) => openWillFrom(event.currentTarget)}>
+      <V2Icon name="quill" size={22} />
+      {dock ? <span>유언</span> : null}
+      {willSaved ? <i className="mv-chat__will-dot" aria-hidden="true" /> : null}
+    </button>
+  );
+  const chatTools = showChat && (penOn || (canReact && binding.onEmote !== undefined && ((playtest && discussion) || (binding.emotes?.length ?? 0) > 0)));
   const channel = view.me.chat ?? null;
-  const peopleAction = nightAction ?? dock?.peopleAction;
+  const peopleAction = dock?.peopleAction?.kind === "suspect" ? dock.peopleAction : nightAction ?? dock?.peopleAction;
   const waitingToNominate = view.phase === "nomination" && dock !== undefined && peopleAction?.kind !== "vote";
   const peek = waitingToNominate && showChat && channel !== null
     ? [...binding.messages].reverse().find((message) => message.kind === "player" && message.ch === channel)
     : undefined;
   const firstBallotCount = firstBallotAtTable ? <PlaytestBallotCount view={view} count={firstBallot.count} /> : null;
+  const dockTools = !presenting && (chatTools || suspect !== undefined || roleTool)
+    ? roomChat("tools", showChat ? undefined : roleTool)
+    : null;
 
   return (
     <>
@@ -296,7 +287,7 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
       ) : null)}
       <section
         ref={panelRef}
-        inert={introActive && !firstBallotAtTable}
+        inert={introActive && !firstBallotAtTable && !dock}
         data-phase-panel-paused={introActive ? "" : undefined}
         className={`mf-game__panel${lifted ?? kbOpen ? " mf-game__panel--kb" : ""}${dock ? " mf-game__panel--dock" : showChat ? " mf-game__panel--chat" : ""}${!dock && panelEmpty ? " mf-game__panel--empty" : ""}`}
         data-world-panel=""
@@ -307,7 +298,7 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
         {notice}
         {answerPresentation}
         {dock && firstBallotAtTable && !peopleAction ? firstBallotCount : null}
-        {dock && !presenting ? (
+        {dock && (!presenting || suspect !== undefined) ? (
           <GameDock
             scope={`${view.round ?? 1}:${view.day?.n ?? 0}:${view.phase}:${peopleAction?.title ?? ""}`}
             initialPane={peopleAction ? "people" : discussion ? "chat" : "closed"}
@@ -317,7 +308,7 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
             paused={introActive}
             inputRef={inputRef}
             chatStore={dock.chatStore}
-            {...(peopleAction ? { peopleAction: firstBallotAtTable ? {
+            {...(peopleAction ? { peopleAction: firstBallotAtTable && peopleAction.kind === "vote" ? {
               ...peopleAction,
               footer: <div className="mf-game-dock__ballot-footer">{peopleAction.footer}{firstBallotCount}</div>,
             } : peopleAction } : {})}
@@ -326,9 +317,10 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
             latest={peek}
             chat={showChat ? roomChat("chat") : null}
             people={dock.roster}
-            tools={chatTools ? roomChat("tools") : showChat ? null : roleTools}
+            tools={dockTools}
+            peopleOnly={presenting}
           />
-        ) : showChat ? roomChat() : roleTools}
+        ) : showChat ? roomChat() : roleTool ? <div className="mf-room-toolbar">{roleTool}</div> : null}
         {showNoteRow && !noteReady ? (
           <span id={noteHintId} className="mf-sr-only">암살 대상을 모두 같게 고르면 쓸 수 있어요</span>
         ) : null}

@@ -54,9 +54,9 @@
 }
 
 .mf-btn.mf-answer-presentation__suspect {
-  background: var(--crimson-700);
+  background: var(--crimson-300);
   border-color: var(--crimson-300);
-  color: var(--noir-paper);
+  color: var(--night-950);
 }
 
 .mf-btn.mf-answer-presentation__suspect[aria-pressed="true"] {

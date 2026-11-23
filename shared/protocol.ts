@@ -174,7 +174,7 @@ export interface DayView {
   runoff?: RunoffView; // runoff 단계에서만, 모두에게 같은 동점 결선 정보(결정 0066-4, L20)
   showdown?: ShowdownView; // showdown 단계에서만, 모두에게 같은 마지막 3인 결전 정보(결정 0066-5, L21)
   // ---- 24페이즈 의심 포스트잇(결정 0089-10, D-06·D-07). 모두에게 같은 공개 값이고 서버 전용 RoomState.notes 에서 필드별로 복사한다. ----
-  suspects?: { to: number; from: number }[]; // 오늘(day.n) 붙어 있는 종이. 배열 순서 = 쌓는 순서(아래→위). 오늘 줄이 없으면 키가 없다
+  suspects?: { to: number; from: number }[]; // 현재 붙어 있는 종이. 배열 순서 = 쌓는 순서(아래→위). 현재 표시가 없으면 키가 없다
   suspectLog?: { n: number; from: number; to: number }[]; // 판 내내 남는 전체 기록(지난 날 포함). 줄이 없으면 키가 없다
 }
 
@@ -274,7 +274,7 @@ export type ClientMessage =
   | { t: "endDiscussion"; on: boolean } // 이전 클라이언트의 토론 건너뛰기
   | { t: "phaseSkip"; opensAt: number; on: boolean } // 현재 단계 또는 차례의 건너뛰기 동의/취소
   | { t: "point"; target: number } // 지목 — 대상 seat 하나, 취소 없음, 마감까지 바꿀 수 있다(DAY-04)
-  | { t: "suspect"; target: number; remove?: true } // 발표 중 현재 발표자 또는 낮 토론 상대에게 붙이기·옮기기. remove는 해당 대상의 내 표시만 뗀다.
+  | { t: "suspect"; target: number; remove?: true } // 게임 중 한 상대에게 붙이기·옮기기. remove는 해당 대상의 내 표시만 뗀다.
   | { t: "whisper"; to: number; text: string } // 귓속말(결정 0066-2) — 낮 토론, 하루 1번, 산 다른 사람 한 명에게 30자소 이하. 본문은 보낸·받은 사람 소켓에만 간다
   | { t: "badge"; role: BadgeId } // 직업 주장(결정 0066-1) — 서버가 정하는 것은 값의 형식뿐 참·거짓은 판정하지 않는다. 낮 시작 발표·토론·지목 단계에서만
   | { t: "dress"; look: OutfitId } // 로비 의상(결정 D-6) — 의상 id 하나뿐, 대기실에서만. 서버는 고른 값을 저장·방송할 뿐 역할과 비교하지 않는다
@@ -343,7 +343,7 @@ export interface MyInfo {
   testBots?: number; // 방장 본인의 대기실 view 에서만, 서버 봇 수(0 포함, 결정 0024·0075 — 일반 방 방장 포함). 손님·게임 중에는 키 자체가 없다
   testBotVote?: { exec: BotVoteExec; pick: BotVotePick }; // 그 방장의 대기실 view 에서만, 무작위가 아닌 값이 있을 때만(P-13). 손님·일반 방·게임 중에는 키 자체가 없다
   chat?: ChatChannel; // 서버가 정한 내 채널(channelOf), 본인에게만. 말할 수 없으면 키가 없다
-  suspectTo?: number; // 오늘 내가 붙인 대상 seat. 답안 발표와 토론 중 산 본인에게만 보낸다.
+  suspectTo?: number; // 현재 내가 붙인 대상 seat. 게임 중 산 본인에게만 보낸다.
   whisperUsed?: true; // 오늘 귓속말을 이미 보냈다(결정 0066-2) — discussion 단계의 산 본인에게만, 다른 소켓·다른 단계·다음 일차에는 키가 없다
   endDiscussion?: true; // discussion 단계에서 본인이 토론 끝내기를 누른 상태(본인에게만, 8페이즈 결정 0060)
   phaseSkip?: true; // 현재 단계나 차례에서 건너뛰기에 동의한 본인에게만

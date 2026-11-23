@@ -35,20 +35,29 @@ export function TableControls({ players, focus, selected, readOnly = false, pick
         const tally = night?.tally.get(seat) ?? 0;
         const sure = night?.sure === seat;
         const call = night?.callSeats?.has(seat) === true;
-        const disabled = readOnly || (pick !== undefined && (pick.disabled === true || !pick.seats.has(seat)));
-        const name = pick?.label(player.nickname, player.seat) ?? (readOnly ? player.nickname : `${player.nickname} 님 바라보기`);
+        const chooseDisabled = readOnly || (pick !== undefined && (pick.disabled === true || !pick.seats.has(seat)));
+        const canHold = cards && suspectHold?.seats.has(seat) === true;
+        const disabled = chooseDisabled && !canHold;
+        const name = chooseDisabled ? player.nickname : pick?.label(player.nickname, player.seat) ?? `${player.nickname} 님 바라보기`;
         const label = count > 0 ? `${name}, ${SUSPECT_TEXT.count(count)}${myNote ? ", 내 딱지 있음" : ""}`
           : sure ? `${name}, 확정` : tally > 0 ? `${name}, ${tally}명 선택` : name;
         const pressed = (pick ? pick.mine : selected ?? focus) === seat;
         return (
           <button key={seat} type="button" className={`mf-table-controls__seat${call ? " is-call" : ""}`}
-            data-face={night ? seat : undefined} data-call={call ? "" : undefined}
-            data-suspect-holdable={cards && !disabled && suspectHold?.seats.has(seat) ? "" : undefined}
+            data-face={night && pick?.seats.has(seat) ? seat : undefined} data-call={call ? "" : undefined}
+            data-suspect-holdable={canHold ? "" : undefined}
             data-table-seat={seat} data-table-readonly={readOnly ? "" : undefined} {...(pick !== undefined && pick.seats.has(seat) ? {
               "data-pick": seat,
               ...(pick.attr ? { [pick.attr]: seat } : {}),
             } : {})}
-            aria-label={label} aria-pressed={pressed} disabled={disabled} aria-disabled={disabled || undefined} onClick={() => onChoose(seat)}>
+            aria-label={label} aria-pressed={pressed} disabled={disabled} aria-disabled={disabled || undefined}
+            aria-keyshortcuts={canHold ? "Shift+Enter" : undefined}
+            onKeyDown={(event) => {
+              if (!canHold || !event.shiftKey || event.key !== "Enter" || event.repeat) return;
+              event.preventDefault();
+              suspectHold?.onRelease(seat);
+            }}
+            onClick={() => { if (!chooseDisabled) onChoose(seat); }}>
             {cards ? (
               <span className="mf-table-controls__portrait">
                 <PlayerPortrait seat={seat} animal={player.animal} variant="participant" look={player.look} />

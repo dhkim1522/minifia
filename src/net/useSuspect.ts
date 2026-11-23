@@ -3,7 +3,7 @@
 // - 근처 판정은 서버 구간(store.segOf) — 내 예측 위치를 쓰지 않는다(D-25). 서버가 같은 구간·같은 함수로 거리를 재므로 켠 대상은 서버가 받아 준다. 판정 함수는 suspectTargets(히스테리시스 92%/100%).
 // - 근처 집합은 250ms 간격으로 다시 잰다(걷는 중 이름표가 프레임마다 켜졌다 꺼지지 않게). 모드가 아닐 때도 같은 간격으로 재서 단추의 비활성(근처 0명)을 정한다.
 // - 낙관 그림은 없다(P24-8): 붙었다는 확인은 서버 view(me.suspectTo·day.suspects)가 오면 3D 가 보여 준다. 이 훅은 보내고 모드만 끝낸다.
-// - 땅을 눌러 걷는 것은 모드를 끝내지 않는다. 끝나는 때: 대상 고름 · 같은 단추 · Esc · 낮 토론을 벗어남 · 일차 바뀜 · 내가 죽음.
+// - 땅을 눌러 걷는 것은 모드를 끝내지 않는다. 끝나는 때: 대상 고름 · 같은 단추 · Esc · 단계나 일차가 바뀜 · 내가 죽음.
 // - 거절 알림은 GameMap 이 보낸다. 화면과 서버는 같은 요청 간격으로 연타를 막는다.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isAlive } from "../../shared/game/alive";
@@ -37,9 +37,9 @@ export interface UseSuspectOptions {
 export type SuspectToggle = "on" | "off" | "deny" | null;
 
 export interface SuspectApi {
-  /** 단추를 낼 수 있는 때(낮 토론 중 다른 산 사람이 있는 생존자) */
+  /** 다른 산 사람이 있는 생존자가 플레이 중이면 켤 수 있다. */
   visible: boolean;
-  /** 오늘 붙여 둔 표시가 있는가(서버 값) */
+  /** 붙여 둔 표시가 있는가(서버 값) */
   used: boolean;
   /** 서버 요청 간격이 지나기를 기다리는 중 */
   coolingDown: boolean;
@@ -53,7 +53,7 @@ export interface SuspectApi {
   off: () => void;
   /** 대상 고르기 — 보내고 모드를 끈다 */
   pick: (seat: number) => void;
-  /** 답안 발표의 현재 발표자에게 표시를 붙이거나 뗀다. false 는 전송 실패다. */
+  /** 상대에게 표시를 붙이거나 뗀다. false 는 전송 실패다. */
   change: (seat: number) => boolean | undefined;
   /** 붙인 사람에게만 읽히는 안내 문장(role="status"). 처음 마운트 때 이미 붙어 있던 것은 비어 있다 */
   said: string;
@@ -64,6 +64,7 @@ const EMPTY: ReadonlySet<number> = new Set<number>();
 
 export function useSuspect({ view, store, offset, send, canSend = true, guard }: UseSuspectOptions): SuspectApi {
   const visible = suspectVisible(view);
+  const seated = view.map === "bar";
   const walkToTarget = view.playtest === true;
   const used = suspectUsed(view);
   const dayN = view.day?.n;
@@ -93,9 +94,9 @@ export function useSuspect({ view, store, offset, send, canSend = true, guard }:
     return next;
   }, [measure]);
 
-  // 보이는 동안만 250ms 마다 다시 잰다. 보이게 된 순간에도 한 번 잰다
+  // 이동하는 광장에서만 거리를 반복 측정한다. 재즈 바는 공개 참가자 명단을 바로 쓴다.
   useEffect(() => {
-    if (!visible) {
+    if (!visible || seated) {
       nearRef.current = EMPTY;
       setNear(EMPTY);
       return;
@@ -103,15 +104,15 @@ export function useSuspect({ view, store, offset, send, canSend = true, guard }:
     refresh();
     const timer = setInterval(refresh, SUSPECT_POLL_MS);
     return () => clearInterval(timer);
-  }, [visible, refresh]);
+  }, [visible, seated, refresh]);
 
-  // 낮 토론을 벗어나거나 내가 죽으면(visible 거짓) · 일차가 바뀌면 모드가 즉시 꺼진다
+  // 단계가 바뀌거나 내가 죽으면 이전의 선택 모드를 풀어 새 단계 조작과 섞이지 않게 한다.
   useEffect(() => {
     if (!visible) setMode(false);
   }, [visible]);
   useEffect(() => {
     setMode(false);
-  }, [dayN]);
+  }, [dayN, view.phase]);
 
   // Esc 는 모드를 끈다(PC)
   useEffect(() => {
@@ -127,10 +128,11 @@ export function useSuspect({ view, store, offset, send, canSend = true, guard }:
   const players = view.players;
   const targets = useMemo<ReadonlySet<number>>(() => {
     if (!visible) return EMPTY;
+    if (seated) return measure();
     const alive = new Set(players.filter((p) => isAlive(p)).map((p) => p.seat));
     const kept = [...near].filter((s) => alive.has(s));
     return kept.length === near.size ? near : new Set(kept);
-  }, [visible, near, players]);
+  }, [visible, seated, near, players, view.me.seat, measure]);
 
   // 서버가 변경을 확인하면 거절 대기를 풀고 본인에게만 안내한다.
   const suspectTo = view.me.suspectTo;
@@ -156,16 +158,16 @@ export function useSuspect({ view, store, offset, send, canSend = true, guard }:
       return "off";
     }
     // 눌린 순간의 근처를 바로 다시 잰다(간격 사이에 가까워졌어도 알림 없이 켜진다)
-    if (refresh().size === 0 && !walkToTarget) return "deny";
+    if ((seated ? targets : refresh()).size === 0 && !walkToTarget) return "deny";
     setMode(true);
     return "on";
-  }, [visible, canSend, coolingDown, mode, refresh, walkToTarget]);
+  }, [visible, canSend, coolingDown, mode, seated, targets, refresh, walkToTarget]);
 
   const off = useCallback(() => setMode(false), []);
 
   const change = useCallback((seat: number): boolean | undefined => {
     const now = Date.now();
-    if (!canSend || now - sentAt.current < SUSPECT_MIN_GAP_MS) return;
+    if (!visible || !canSend || now - sentAt.current < SUSPECT_MIN_GAP_MS || !targets.has(seat)) return;
     const remove = latest.current.view.me.suspectTo === seat;
     if (send({ t: "suspect", target: seat, ...(remove ? { remove: true } : {}) }) === false) return false;
     sentAt.current = now;
@@ -173,7 +175,7 @@ export function useSuspect({ view, store, offset, send, canSend = true, guard }:
     guard.mark("suspect", now);
     emitSignal({ kind: "tap" });
     return true;
-  }, [canSend, send, guard]);
+  }, [visible, canSend, targets, send, guard]);
 
   const pick = useCallback(
     (seat: number) => {

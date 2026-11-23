@@ -80,6 +80,36 @@ describe("참가자 카드 의심딱지 홀드", () => {
     expect(people.onChoose).not.toHaveBeenCalled();
   });
 
+  it("밤 선택 중 홀드나 Shift+Enter는 의심만 보내고, 밤 선택은 짧은 탭으로만 보낸다", () => {
+    const { card, people, advance, update } = setup(4);
+    const nightPick = vi.fn();
+    update({
+      peopleAction: {
+        kind: "night", title: "밤 대상", roster: {
+          ...people, onChoose: nightPick,
+          pick: { seats: new Set([1]), group: "밤 대상", label: (name) => name, onPick: nightPick },
+        },
+      },
+    });
+    fireEvent.pointerDown(card(1), point());
+    advance(700);
+    fireEvent.pointerUp(card(1), point());
+    pointerClick(card(1));
+    expect(people.suspectHold.onRelease).toHaveBeenCalledExactlyOnceWith(1);
+    expect(nightPick).not.toHaveBeenCalled();
+    expect(card(2).disabled).toBe(false);
+    expect(card(2).hasAttribute("data-pick")).toBe(false);
+    expect(card(2).getAttribute("aria-keyshortcuts")).toBe("Shift+Enter");
+    fireEvent.keyDown(card(2), { key: "Enter", shiftKey: true });
+    fireEvent.click(card(2));
+    expect(people.suspectHold.onRelease).toHaveBeenLastCalledWith(2);
+    expect(nightPick).not.toHaveBeenCalled();
+    fireEvent.pointerDown(card(1), point());
+    fireEvent.pointerUp(card(1), point());
+    pointerClick(card(1));
+    expect(nightPick).toHaveBeenCalledExactlyOnceWith(1);
+  });
+
   it("포인터 취소, 움직였다가 원점으로 돌아옴, 단계 변경에서는 딱지가 붙지 않는다", () => {
     const { card, people, advance, update } = setup();
     fireEvent.pointerDown(card(), point());

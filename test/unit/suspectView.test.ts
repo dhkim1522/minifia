@@ -63,7 +63,12 @@ describe("suspectVisible (D-22: 서버 noteAllowedNow 와 같은 조건)", () =>
     expect(suspectVisible(makeView({ day: 5 }))).toBe(true);
   });
   it("첫날 토론에도 참", () => expect(suspectVisible(makeView({ day: 1 }))).toBe(true));
-  it("찬반 단계는 거짓", () => expect(suspectVisible(makeView({ phase: "verdict" }))).toBe(false));
+  it.each(["roleReveal", "verdict", "night", "morning"] as const)("%s에도 참", (phase) => {
+    expect(suspectVisible(makeView({ phase }))).toBe(true);
+  });
+  it.each(["lobby", "assigning", "ended"] as const)("%s에서는 거짓", (phase) => {
+    expect(suspectVisible(makeView({ phase }))).toBe(false);
+  });
   it("내가 죽었으면 거짓", () => expect(suspectVisible(makeView({ dead: [0] }))).toBe(false));
   it("산 사람이 나뿐이면 거짓", () => expect(suspectVisible(makeView({ dead: [1, 2, 3, 4, 5] }))).toBe(false));
 });
@@ -98,6 +103,10 @@ describe("suspectTargets (D-25: 서버 구간 · 켜는 문턱 92% · 끄는 문
     expect(suspectTargets(view, segOfMap({ 1: at(0) }), NOW).size).toBe(0);
     expect(sorted(suspectTargets(view, segOfMap({ 0: at(0), 2: at(5) }), NOW))).toBe("2");
   });
+  it("바에서는 월드 구간이 아직 준비되지 않아도 산 상대를 고른다", () => {
+    const bar: RoomView = { ...makeView({ phase: "roleReveal", count: 4, dead: [2] }), map: "bar" };
+    expect(sorted(suspectTargets(bar, segOfMap({}), NOW))).toBe("1,3");
+  });
   it("입력 prev 를 바꾸지 않는다", () => {
     const prev = new Set([1]);
     suspectTargets(view, segOfMap({ 0: at(0), 1: at(300), 2: at(5) }), NOW, prev);
@@ -120,7 +129,7 @@ describe("suspectTargets (D-25: 서버 구간 · 켜는 문턱 92% · 끄는 문
       connected: true,
       connId: `c${i}`,
     }));
-    const state = { code: "0420", createdAt: 0, expiresAt: ROOM_TTL_MS, phase: "discussion", phaseEndsAt: NOW + 1000, day: 2, hostId: "p0", nextJoinSeq: 6, players } as RoomState;
+    const state = { code: "0420", createdAt: 0, expiresAt: ROOM_TTL_MS, phase: "discussion", phaseEndsAt: NOW + 1000, day: 2, hostId: "p0", nextJoinSeq: 6, players, map: "plaza" } as RoomState;
     let included = 0;
     for (let k = 0; k < 200; k++) {
       const segBySeat: Record<number, Segment> = {};

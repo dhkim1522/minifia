@@ -73,6 +73,10 @@
 .mf-pregame--seated > .mf-world { z-index: 0; }
 .mf-pregame--seated .mf-world__input { pointer-events: none; }
 .mf-pregame__content { position: relative; z-index: 1; height: 100%; }
+.mf-pregame--seated .mf-pregame__content { display: flex; flex-direction: column; }
+.mf-pregame__phase { flex: 1; min-height: 0; }
+.mf-pregame__participants { position: relative; z-index: 2; padding: 0 8px max(8px, env(safe-area-inset-bottom)); }
+.mf-pregame__participants .mf-game-dock__pane { position: absolute; inset: auto 8px 100%; }
 /* 역할 배정·확인 무대는 꾸밈이라 3D 이름표 층을 보이지 않게 한다 — 제목·띠·소리 단추·카드와 겹쳤다(18.1 P181-1). DOM 은 남겨 런타임 측정·AP7 이 그대로 돈다 */
 .mf-pregame .mf-world__tags { visibility: hidden; }
 .mf-reveal { position: relative; height: 100%; display: flex; flex-direction: column; overflow: hidden; }

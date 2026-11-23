@@ -123,6 +123,9 @@
 /* 원탁 좌석까지 포함한 패널 위에 안내를 얹어 좌석 클릭과 카메라 위치를 보존한다. */
 .mf-game__panel:has(.mf-table-controls) :is(.mf-room-chat, .mf-room-chat__tools):has([data-suspect-guidance]) { position: static; }
 .mf-room-chat__surface[data-suspect-guidance] { padding: 6px 8px; pointer-events: none; }
+.mf-room-toolbar button[data-suspect-btn] svg { color: var(--crimson-300); }
+.mf-room-toolbar button[data-suspect-btn][aria-pressed="true"] { border-color: var(--crimson-300); }
+.mf-room-toolbar button[data-suspect-btn] .mv-chat__will-dot { background: var(--crimson-300); }
 .mf-room-chat__reactions .mv-emote-tray { position: static; grid-auto-rows: var(--tap-min); gap: 4px; padding: 0; border: 0; background: transparent; box-shadow: none; }
 .mf-room-chat__reactions[data-quick-reactions] .mv-emote-tray { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 
