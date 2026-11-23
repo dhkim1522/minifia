@@ -6,7 +6,7 @@
 
 - **v3.0 시험판**(`v3`)은 [B안 달빛 누아르](docs/decisions/0093-v3-noir-visual-redesign.md)의 재즈 바와 공통 화면을 쓴다. **22** 낮은 토론 → 찬반 → 지목 → 유언 → 처형(결정 0090). **23** 첫날 라이어게임과 정답 공개, 조기 진행, D1 판 기록(결정 0091). **24-01~07** 구현 완료.
 - [동물 12종](docs/decisions/0102-animal-characters.md)은 3D 모델·초상·의상을 공유한다. [공용 화면](docs/decisions/0100-home-art-and-discussion-controls.md)의 채팅은 하단에 두고, [단계의 선택과 결과](docs/decisions/0103-phase-events.md)는 중앙에서 진행한다.
-- **공개 v3** `2026-11-22T18:28:28Z+942c52e4`. [참가자 카드](docs/decisions/0120-night-hoods-and-participant-cards.md)는 기존 3D의 새 상반신을 네 장씩 넘긴다. [유언 글자](docs/decisions/0099-unified-game-ui.md)를 키우고 [탈락 관전과 결과](docs/decisions/0112-jazz-bar-fixed-view.md)의 직업 의상과 다음 판·메인 버튼을 적용했다. 휴대폰 실기기 확인은 대기 중이다. [테스트 방](https://minifia-v3.dhplay.workers.dev/?test=1).
+- **공개 v3** `2026-11-23T04:30:07Z+daf39c68`. [닉네임 고유색](docs/decisions/0121-player-name-colors.md)을 세 화면 크기의 무대·채팅·참가자 목록·기록에서 확인했다. 공개 참가자 탭 E2E 86/88(초상 요청 취소 2건). [참가자 카드](docs/decisions/0120-night-hoods-and-participant-cards.md), [탈락 관전과 결과](docs/decisions/0112-jazz-bar-fixed-view.md), [테스트 방](https://minifia-v3.dhplay.workers.dev/?test=1). 휴대폰 실기기 확인은 대기 중이다.
 - **v2.0 완료 처리(2026-11-07)**: 태그 `v2.0`, 문서는 `.planning/milestones/v2.0-*`. 열린 감사 항목 26개는 STATE.md 미룬 항목. main 은 v1.0 그대로, v3.0 실테스트 통과 뒤 반영.
 - **캐릭터·맵**의 B안 모델은 `src/world/character.ts`, `src/world/ghost3d.ts`, `src/world/maps/`에 있다. 시안은 `design/v3.0/redesign/b-noir.png`. 이미지 재생성은 [에셋 자동 검사](docs/screen-map.md#에셋-자동-검사) 참고.
 - **맵**: 일반·테스트·튜토리얼·다시 하기 모두 재즈 바. 이전 광장 방은 역할·단계를 유지해 원탁으로 옮긴다. 광장 자료는 개발 측정에서만 쓴다.
@@ -17,7 +17,6 @@
 
 ## 확인 대기 (사용자 답·확인이 필요한 것)
 
-- **모바일 UX 제안**: 닉네임 고유색.
 - **v3.0 결정은 끝났다(2026-11-07)**: 세부는 `docs/playtest-v2.0-feedback.md`. 다시 묻지 않는다. 새 결정은 추천안으로 진행하고 기록한다. 시안은 캔버스 2~3개 + 추천안 바로 구현.
 - **실테스트는 v3.0 전체를 한 번에**(팀·실기기, v2.0 실기기 칸도 그때). 단계별 팀 테스트는 없다.
 - 결정 0071~0091 과 각 페이즈 UI-SPEC "기본값 기록"은 사용자가 돌아와 검토하고 한 줄씩 바꿀 수 있다. 0090-8: 유언 10초에 몸동작도 막았다(살리려면 audience 분기 필요).
