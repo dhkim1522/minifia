@@ -31,6 +31,7 @@ import { ResultLogStore } from "../net/resultLogStore";
 import { usePhaseArrival } from "../net/phaseArrival";
 import { usePendingServerTime } from "../net/usePendingServerTime";
 import { useFixedRoomHeight } from "../net/useFixedRoomHeight";
+import { useFirstGameGuide } from "../net/useFirstGameGuide";
 import { loadSeenCount, saveSeenCount, unseenCount } from "../net/recordsSeen";
 import { useDayFx } from "../net/useDayFx";
 import { useWillLetter } from "../net/useWillLetter";
@@ -168,6 +169,7 @@ function soundHookOn(): boolean {
 export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   const connection = useRoomConnection(code, token);
   const { status, banner, view, removedReason } = connection;
+  const firstGameGuide = useFirstGameGuide(view);
   const introAt = usePendingServerTime(view?.phaseStartsAt, connection.offset);
   const roomRef = useRef<HTMLDivElement>(null);
   useFixedRoomHeight(roomRef);
@@ -609,6 +611,8 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
             chat={chat}
             headerAction={menuAction}
             opening={opening}
+            firstGameGuide={firstGameGuide}
+            pauseGuide={gameMenu !== null || roleCard.open || testOpen}
             introAt={introAt}
             testButton={testButton}
             announce={announce}

@@ -1,0 +1,89 @@
+.mf-first-guide {
+  --mf-guide-yellow: #ffd174;
+  position: absolute;
+  inset: 0;
+  z-index: calc(var(--z-overlay) + 8);
+  pointer-events: none;
+}
+
+.mf-first-guide__ring {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid var(--mf-guide-yellow);
+  border-radius: 12px;
+  box-shadow: 0 0 12px rgb(255 209 116 / 50%);
+}
+
+.mf-first-guide__hand {
+  --mf-guide-position: -100%;
+  --mf-guide-nudge: -7px;
+  position: absolute;
+  font: 26px/1 "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+  filter: drop-shadow(0 2px 3px #080e1a);
+  transform: translate(-50%, var(--mf-guide-position));
+  animation: mf-first-guide-point 780ms ease-out 3;
+}
+
+.mf-first-guide__hand[data-guide-hold] {
+  animation-name: mf-first-guide-hold;
+  animation-duration: 1.24s;
+}
+
+.mf-first-guide[data-guide-placement="below"] .mf-first-guide__hand {
+  --mf-guide-position: 0%;
+  --mf-guide-nudge: 7px;
+}
+
+.mf-first-guide__info {
+  position: absolute;
+  display: grid;
+  grid-template-columns: 21px minmax(0, 1fr);
+  gap: 8px;
+  width: min(calc(100% - 20px), 306px);
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid #b58a4f;
+  border-radius: 12px;
+  background: #152337;
+  color: #fff1da;
+  box-shadow: 0 4px 16px rgb(4 8 15 / 45%);
+  font: var(--type-label);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  transform: translateY(-100%);
+  animation: mf-first-guide-arrive 180ms ease-out both;
+}
+
+.mf-first-guide[data-guide-placement="below"] .mf-first-guide__info { transform: none; }
+.mf-first-guide:not([data-guide-fit="full"]) .mf-first-guide__hand,
+.mf-first-guide[data-guide-fit="ring"] .mf-first-guide__info { visibility: hidden; }
+.mf-first-guide__info p { margin: 2px 0 0; color: #edf0f6; }
+
+.mf-first-guide__icon {
+  display: grid;
+  place-items: center;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  font: 700 14px/1 Georgia, serif;
+  background: var(--mf-guide-yellow);
+  color: #1a2030;
+}
+
+@keyframes mf-first-guide-point {
+  0%, 100% { transform: translate(-50%, var(--mf-guide-position)); }
+  36% { transform: translate(-50%, calc(var(--mf-guide-position) + var(--mf-guide-nudge))); }
+}
+
+@keyframes mf-first-guide-hold {
+  0%, 100% { transform: translate(-50%, calc(var(--mf-guide-position) + var(--mf-guide-nudge))); }
+  18%, 75% { transform: translate(-50%, var(--mf-guide-position)); }
+}
+
+@keyframes mf-first-guide-arrive { from { opacity: 0; } to { opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .mf-first-guide__hand,
+  .mf-first-guide__hand[data-guide-hold],
+  .mf-first-guide__info { animation: none; }
+}

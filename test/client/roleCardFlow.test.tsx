@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import type { RoleId } from "../../shared/game/roles";
 import type { PhaseId, RoleRecord, RoomView } from "../../shared/protocol";
+import { FIRST_GAME_GUIDE_KEY } from "../../src/net/useFirstGameGuide";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 import { installMemoryStorage } from "../helpers/memoryStorage";
 import type { MemoryStorage } from "../helpers/memoryStorage";
@@ -262,14 +263,14 @@ describe("앰버 점과 읽음 (D-11)", () => {
     expect(newMarks()).toEqual(["-", "-"]);
   });
 
-  it("저장소에는 방 코드 키 하나뿐이고 값은 숫자 문자열이다(기록 내용·토큰 없음)", () => {
+  it("역할 기록 저장에는 읽은 개수만 남는다(기록 내용·토큰 없음)", () => {
     renderRoom(makeView({ records: POLICE_TWO }));
     openSheet();
     openActivity();
-    expect(storage.length).toBe(1);
-    expect(storage.key(0)).toBe(KEY);
+    const savedKeys = Array.from({ length: storage.length }, (_, index) => storage.key(index));
+    expect(savedKeys.filter((key) => key !== FIRST_GAME_GUIDE_KEY)).toEqual([KEY]);
     expect(/^\d+$/.test(storage.getItem(KEY) ?? "")).toBe(true);
-    expect(JSON.stringify(Object.keys(storage)).includes("tttt")).toBe(false);
+    expect(JSON.parse(storage.getItem(FIRST_GAME_GUIDE_KEY) ?? "null")).toEqual({ code: "0042", round: 1, seen: [] });
   });
 
   it("재마운트(새로고침): 읽은 뒤에는 점이 없고, 안 읽고 나가면 점이 그대로 복원된다", () => {

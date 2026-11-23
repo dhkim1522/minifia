@@ -6,7 +6,6 @@ import { isRoomCode } from "../../shared/roomCode";
 export const SESSION_KEY = "minifia:session";
 export const NICKNAME_KEY = "minifia:lastNickname";
 // 혼자 하기 튜토리얼을 본 적이 있는가(24페이즈 P24-22). 값은 "1" 하나뿐이다 — 개인정보·닉네임 없음. 읽고 쓰는 곳은 첫 화면(Home)이고 튜토리얼 화면은 이 모듈을 import 하지 않는다(D-15).
-export const TUTORIAL_SEEN_KEY = "minifia:tutorialSeen";
 
 export interface StoredSession {
   code: string;
@@ -97,14 +96,4 @@ export function loadLastNickname(storage: StorageLike = browserStorage()): strin
 
 export function saveLastNickname(nickname: string, storage: StorageLike = browserStorage()): void {
   write(NICKNAME_KEY, nickname, storage);
-}
-
-/** 혼자 하기를 한 번이라도 눌렀는가(끝·그만두기 불문). 저장소가 막힌 환경은 메모리 값으로 대신한다 */
-export function readTutorialSeen(storage: StorageLike = browserStorage()): boolean {
-  return read(TUTORIAL_SEEN_KEY, storage) === "1";
-}
-
-/** [혼자 하기]를 누른 순간 쓴다 */
-export function markTutorialSeen(storage: StorageLike = browserStorage()): void {
-  write(TUTORIAL_SEEN_KEY, "1", storage);
 }

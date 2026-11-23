@@ -11,6 +11,7 @@ import { WILL_MAX_GRAPHEMES } from "../../shared/game/will";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { emitSignal } from "../audio/signals";
 import { AnswerPresentation } from "../components/AnswerPresentation";
+import { FirstGameGuide } from "../components/FirstGameGuide";
 import { KillFx } from "../components/KillFx";
 import { PhaseIntro } from "../components/PhaseIntro";
 import { PhaseEvent } from "../components/PhaseEvent";
@@ -41,6 +42,7 @@ import type { PeopleAction } from "../components/GameDock";
 import { WorldStage } from "../components/WorldStage";
 import type { WorldPick, WorldStageProps } from "../components/WorldStage";
 import { ownAnimalOf } from "../game/playerIdentity";
+import { firstGameGuideSteps } from "../game/firstGameGuide";
 import { jobOutfit } from "../world/jobOutfit";
 import { keywordPresentationOf } from "../game/keywordView";
 import { todOf, todWordOf } from "../game/timeOfDay";
@@ -54,6 +56,7 @@ import { blockModeOf, isMyTurn, turnStageOf, turnTopLine } from "../game/pickTur
 import { isMySpeakTurn, pointSeatsOf, quoteOf, revealCounts, SHOWDOWN_COPY, showdownStageOf, speakerOf } from "../game/showdownView";
 import type { ChatStore } from "../net/chatStore";
 import type { DayFx } from "../net/useDayFx";
+import type { FirstGameGuideSession } from "../net/useFirstGameGuide";
 import { useBadge, useBadgeFx } from "../net/useBadge";
 import { useChat } from "../net/useChat";
 import { usePendingServerTime } from "../net/usePendingServerTime";
@@ -140,6 +143,8 @@ interface GameMapProps {
   headerAction?: ReactNode;
   /** 재즈 바의 착석·역할·라이어 화면을 같은 무대 위에 그린다. */
   opening?: ReactNode;
+  firstGameGuide?: FirstGameGuideSession | undefined;
+  pauseGuide?: boolean;
   introAt?: number | undefined;
   ending?: Pick<ResultScreenProps, "view" | "resultLog" | "arrivedFrom" | "onExit">;
   /** 헤더 시간대 글자(0083-1, "낮 · 토론"). 튜토리얼만 false — 17·18 레이아웃을 건드리지 않는다. 기본 true */
@@ -214,7 +219,7 @@ function TurnBlock({ view, offset, line, compact, reducedMotion }: { view: RoomV
 // 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내 + 시간 링 + [역할 카드]), [테스트], 결과 알림, 아래 패널을 얹는다.
 // 낮 시작·낮 토론·찬반·지목·유언·처형이 이 화면 하나를 같은 장면 키로 그려 단계가 바뀌어도 맵이 다시 만들어지지 않는다.
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)·알림 글자는 React 텍스트 노드로만 그린다.
-export function GameMap({ view, store, chat, send, canSend: connected = true, offset = 0, roleCard, headerAction, opening, introAt, ending, tod = true, panelless, camera, testButton, announce = null, deny, fading, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onLeave, bottomExtra = 0, timeless = false }: GameMapProps) {
+export function GameMap({ view, store, chat, send, canSend: connected = true, offset = 0, roleCard, headerAction, opening, firstGameGuide, pauseGuide = false, introAt, ending, tod = true, panelless, camera, testButton, announce = null, deny, fading, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onLeave, bottomExtra = 0, timeless = false }: GameMapProps) {
   const introActive = introAt !== undefined;
   const canSend = connected && !introActive;
   const toast = useTopToast();
@@ -308,6 +313,7 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
     return () => observer.disconnect();
   }, [letterAnnounceText]);
   const killNonce = killFx?.nonce ?? 0;
+  const killStillPlaying = usePendingServerTime(killFx === null ? undefined : killFx.at + KILL_HOLD_MS, 0) !== undefined;
   const seenKill = useRef(killNonce);
   const killTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [surprise, setSurprise] = useState<{ seat: number; nonce: number } | undefined>(undefined);
@@ -478,10 +484,23 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
   // [의심](24-03, D-10): 모드·근처 판정(서버 구간)·보내기는 useSuspect 가 쥔다. 귓속말 모드와 동시에 켜지지 않는다(D-24) — 한쪽 단추가 먼저 다른 쪽을 끈다.
   const suspect = useSuspect({ view, store, offset, send, canSend: connected, guard: sendGuard });
   const canSuspectSpeaker = canSend && !suspect.disabled && speaker !== undefined && suspect.targets.has(speaker.seat);
+  const [guideSuspectRequest, setGuideSuspectRequest] = useState<{ id: "answer-suspect" | "hold-suspect"; target: number | undefined }>();
+  const [guideSuspectDone, setGuideSuspectDone] = useState<ReadonlySet<string>>(() => new Set());
+  const changeSuspect = (seat: number, id: "answer-suspect" | "hold-suspect") => {
+    const result = suspect.change(seat);
+    if (result === false) show(SEND_FAIL_TEXT);
+    if (result === true && firstGameGuide) setGuideSuspectRequest({ id, target: view.me.suspectTo === seat ? undefined : seat });
+  };
+  useEffect(() => {
+    if (guideSuspectRequest === undefined || view.me.suspectTo !== guideSuspectRequest.target) return;
+    firstGameGuide?.markSeen(guideSuspectRequest.id);
+    setGuideSuspectDone((done) => new Set([...done, guideSuspectRequest.id]));
+    setGuideSuspectRequest(undefined);
+  }, [firstGameGuide, guideSuspectRequest, view.me.suspectTo]);
   const suspectSpeaker = (): void => {
     if (!canSuspectSpeaker || speaker === undefined) return;
     if (view.phaseEndsAt !== null && Date.now() + offset >= view.phaseEndsAt) return;
-    if (suspect.change(speaker.seat) === false) show(SEND_FAIL_TEXT);
+    changeSuspect(speaker.seat, "answer-suspect");
   };
   // 받은 순간 위 알림 "{A} 님의 귓속말"(본문 없음). 라이브로 받은 줄만 번호가 바뀐다 — 재접속 복원 줄·내가 보낸 줄은 알림이 없다. 처음 마운트 때의 번호는 지난 일이다
   const whisperInNonce = liveWhisperIn?.nonce ?? 0;
@@ -780,9 +799,7 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
   ) : undefined;
   const suspectHold = (tableDock || inOpening) && suspect.visible && connected && !whisper.mode && layerKind === null ? {
     seats: suspect.targets,
-    onRelease: (seat: number) => {
-      if (suspect.change(seat) === false) show(SEND_FAIL_TEXT);
-    },
+    onRelease: (seat: number) => changeSuspect(seat, "hold-suspect"),
   } : undefined;
   const dockAction: PeopleAction | undefined = dockTarget ? {
     kind: dockSuspect ? "suspect" : "vote",
@@ -811,6 +828,29 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
     onChoose: tableDock && (tableBallot || dockSuspect || firstBallotOpen) ? lookAtTableSeat : chooseTableSeat,
   };
   const standaloneRoster = firstBallotOpen ? dockAction?.roster : tableOn && (!kbLifted || (tableBallot && pick !== undefined)) ? tableRoster : undefined;
+  const guideBlocked = !firstGameGuide || !canSend || inEnding || pauseGuide || layerKind !== null || !tableCameraOn || letter !== null || moment.active;
+  const guideVote = !dockSuspect && (firstBallotOpen && firstChoice === undefined || canPick);
+  const guideNight = nighting && meAlive && (!nightWithoutExecution || nightIntroSummary !== undefined);
+  const guideGhost = ghost && view.me.chat === "ghost" && view.phase !== "execution" && !moment.active && letter === null && !killStillPlaying && shownAnnounce === null;
+  const guideAnswerSuspect = canSuspectSpeaker && !speakerMarked && !guideSuspectDone.has("answer-suspect");
+  const guideHoldSuspect = view.phase === "discussion" && suspectHold !== undefined && !dockSuspect && !guideSuspectDone.has("hold-suspect");
+  const guideSteps = useMemo(() => firstGameGuideSteps(view, {
+    blocked: guideBlocked,
+    canVote: guideVote,
+    firstDayVote: firstBallotOpen,
+    nightAvailable: guideNight,
+    ghostChat: guideGhost,
+    answerSuspect: guideAnswerSuspect,
+    holdSuspect: guideHoldSuspect,
+  }), [view, guideBlocked, guideVote, firstBallotOpen, guideNight, guideGhost, guideAnswerSuspect, guideHoldSuspect]);
+  useEffect(() => {
+    if (!firstGameGuide) return;
+    if (view.me.roleReady) firstGameGuide.markSeen("role");
+    if (view.me.answer?.final) firstGameGuide.markSeen("clue");
+    if (view.me.verdictVote !== undefined) firstGameGuide.markSeen("verdict");
+    if (firstChoice !== undefined || (nominating && serverMine !== undefined)) firstGameGuide.markSeen("nomination");
+    if (nighting && (view.me.pick !== undefined || view.me.nightDone)) firstGameGuide.markSeen("night");
+  }, [firstGameGuide, view.me, firstChoice, nominating, serverMine, nighting]);
 
   const scene = useMemo(() => {
     const look = sceneLook(view, { stageH, ...(fading ? { fading } : {}), ...(mine !== undefined ? { mine } : {}), ...(verdictZoom !== undefined ? { verdictZoom } : {}) });
@@ -1110,6 +1150,7 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
         </div>
       ) : null}
       </>}
+      {firstGameGuide ? <FirstGameGuide rootRef={rootRef} session={firstGameGuide} scope={phase} steps={guideSteps} /> : null}
     </main>
   );
 }
