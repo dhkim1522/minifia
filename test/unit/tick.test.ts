@@ -98,7 +98,7 @@ describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", 
     expect(row("nomination")).toBe(`${NOMINATION_MS}/defense/true`); // 단계 표 값은 자리 값 — 진입 훅 뒤 phaseDurationOf 가 모이기(3000)로 다시 구한다. 동률·0표면 마감 훅이 night 로 보낸다
     expect(row("defense")).toBe("10000/execution/true"); // 변론(유언 자리) 다음은 처형
     expect(row("execution")).toBe("6600/night/true"); // 표는 night 그대로 — 첫날 키워드 판은 마감 훅이 answerReveal 로 보낸다(23-05)
-    expect(row("answerReveal")).toBe("3000/night/true"); // 23-05: 첫날 정답 공개 3초
+    expect(row("answerReveal")).toBe("12000/night/true"); // 23-05: 첫날 정답 공개 12초
     expect(row("night")).toBe("30000/morning/true");
     expect(row("morning")).toBe("5000/dayAnnounce/true");
     expect(row("ended")).toBe("null/null/true"); // 종단 행: 마감 없음

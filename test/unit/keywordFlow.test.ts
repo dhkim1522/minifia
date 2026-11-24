@@ -165,10 +165,10 @@ const againstAll = (state: RoomState): RoomState =>
   castVerdicts(state, Object.fromEntries(state.players.map((p) => [p.seat, false])));
 
 describe("answerReveal 상수와 단계 표 (D-02·D-22)", () => {
-  it("ANSWER_REVEAL_MS 3000, NO_EXECUTION_MS 1400, answerReveal → night, 본인 역할을 싣는 단계다", () => {
-    expect(ANSWER_REVEAL_MS).toBe(3000);
+  it("ANSWER_REVEAL_MS 12000, NO_EXECUTION_MS 1400, answerReveal → night, 본인 역할을 싣는 단계다", () => {
+    expect(ANSWER_REVEAL_MS).toBe(12000);
     expect(NO_EXECUTION_MS).toBe(1400);
-    expect(PHASE_DEFS.answerReveal.durationMs).toBe(3000);
+    expect(PHASE_DEFS.answerReveal.durationMs).toBe(12000);
     expect(PHASE_DEFS.answerReveal.revealsOwnRole).toBe(true);
     expect(nextPhaseOf("answerReveal")).toBe("night");
     // 표의 execution.next 는 night 그대로(둘째 날 이후가 쓴다) — 첫날 분기는 마감 훅과 afterDayOf 가 한다
@@ -230,24 +230,24 @@ describe("첫날 처형 뒤 전이", () => {
 });
 
 describe("처형 없는 첫날 → answerReveal 4.4초 (D-22)", () => {
-  it("이전 판의 day 1 찬반 부결 → answerReveal, 길이 4400, noExecutionOf 가 rejected", () => {
+  it("이전 판의 day 1 찬반 부결 → answerReveal, 길이 13400, noExecutionOf 가 rejected", () => {
     const verdict = legacyBeforeReveal(againstAll(stateWithVerdict(6, 1, "verdict")));
     const at = verdict.phaseEndsAt!;
     const reveal = tick(verdict, at, seededRandInt(9));
     expect(reveal.phase).toBe("answerReveal");
     expect(phaseDurationOf(reveal)).toBe(ANSWER_REVEAL_MS + NO_EXECUTION_MS);
-    expect(reveal.phaseEndsAt).toBe(at + 4400);
+    expect(reveal.phaseEndsAt).toBe(at + 13400);
     expect(noExecutionOf(reveal)).toEqual({ reason: "rejected" });
     expect(tick(reveal, reveal.phaseEndsAt!, seededRandInt(9)).phase).toBe("night");
   });
 
-  it("day 1 지목 0표·동점 → answerReveal, 길이 4400, 이유 noVotes·tie", () => {
+  it("day 1 지목 0표·동점 → answerReveal, 길이 13400, 이유 noVotes·tie", () => {
     for (const [picks, reason] of [[{}, "noVotes"], [{ 0: 1, 1: 0 }, "tie"]] as const) {
       const nomination = legacyBeforeReveal(castPoints(startedAt(6, 1, "nomination"), picks));
       let s = nomination;
       for (let guard = 0; s.phase === "nomination" && guard < 30; guard += 1) s = tick(s, s.phaseEndsAt!, seededRandInt(9));
       expect(s.phase).toBe("answerReveal");
-      expect(phaseDurationOf(s)).toBe(4400);
+      expect(phaseDurationOf(s)).toBe(13400);
       expect(noExecutionOf(s)).toEqual({ reason });
     }
   });

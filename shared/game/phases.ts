@@ -39,8 +39,8 @@ export const ROLE_REVEAL_MS = 15_000;
 // 제시어가 보이는 순간부터 단서를 입력할 수 있다.
 export const KEYWORD_MS = 35_000;
 export const FIRST_ANSWER_TURN_MS = 5_000; // 첫날 원탁에서 한 사람의 답을 공개하는 시간
-// 첫날 정답 공개 단계(D-02, P23-20): 처형 뒤(또는 처형 없는 첫날 뒤) 밤 직전 3초. 처형이 없으면 "처형 없음" 큰 글 1.4초가 앞에 붙는다(D-22). 시간은 참고 목표라 연출을 줄이는 근거로 쓰지 않는다.
-export const ANSWER_REVEAL_MS = 3_000;
+// 첫날 정답 공개 단계(D-02, P23-20): 처형 뒤(또는 처형 없는 첫날 뒤) 밤 직전 12초. 처형이 없으면 "처형 없음" 큰 글 1.4초가 앞에 붙는다(D-22). 시간은 참고 목표라 연출을 줄이는 근거로 쓰지 않는다.
+export const ANSWER_REVEAL_MS = 12_000;
 export const NO_EXECUTION_MS = 1_400; // 처형 없음 큰 글 시간 — src/game/dayView.ts 의 ANNOUNCE_NOEXEC_MS 가 같은 값을 쓴다(23-07)
 export const DAY_ANNOUNCE_MS = 2_000; // D-20
 export const DISCUSSION_MS = 90_000; // 낮 토론 기본 마감. 전원 동의로 일찍 끝날 수 있다.

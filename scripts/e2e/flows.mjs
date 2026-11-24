@@ -1922,7 +1922,7 @@ async function dayFlow(ctx) {
       // 처형 5초는 서버 타이머로 밤이 된다. 배포본처럼 지연이 큰 곳에서는 위 판정이 5초를 넘기고, 그 뒤 '다음 단계로 넘기기' 를
       // 누르면 이미 온 밤을 건너뛰어 아침·다음 날 토론까지 가 버린다 — 눌러 넘기지 않고 자연 전환을 기다린다(판정은 그대로).
       const night = await attempt(async () => {
-        await ht.waitFor((v) => v.phase === "night", 14_000, "처형 뒤 정답 공개(첫날 3초)를 지나 밤(서버 타이머)");
+        await ht.waitFor((v) => v.phase === "night", 24_000, "처형 뒤 정답 공개(첫날 12초)를 지나 밤(서버 타이머)");
         await Promise.all(guests.map((x) => untilGame(x.page, (g) => g.phase === "night", 15_000, "밤 도착")));
       });
       const nightSeen = night.ok ? "" : ` · 방장 서버 단계 ${ht.last()?.phase} · 손님 화면 단계 ${(await Promise.all(guests.map((x) => readGame(x.page).then((g) => g.phase).catch(() => "읽기 실패")))).join(",")}`;

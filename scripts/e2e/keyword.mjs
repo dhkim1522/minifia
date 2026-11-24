@@ -17,7 +17,7 @@ const overlaps = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left)
 /** 제시어가 표시된 순간부터 단서를 쓸 수 있는 시간(ms) */
 export const KEYWORD_MS_COPY = 35_000;
 /** 정답 공개 단계 길이(ms) */
-export const ANSWER_REVEAL_MS_COPY = 3_000;
+export const ANSWER_REVEAL_MS_COPY = 12_000;
 /** 답 길이 상한(자소) */
 export const ANSWER_MAX_GRAPHEMES_COPY = 20;
 /** 서버의 답 전송 최소 간격(ms) */
@@ -611,6 +611,7 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       }
 
       await Promise.all(pages.map(p => p.tracker.waitFor(v => v.phase === "answerReveal", 7000, "마지막 답 → 제시어 공개")));
+      const revealView = ht.last();
       const reveal = await Promise.all(pages.map(async (p) => {
         await p.page.locator("[data-announce-label]").filter({ hasText: "제시어" }).waitFor({ timeout: 2500 });
         return { who: p.who, ...(await readAnnounce(p.page)) };
@@ -620,7 +621,12 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       mafiaWs.stop();
       citizenWs.stop();
       rec1(rec, `${id}/leak`, kw13Leak({ mafia: keyBefore.mafia, citizen: keyBefore.citizen, mafiaFrameHits: mafiaHits, citizenFrameHits: citizenHits, hostOnlyMe: HOST_ONLY_ME_KEYS, roleMe: ROLE_ME_KEYS }));
-      await Promise.all(pages.map(p => p.tracker.waitFor(v => v.phase === "discussion", 6500, "제시어 공개 → 첫 토론")));
+      await Promise.all(pages.map(p => p.tracker.waitFor(v => v.phase === "discussion", ANSWER_REVEAL_MS_COPY + 3500, "제시어 공개 → 첫 토론")));
+      const discussionView = ht.last();
+      rec(`${id}/reveal`, "KW10-TIME", `제시어와 답안은 ${ANSWER_REVEAL_MS_COPY / 1000}초 공개 후 첫 토론으로 넘어간다`,
+        revealView.phaseDurationMs === ANSWER_REVEAL_MS_COPY && typeof revealView.phaseEndsAt === "number" &&
+        discussionView.serverNow >= revealView.phaseEndsAt,
+        `공개 ${revealView.phaseDurationMs}ms · 토론 수신 ${discussionView.serverNow - revealView.phaseEndsAt}ms`);
       const presentations = await Promise.all(pages.map(async (p, i) => {
         await waitForPhaseStart(p.page, p.tracker.last());
         await untilGame(p.page, v => v.phase === "discussion", 5000, "첫 토론 UI");

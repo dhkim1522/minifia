@@ -106,7 +106,7 @@ describe("첫날 실험방 HTTP·소켓", () => {
       }
       await settleAll(sockets);
       const reveal = lastViewOf(host);
-      expect(reveal).toMatchObject({ phase: "answerReveal", phaseDurationMs: 3_000 });
+      expect(reveal).toMatchObject({ phase: "answerReveal", phaseDurationMs: 12_000 });
       expect(reveal.day?.keyword?.answer).toEqual(expect.any(String));
       expect(reveal.day?.keyword?.answers?.map(({ seat }) => seat)).toEqual(clockwiseSeats);
       await closePhase(code);

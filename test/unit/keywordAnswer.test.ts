@@ -236,7 +236,7 @@ describe("tick: keyword 마감 훅", () => {
     }
     const reveal = tick(s, s.phaseEndsAt!, () => 0);
     expect(reveal.phase).toBe("answerReveal");
-    expect(reveal.phaseEndsAt).toBe(s.phaseEndsAt! + 3_000);
+    expect(reveal.phaseEndsAt).toBe(s.phaseEndsAt! + 12_000);
     const discussion = tick(reveal, reveal.phaseEndsAt!, () => 0);
     expect(discussion.phase).toBe("discussion");
     expect(discussion.keywordPresentationIndex).toBeUndefined();

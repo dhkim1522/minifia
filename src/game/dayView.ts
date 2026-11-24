@@ -220,7 +220,7 @@ const isNoExecution = (day: NonNullable<RoomView["day"]>): boolean => {
 
 /**
  * 재접속·새로고침으로 answerReveal 중간에 들어온 첫 화면(23-07, UI-SPEC partial 재접속): 정답 큰 글을 남은 시간만 모션 없이 보인다.
- * 남은 시간은 서버 시계끼리의 차(phaseEndsAt - serverNow)라 기기 시계와 무관하고, 정답 길이(3초)를 넘지 않는다 — 처형 없는 첫날의 앞 1.4초(처형 없음)는 되살리지 않는다.
+ * 남은 시간은 서버 시계끼리의 차(phaseEndsAt - serverNow)라 기기 시계와 무관하고, 정답 길이(12초)를 넘지 않는다 — 처형 없는 첫날의 앞 1.4초(처형 없음)는 되살리지 않는다.
  * 단계가 아니거나 정답·마감이 없거나 이미 끝났으면 null. 순수: 시각을 읽지 않는다.
  */
 export function answerStillOf(view: RoomView): { text: string; label: string; ms: number } | null {
@@ -259,7 +259,7 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
       return;
     }
     case "answerReveal": {
-      // 첫날 발표가 끝나면 바로 제시어를 3초 동안 보여 준다. 배포 전에 토론을 지난 판에서만 기존 저녁 알림을 먼저 보여 준다.
+      // 첫날 발표가 끝나면 바로 제시어를 12초 동안 보여 준다. 배포 전에 토론을 지난 판에서만 기존 저녁 알림을 먼저 보여 준다.
       const answer = day.keyword?.answer;
       if (answer === undefined) return;
       let at = 0;

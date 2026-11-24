@@ -35,7 +35,7 @@ interface Opts {
   role?: RoleId;
   ghost?: boolean;
   answer?: boolean;
-  /** 남은 시간(ms). 기본 3000 */
+  /** 남은 시간(ms). 기본 12000 */
   left?: number;
   execution?: boolean;
   noExecution?: "rejected" | "tie" | "noVotes";
@@ -43,12 +43,12 @@ interface Opts {
 
 function makeView(o: Opts = {}): RoomView {
   const phase = o.phase ?? "answerReveal";
-  const left = o.left ?? 3000;
+  const left = o.left ?? 12000;
   return {
     code: "0042",
     phase,
     phaseEndsAt: NOW + left,
-    phaseDurationMs: 3000,
+    phaseDurationMs: 12000,
     serverNow: NOW,
     minPlayers: 4,
     maxPlayers: 8,
@@ -137,35 +137,35 @@ describe("ResultAnnounce label (23-07, P23-20)", () => {
 });
 
 describe("정답 공개 화면 — 큰 글 (23-07, P23-20, D-22)", () => {
-  it("처형 뒤 answerReveal 에 들어오면 0초부터 '제시어' + 키워드가 3초 서고, 3초 뒤 사라진다", () => {
+  it("처형 뒤 answerReveal 에 들어오면 0초부터 '제시어' + 키워드가 12초 서고, 12초 뒤 사라진다", () => {
     const m = mount(makeView({ phase: "execution", execution: true, answer: false }));
     expect(announceEl(m.container)).toBeNull();
     m.show(makeView());
     expect(announceEl(m.container)?.textContent).toBe("제시어 해리포터");
     expect(m.container.querySelector("[data-announce-label]")?.textContent).toBe("제시어");
-    advance(2999);
+    advance(11999);
     expect(announceEl(m.container)).not.toBeNull();
     advance(1);
     expect(announceEl(m.container)).toBeNull();
   });
 
-  it("처형 없는 첫날: '처형 없음' 0~1.4초 다음에 '제시어' 3초 — 겹치지 않는다", () => {
+  it("처형 없는 첫날: '처형 없음' 0~1.4초 다음에 '제시어' 12초 — 겹치지 않는다", () => {
     const m = mount(makeView({ phase: "verdict", answer: false }));
-    m.show(makeView({ noExecution: "rejected", left: 4400 }));
+    m.show(makeView({ noExecution: "rejected", left: 13400 }));
     expect(announceEl(m.container)?.textContent).toBe("처형 없음");
     expect(m.container.querySelector("[data-announce-label]")).toBeNull();
     advance(1399);
     expect(announceEl(m.container)?.textContent).toBe("처형 없음");
     advance(1);
     expect(announceEl(m.container)?.textContent).toBe("제시어 해리포터");
-    advance(3000);
+    advance(12000);
     expect(announceEl(m.container)).toBeNull();
   });
 
   it("정답 공개 → 밤: '처형 없음' 알림이 다시 나오지 않는다(D-22)", () => {
     const m = mount(makeView({ phase: "verdict", answer: false }));
-    m.show(makeView({ noExecution: "rejected", left: 4400 }));
-    advance(4400);
+    m.show(makeView({ noExecution: "rejected", left: 13400 }));
+    advance(13400);
     expect(announceEl(m.container)).toBeNull();
     m.show(makeView({ phase: "night", noExecution: "rejected" }));
     expect(announceEl(m.container)).toBeNull();
@@ -197,6 +197,10 @@ describe("정답 공개 화면 — 큰 글 (23-07, P23-20, D-22)", () => {
     m.show(view);
     const list = m.getByRole("list", { name: "참가자 답안" });
     expect(list.children).toHaveLength(8);
+    expect(list.querySelectorAll(".mf-keyword-review__dot[aria-hidden='true']")).toHaveLength(8);
+    expect(list.querySelectorAll(".mf-keyword-review__name")).toHaveLength(8);
+    expect(list.querySelectorAll("img, svg")).toHaveLength(0);
+    expect(list.querySelectorAll("[data-answer-missing]")).toHaveLength(1);
     expect(list.getAttribute("tabindex")).toBe("0");
     expect(list.lastElementChild?.textContent).toContain("미제출");
     expect(list.textContent).toContain("가나다라마바사아자차카타파하");

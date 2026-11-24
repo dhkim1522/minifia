@@ -167,7 +167,7 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
   // 재즈 바의 밤에는 하단 더 보기에서 유언을 연다. 독립 패널은 기존의 역할별 방식을 사용한다.
   // 채팅 입력줄이 있는 화면(낮·아침)은 깃펜, 산 사람 + 지도 단계에만(유령·로비·역할 확인에는 없다, UI-SPEC 281·286행)
   // 유언 단계에는 입력줄이 잠기고 마지막 유언을 중앙에서 쓴다.
-  // 정답 공개(answerReveal, 23-07 P23-21): 3초 동안 큰 글을 보는 단계라 유언 단계와 같은 잠긴 입력줄을 쓴다(패널 높이 그대로) — 서버도 채팅을 받지 않는다(CHAT_PHASES 미가입).
+  // 정답 공개(answerReveal, 23-07 P23-21): 12초 동안 큰 글을 보는 단계라 유언 단계와 같은 잠긴 입력줄을 쓴다(패널 높이 그대로) — 서버도 채팅을 받지 않는다(CHAT_PHASES 미가입).
   // 깃펜은 그리지 않는다: 서버 MAP_PHASES 에는 answerReveal 이 있어 유언 저장을 받지만 화면은 이 3초에 쓰는 길을 열지 않는다(처형자 조건은 유언 단계에만).
   const defense = view.phase === "defense";
   const answerReveal = view.phase === "answerReveal";

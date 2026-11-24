@@ -63,7 +63,7 @@ describe("첫날 제시어 공개 단계", () => {
   const rejectAll = (room: Awaited<ReturnType<typeof seat>>): Record<number, boolean> =>
     Object.fromEntries(actorsOf(room).map((a) => [a.seat, false]));
 
-  it("마지막 답 발표 → 3초 제시어 공개 → 토론, 첫날 부결 뒤는 다시 공개 없이 밤", async () => {
+  it("마지막 답 발표 → 12초 제시어 공개 → 토론, 첫날 부결 뒤는 다시 공개 없이 밤", async () => {
     const room = await seat(3, 0);
     const socks = [room.host, ...room.guests.map((g) => g.sock)];
     send(room.host, { t: "start" });
@@ -80,7 +80,7 @@ describe("첫날 제시어 공개 단계", () => {
     for (const sock of socks) {
       const view = lastViewOf(sock);
       expect(view.phase).toBe("answerReveal");
-      expect(view.phaseDurationMs).toBe(3000);
+      expect(view.phaseDurationMs).toBe(12000);
       expect(view.day?.keyword).toEqual({ genre: label, answer: word, answers: expect.any(Array) });
       expect(view.day?.noExecution).toBeUndefined();
     }

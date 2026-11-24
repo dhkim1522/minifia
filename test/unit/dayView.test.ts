@@ -817,14 +817,14 @@ describe("정답 공개 알림 시간표 (23-07, D-22, P23-20)", () => {
     expect(ANNOUNCE_NOEXEC_MS).toBe(NO_EXECUTION_MS);
   });
 
-  it("처형이 있었던 첫날: 처형 → 정답 공개는 정답 큰 글만 0초부터 3초, 처형 없음 줄·알림은 없다", () => {
+  it("처형이 있었던 첫날: 처형 → 정답 공개는 정답 큰 글만 0초부터 12초, 처형 없음 줄·알림은 없다", () => {
     const events = dayEvents(exec(), reveal());
     same(events.announces, [{ ...ANSWER, at: 0, ms: ANSWER_REVEAL_MS }]);
     same(events.lines, []);
     same(events.fx, []);
   });
 
-  it("처형 없는 첫날(부결·동점·0표): '처형 없음' 0~1.4초, 이어서 1.4초부터 정답 3초 — 두 큰 글이 겹치지 않는다", () => {
+  it("처형 없는 첫날(부결·동점·0표): '처형 없음' 0~1.4초, 이어서 1.4초부터 정답 12초 — 두 큰 글이 겹치지 않는다", () => {
     for (const [prev, reason] of [
       [verdictView(), "rejected"],
       [nominationOf([[0, 1], [1, 0]]), "tie"],
@@ -876,7 +876,7 @@ describe("정답 공개 알림 시간표 (23-07, D-22, P23-20)", () => {
   it("answerStillOf: 재접속 첫 화면은 서버 시계(phaseEndsAt - serverNow) 남은 시간만, 정답 길이 이내로 — 마감이 없거나 지났거나 정답 단계가 아니면 null", () => {
     const left = (ms: number | null) => ({ ...reveal(), serverNow: 5_000, phaseEndsAt: ms === null ? null : 5_000 + ms }) as RoomView;
     same(answerStillOf(left(1500)), { ...ANSWER, ms: 1500 });
-    same(answerStillOf(left(4400)), { ...ANSWER, ms: ANSWER_REVEAL_MS });
+    same(answerStillOf(left(13400)), { ...ANSWER, ms: ANSWER_REVEAL_MS });
     expect(answerStillOf(left(0))).toBeNull();
     expect(answerStillOf(left(null))).toBeNull();
     expect(answerStillOf(viewOf("night", { day: { keyword: { genre: "영화", answer: "해리포터" } } }))).toBeNull();

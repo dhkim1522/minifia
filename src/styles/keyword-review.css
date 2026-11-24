@@ -1,12 +1,17 @@
-.mf-keyword-review .mf-keyword-review__card { --mf-answer-row: 48px; width: min(100%, 380px); display: flex; gap: 8px; overflow: hidden; padding: 12px; }
+.mf-keyword-review .mf-keyword-review__card { --mf-answer-row: 52px; --mf-answer-list-max: 216px; width: min(100%, 380px); display: flex; gap: 8px; overflow: hidden; padding: 12px; }
 .mf-keyword-review__word { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 11px; border: 1px solid #598a73; background: #223831; border-radius: 8px; text-align: start; }
 .mf-keyword-review__label { font: var(--type-section); color: #a7e0bd; }
 .mf-keyword-review__word .mf-announce__text { color: #e5fae9; font: var(--type-body-strong); animation: none; text-align: end; }
-.mf-keyword-review .mf-keyword-review__answers { flex: 0 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: thin; overscroll-behavior: contain; touch-action: pan-y; pointer-events: auto; margin: 0; padding: 0; list-style: none; max-height: calc(var(--mf-answer-row) * 4.5); text-align: start; }
-.mf-keyword-review__answer { min-height: var(--mf-answer-row); display: grid; grid-template-columns: 24px minmax(0, 1fr); align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--noir-line); font: var(--type-label); }
-.mf-keyword-review__answer > div { min-width: 0; display: flex; flex-direction: column; }
-.mf-keyword-review__order { color: var(--gray-300); text-align: center; }
-.mf-keyword-review__text { color: var(--noir-paper); overflow-wrap: anywhere; }
+.mf-keyword-review .mf-keyword-review__answers { flex: 0 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: thin; overscroll-behavior: contain; touch-action: pan-y; pointer-events: auto; margin: 0; padding: 0; list-style: none; max-height: var(--mf-answer-list-max); text-align: start; }
+.mf-keyword-review__answer { min-height: var(--mf-answer-row); box-sizing: border-box; display: grid; grid-template-columns: 22px minmax(0, 1fr); align-items: start; gap: 5px; padding: 6px 5px; border-bottom: 1px solid #435169; }
+.mf-keyword-review__answer:last-child { border-bottom: 0; }
+.mf-keyword-review__entry { min-width: 0; display: grid; grid-template-columns: 6px minmax(0, 1fr); align-items: start; gap: 2px 6px; }
+.mf-keyword-review__order { color: #9aabbe; text-align: center; font: 400 12px/19px var(--font-ui); }
+.mf-keyword-review__dot { width: 6px; height: 6px; margin-top: 6px; border-radius: 50%; background: #9aabbe; }
+.mf-keyword-review__name, .mf-keyword-review__text { min-width: 0; color: #fff4df; word-break: keep-all; overflow-wrap: anywhere; }
+.mf-keyword-review__name { font: 700 14px/19px var(--font-ui); }
+.mf-keyword-review__text { grid-column: 2; font: 600 16px/22px var(--font-ui); }
+.mf-keyword-review__text[data-answer-missing] { color: #aebdce; font-size: 14px; font-weight: 400; }
 
 .mf-keyword-review .mf-keyword-review__card { width: min(100%, 360px); gap: 8px; }
 .mf-keyword-review__word {

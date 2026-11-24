@@ -1,5 +1,5 @@
 import type { RoomView } from "../../shared/protocol";
-import { PlayerName } from "./PlayerName";
+import { playerNameColor } from "../game/playerIdentity";
 import "../styles/keyword-review.css";
 
 export function KeywordPublicReveal({ view, still }: { view: RoomView; still?: boolean }) {
@@ -18,9 +18,10 @@ export function KeywordPublicReveal({ view, still }: { view: RoomView; still?: b
             {keyword.answers.map(({ order, seat, text }) => (
               <li key={seat} className="mf-keyword-review__answer">
                 <span className="mf-keyword-review__order">{order}</span>
-                <div>
-                  <PlayerName seat={seat}>{view.players.find(p => p.seat === seat)?.nickname ?? `${seat + 1}번 자리`}</PlayerName>
-                  <span className="mf-keyword-review__text">{text ?? "미제출"}</span>
+                <div className="mf-keyword-review__entry">
+                  <span className="mf-keyword-review__dot" aria-hidden="true" style={{ backgroundColor: playerNameColor(seat) }} />
+                  <span className="mf-keyword-review__name">{view.players.find(p => p.seat === seat)?.nickname ?? `${seat + 1}번 자리`}</span>
+                  <span className="mf-keyword-review__text" data-answer-missing={text === null ? "" : undefined}>{text ?? "미제출"}</span>
                 </div>
               </li>
             ))}
