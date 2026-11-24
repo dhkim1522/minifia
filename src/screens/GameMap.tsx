@@ -487,10 +487,10 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
   const canSuspectSpeaker = canSend && !suspect.disabled && speaker !== undefined && suspect.targets.has(speaker.seat);
   const [guideSuspectRequest, setGuideSuspectRequest] = useState<{ id: "answer-suspect" | "hold-suspect"; target: number | undefined }>();
   const [guideSuspectDone, setGuideSuspectDone] = useState<ReadonlySet<string>>(() => new Set());
-  const changeSuspect = (seat: number, id: "answer-suspect" | "hold-suspect") => {
+  const changeSuspect = (seat: number, id?: "answer-suspect" | "hold-suspect") => {
     const result = suspect.change(seat);
     if (result === false) show(SEND_FAIL_TEXT);
-    if (result === true && firstGameGuide) setGuideSuspectRequest({ id, target: view.me.suspectTo === seat ? undefined : seat });
+    if (result === true && firstGameGuide && id !== undefined) setGuideSuspectRequest({ id, target: view.me.suspectTo === seat ? undefined : seat });
   };
   useEffect(() => {
     if (guideSuspectRequest === undefined || view.me.suspectTo !== guideSuspectRequest.target) return;
@@ -971,7 +971,16 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
       {!playtest ? <SceneCurtain view={view} offset={offset} reducedMotion={reducedMotion} {...(killFx !== null ? { holdUntil: killFx.at + KILL_HOLD_MS } : {})} /> : null}
       {!playtest ? <KillFx nonce={killNonce} reducedMotion={reducedMotion} /> : null}
       {view.phase === "answerReveal" && view.day?.n === 1 && view.day.keyword?.answer !== undefined && shownAnnounce?.label === DAY_COPY.answerLabel && !introActive && !moment.active ? (
-        <KeywordPublicReveal view={view} still={shownAnnounce.still} />
+        <KeywordPublicReveal view={view} still={shownAnnounce.still} {...(!timeless && suspect.visible ? {
+          suspect: {
+            canChange: (seat: number) => canSend && layerKind === null && !suspect.disabled && suspect.targets.has(seat),
+            change: (seat: number) => {
+              if (!canSend || layerKind !== null || !suspect.targets.has(seat) || suspect.disabled ||
+                (view.phaseEndsAt !== null && Date.now() + offset >= view.phaseEndsAt)) return;
+              changeSuspect(seat);
+            },
+          },
+        } : {})} />
       ) : moment.active ? (
         willReveal !== null || executionResult !== null ? (
           <PhaseEvent kind="execution" title={willReveal !== null ? "마지막 유언" : "처형 결과"} interactive={false}>

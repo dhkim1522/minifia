@@ -30,3 +30,36 @@
 .mf-keyword-review__word .mf-announce__text { font: var(--type-section); color: var(--noir-ink); text-align: center; }
 .mf-keyword-review__summary { display: flex; align-items: center; justify-content: space-between; color: var(--noir-paper); font: var(--type-label-strong); padding: 0 6px; }
 .mf-phase-event.mf-keyword-review { justify-content: flex-end; padding-bottom: clamp(8px, calc(15dvh - var(--mf-panel-h, 0px)), 96px); }
+
+.mf-keyword-review__answers:has([data-public-suspect]) .mf-keyword-review__answer {
+  grid-template-columns: 22px minmax(0, 1fr) var(--tap-min);
+}
+.mf-btn.mf-keyword-review__suspect {
+  position: relative;
+  isolation: isolate;
+  align-self: center;
+  min-width: var(--tap-min);
+  width: var(--tap-min);
+  min-height: var(--tap-min);
+  padding: 0;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: #ffe3e7;
+}
+/* Draw a smaller surface without reducing the focus or touch target. */
+.mf-btn.mf-keyword-review__suspect::before {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  z-index: -1;
+  pointer-events: none;
+  border: 1px solid #a36071;
+  border-radius: 8px;
+  background: #6b3445;
+}
+.mf-btn.mf-keyword-review__suspect[aria-pressed="true"] { color: var(--gray-50); }
+.mf-btn.mf-keyword-review__suspect[aria-pressed="true"]::before {
+  background: var(--gray-700);
+  border-color: var(--gray-300);
+}

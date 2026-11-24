@@ -1,4 +1,4 @@
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
@@ -199,7 +199,7 @@ describe("정답 공개 화면 — 큰 글 (23-07, P23-20, D-22)", () => {
     expect(list.children).toHaveLength(8);
     expect(list.querySelectorAll(".mf-keyword-review__dot[aria-hidden='true']")).toHaveLength(8);
     expect(list.querySelectorAll(".mf-keyword-review__name")).toHaveLength(8);
-    expect(list.querySelectorAll("img, svg")).toHaveLength(0);
+    expect(list.querySelectorAll(".mf-keyword-review__entry img, .mf-keyword-review__entry svg")).toHaveLength(0);
     expect(list.querySelectorAll("[data-answer-missing]")).toHaveLength(1);
     expect(list.getAttribute("tabindex")).toBe("0");
     expect(list.lastElementChild?.textContent).toContain("미제출");
@@ -207,6 +207,39 @@ describe("정답 공개 화면 — 큰 글 (23-07, P23-20, D-22)", () => {
     expect(m.getByText("8명")).not.toBeNull();
     m.show({ ...view, phase: "discussion" });
     expect(m.queryByRole("list", { name: "참가자 답안" })).toBeNull();
+  });
+
+  it("공개 답안에서는 다른 생존자만 고르고 서버 확인 뒤 표시가 갱신된다", () => {
+    const base = makeView({ role: "citizen" });
+    const answers = base.players.map(({ seat }) => ({ seat, order: seat + 1, text: null }));
+    const view: RoomView = {
+      ...base, map: "bar",
+      players: base.players.map((p) => p.seat === 3 ? { ...p, alive: false } : p),
+      day: { ...base.day!, keyword: { ...base.day!.keyword!, answers } },
+    };
+    const m = mount(view);
+    const buttons = () => [...m.container.querySelectorAll<HTMLButtonElement>("[data-public-suspect]")];
+    const find = (seat: number) => buttons().find(b => b.dataset.publicSuspect === String(seat))!;
+    const send = (connectionMock.current as RoomConnection).send;
+    expect(find(0)).toBeUndefined();
+    expect(find(3).disabled).toBe(true);
+    fireEvent.click(find(1));
+    expect(send).toHaveBeenLastCalledWith({ t: "suspect", target: 1 });
+    expect(find(1).getAttribute("aria-pressed")).toBe("false");
+    m.show({ ...view, me: { ...view.me, suspectTo: 1 } });
+    expect(find(1).getAttribute("aria-pressed")).toBe("true");
+    expect(find(2).disabled).toBe(true);
+    advance(650);
+    fireEvent.click(find(2));
+    expect(send).toHaveBeenLastCalledWith({ t: "suspect", target: 2 });
+    m.show({ ...view, me: { ...view.me, suspectTo: 2 } });
+    expect(find(1).getAttribute("aria-pressed")).toBe("false");
+    expect(find(2).getAttribute("aria-pressed")).toBe("true");
+    advance(650);
+    fireEvent.click(find(2));
+    expect(send).toHaveBeenLastCalledWith({ t: "suspect", target: 2, remove: true });
+    m.show({ ...view, phase: "discussion" });
+    expect(buttons()).toHaveLength(0);
   });
 
   it("정답이 아직 없는 view(answer 키 없음)에는 큰 글이 없다", () => {
