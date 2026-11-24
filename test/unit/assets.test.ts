@@ -204,7 +204,7 @@ describe("미리 받기 목록", () => {
     expect(hrefs).toContain(`/backgrounds/bg_game_morning.webp?v=${ASSET_VERSION}`);
     expect(hrefs).toContain(`/backgrounds/bg_game_day.webp?v=${ASSET_VERSION}`);
     expect(hrefs).toContain(`/backgrounds/bg_game_night.webp?v=${ASSET_VERSION}`);
-    expect(hrefs).toHaveLength(19);
+    expect(hrefs).toHaveLength(20);
     expect(rolePreloadList()).toEqual(rolePreloadList());
   });
 
@@ -228,7 +228,7 @@ describe("미리 받기 목록", () => {
     expect(new Set(hrefs).size).toBe(hrefs.length);
     expect(hrefs.filter((href) => href.startsWith("/stationery/"))).toHaveLength(stationeryFiles.size);
     const css = readFileSync("src/styles/base.css", "utf8");
-    for (const asset of ["role-front", "role-back", "paper", "will-paper", "note"] as const) {
+    for (const asset of ["role-front", "role-back", "paper", "will-paper", "note", "keyword-ivory-note"] as const) {
       const href = stationeryArt(asset);
       expect(hrefs).toContain(href);
       expect(css).toContain(`--stationery-${asset}: url("${href}")`);

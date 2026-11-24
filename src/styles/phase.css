@@ -195,3 +195,20 @@
   height: 62px;
   padding: 8px 10px;
 }
+
+/* 첫날 단서 입력: 역할과 무관하게 실제 입력란과 원래 안내 타깃을 유지한다. */
+.mf-keyword__card {
+  width: min(100%, 350px);
+  max-width: 350px;
+  min-height: 201px;
+  padding: 24px clamp(18px, 9vw, 35px) 16px;
+  gap: 11px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--stationery-keyword-ivory-note) center / 106% 119% no-repeat;
+}
+.mf-keyword__card::before, .mf-keyword__genre::after { display: none; }
+.mf-keyword__card:not(.is-compact) .mf-keyword__word { font-size: 26px; line-height: 32px; }
+.mf-keyword__card:not(.is-compact) .mf-keyword__answer { margin-top: 8px; }
+.mf-keyword__card.is-compact { min-height: 0; background-size: 107% 122%; }

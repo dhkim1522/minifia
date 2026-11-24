@@ -158,7 +158,7 @@ test("KW9: 새로고침 시 발표를 반복하지 않고 기록에서 답과 �
 });
 
 test("KW10: 공개 제시어가 같고 제목보다 작으며 밤에 남지 않는다", () => {
-  const announcement = { label: "제시어", text: "기생충", titlePx: 20, textPx: 16 };
+  const announcement = { label: "제시어", text: "기생충", titlePx: 14, textPx: 20 };
   const ok = { pages: [{ who: "시민", ...announcement }, { who: "마피아", ...announcement }], answer: "기생충", hidden: [{ who: "시민", hidden: true }, { who: "마피아", hidden: true }] };
   assert.equal(kw10Reveal(ok).ok, true);
   assert.equal(kw10Reveal({ ...ok, pages: [ok.pages[0], { ...ok.pages[1], text: "???" }] }).ok, false);

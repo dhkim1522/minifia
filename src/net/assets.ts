@@ -35,7 +35,7 @@ export const ENTRY_ART_VERSION = "home-table-3";
 export const STATIONERY_VERSION = "stationery-1";
 export const PARTICIPANT_PORTRAIT_VERSION = "bust-1";
 
-type StationeryAsset = "paper" | "will-paper" | "seal" | "role-front" | "role-back" | "note" | `journal-${JournalRole}`;
+type StationeryAsset = "paper" | "will-paper" | "seal" | "role-front" | "role-back" | "note" | "keyword-ivory-note" | `journal-${JournalRole}`;
 
 export function stationeryArt(asset: StationeryAsset): string {
   return `/stationery/${asset}.webp?v=${STATIONERY_VERSION}`;
@@ -146,7 +146,7 @@ export function rolePreloadList(animal?: AnimalId): PreloadItem[] {
     { href: journalArt(role, "cover").src },
     { href: journalArt(role, "icon").src },
   ]);
-  const stationery = (["role-front", "role-back", "paper", "will-paper", "seal", "note"] as const)
+  const stationery = (["role-front", "role-back", "paper", "will-paper", "seal", "note", "keyword-ivory-note"] as const)
     .map((asset) => ({ href: stationeryArt(asset) }));
   return [
     ...arts,

@@ -1,3 +1,4 @@
+import { KeywordPublicReveal } from "../components/KeywordPublicReveal";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps } from "react";
 import type { ReactNode } from "react";
@@ -969,7 +970,9 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
       {/* 장면 전환 막(09-20): 결과 알림보다 앞(DOM 순서)에 두어 막을 붙잡는 동안 알림이 막 위로 올라올 수 있게 한다. 덮기는 공개 마감만의 함수다 */}
       {!playtest ? <SceneCurtain view={view} offset={offset} reducedMotion={reducedMotion} {...(killFx !== null ? { holdUntil: killFx.at + KILL_HOLD_MS } : {})} /> : null}
       {!playtest ? <KillFx nonce={killNonce} reducedMotion={reducedMotion} /> : null}
-      {moment.active ? (
+      {view.phase === "answerReveal" && view.day?.n === 1 && view.day.keyword?.answer !== undefined && shownAnnounce?.label === DAY_COPY.answerLabel && !introActive && !moment.active ? (
+        <KeywordPublicReveal view={view} still={shownAnnounce.still} />
+      ) : moment.active ? (
         willReveal !== null || executionResult !== null ? (
           <PhaseEvent kind="execution" title={willReveal !== null ? "마지막 유언" : "처형 결과"} interactive={false}>
             {willReveal !== null ? <QuoteCard text={willReveal.text} visible still={willReveal.still} will announce={false} /> : <ResultAnnounce text={executionResult?.text ?? null} embedded />}

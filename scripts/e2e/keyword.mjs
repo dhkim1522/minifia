@@ -196,7 +196,7 @@ export function kw10Reveal(m) {
   for (const p of m.pages) {
     if (p.label !== "제시어") bad.push(`${p.who} 제목 '${p.label}'`);
     if (p.text !== m.answer) bad.push(`${p.who} 본문 '${p.text}' ≠ 키워드`);
-    if (p.titlePx !== 20 || p.textPx !== 16) bad.push(`${p.who} 제목 ${p.titlePx}px, 본문 ${p.textPx}px`);
+    if (p.titlePx !== 14 || p.textPx !== 20) bad.push(`${p.who} 제목 ${p.titlePx}px, 본문 ${p.textPx}px`);
   }
   for (const p of m.hidden) {
     if (!p.hidden) bad.push(`${p.who} 밤에 첫날 답이나 제시어가 남음`);
@@ -602,8 +602,8 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
         suspectCopyMatches = readyCopy?.trim() === "의심!" && markedCopy?.trim() === "의심 해제";
         const [neutralRed, neutralGreen, neutralBlue] = markedColor.match(/\d+/g)?.map(Number) ?? [];
         const enabled = await observer.page.locator('[data-answer-suspect][aria-pressed="true"]:enabled').waitFor({ timeout: 1200 }).then(() => true, () => false);
-        rec(`${id}/answers`, "KW8-COLOR", "붙이기는 남색 바탕에 적색 테두리와 글자, 해제는 누를 수 있는 중립색이다",
-          readyColor.background === "rgb(16, 25, 39)" && readyColor.border === "rgb(242, 85, 106)" && readyColor.text === "rgb(242, 85, 106)"
+        rec(`${id}/answers`, "KW8-COLOR", "붙이기는 절제한 버건디 바탕과 밝은 글자, 해제는 누를 수 있는 중립색이다",
+          readyColor.background === "rgb(107, 52, 69)" && readyColor.border === "rgb(163, 96, 113)" && readyColor.text === "rgb(255, 227, 231)"
           && Math.max(neutralRed, neutralGreen, neutralBlue) - Math.min(neutralRed, neutralGreen, neutralBlue) <= 24 && enabled,
           JSON.stringify({ readyColor, markedColor }));
         markedSeat = current.seat;

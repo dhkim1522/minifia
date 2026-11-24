@@ -7,6 +7,7 @@
   --stationery-role-front: url("/stationery/role-front.webp?v=stationery-1");
   --stationery-role-back: url("/stationery/role-back.webp?v=stationery-1");
   --stationery-note: url("/stationery/note.webp?v=stationery-1");
+  --stationery-keyword-ivory-note: url("/stationery/keyword-ivory-note.webp?v=stationery-1");
 }
 
 *,

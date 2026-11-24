@@ -74,3 +74,39 @@
   background: transparent;
   box-shadow: none;
 }
+
+/* Same approved ivory as the writing card; retain the live turn, portrait and action. */
+.mf-answer-presentation {
+  width: min(100%, 352px);
+  min-height: 159px;
+  padding: 17px 22px 14px;
+  gap: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--noir-ink);
+  background: var(--stationery-keyword-ivory-note) center / 106% 119% no-repeat;
+}
+.mf-answer-presentation__speaker {
+  padding-bottom: 6px;
+  border-bottom: 1px solid #b99c6e;
+}
+.mf-answer-presentation__order { color: #594b41; }
+.mf-answer-presentation__text { min-block-size: 30px; text-align: start; margin-top: 6px; }
+.mf-answer-presentation__text[data-answer-none] { color: #615144; }
+.mf-btn.mf-answer-presentation__suspect {
+  color: #ffe3e7;
+  border-color: #a36071;
+  background: #6b3445;
+}
+.mf-btn.mf-answer-presentation__suspect[aria-pressed="false"]:enabled:is(:active, [data-answer-suspect-touch]) {
+  background: #812f4a;
+}
+.mf-game__panel[data-answer-panel] > .mf-answer-presentation {
+  position: absolute;
+  inset-inline: 0;
+  bottom: max(56px, calc(50dvh - 65px));
+  margin-inline: auto;
+  width: min(calc(100% - 32px), 352px);
+}
+.mf-answer-presentation [data-player-name] { color: var(--noir-ink) !important; }

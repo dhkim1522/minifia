@@ -184,6 +184,27 @@ describe("정답 공개 화면 — 큰 글 (23-07, P23-20, D-22)", () => {
     expect(announceEl(container)).toBeNull();
   });
 
+  it("정답 공개 때 8개의 긴 참가자 답을 그리지만 발표 단계나 이후 토론에는 공개 패널을 남기지 않는다", () => {
+    const base = makeView({ role: "mafia" });
+    const answers = Array.from({ length: 8 }, (_, seat) => ({ seat, order: seat + 1, text: seat === 7 ? null : "가나다라마바사아자차카타파하" }));
+    const view: RoomView = {
+      ...base,
+      players: answers.map(({ seat }) => ({ ...player(seat, false), nickname: `아주긴닉네임${seat}` })),
+      day: { ...base.day!, keyword: { ...base.day!.keyword!, answers } },
+    };
+    const m = mount({ ...view, phase: "dayAnnounce" });
+    expect(m.queryByRole("list", { name: "참가자 답안" })).toBeNull();
+    m.show(view);
+    const list = m.getByRole("list", { name: "참가자 답안" });
+    expect(list.children).toHaveLength(8);
+    expect(list.getAttribute("tabindex")).toBe("0");
+    expect(list.lastElementChild?.textContent).toContain("미제출");
+    expect(list.textContent).toContain("가나다라마바사아자차카타파하");
+    expect(m.getByText("8명")).not.toBeNull();
+    m.show({ ...view, phase: "discussion" });
+    expect(m.queryByRole("list", { name: "참가자 답안" })).toBeNull();
+  });
+
   it("정답이 아직 없는 view(answer 키 없음)에는 큰 글이 없다", () => {
     const { container } = mount(makeView({ answer: false }));
     expect(announceEl(container)).toBeNull();
