@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { NAMETAG_H } from "../../src/world/camera";
-import { rankTags } from "../../src/world/tagOrder";
+import { rankTags, spaceCompactTags } from "../../src/world/tagOrder";
 import type { TagBox } from "../../src/world/tagOrder";
 
 // 06-22 (G-06-4): 이름표 순위·맨 앞 겹침 판정. 순수 함수 — 내 이름표 맨 위, 나머지는 발 y(큰 쪽이 위)·seat(큰 쪽이 위).
@@ -157,5 +157,29 @@ describe("rankTags 유령 이름표 (18.1 C-3)", () => {
     const r = rankTags([box(0, { foot: 500, ghost: true }), box(1, { foot: 100, lead: true })]);
     expect(zOf(r, 1)).toBeGreaterThanOrEqual(10);
     expect(zOf(r, 1)).toBeGreaterThan(zOf(r, 0));
+  });
+});
+
+describe("작은 화면 고정 좌석 이름표", () => {
+  it("320px 화면의 8명 긴 이름을 가리지 않되 각 좌석의 x는 유지한다", () => {
+    const input = Array.from({ length: 8 }, (_, seat) => box(seat, {
+      x: 62 + (seat % 2) * 173 + 12 * Math.floor((seat % 4) / 2),
+      bottom: seat < 4 ? 140 : 226,
+      w: 112,
+      me: seat === 0,
+    }));
+    expect(rankTags(input).some(tag => tag.front)).toBe(true);
+    const result = spaceCompactTags(input, 112, 255);
+    expect(rankTags(result).every(tag => !tag.front)).toBe(true);
+    expect(result.map(tag => tag.x)).toEqual(input.map(tag => tag.x));
+    expect(result[0]).toBe(input[0]);
+    expect(result.every(tag => tag.bottom >= 112 && tag.bottom <= 255)).toBe(true);
+  });
+
+  it("여유가 없거나 이미 겹치지 않으면 원래 좌표를 유지한다", () => {
+    const cramped = [box(0), box(1)];
+    expect(spaceCompactTags(cramped, 199, 201)).toEqual(cramped);
+    const separated = [box(0), box(1, { x: 240 })];
+    expect(spaceCompactTags(separated, 100, 300)).toEqual(separated);
   });
 });

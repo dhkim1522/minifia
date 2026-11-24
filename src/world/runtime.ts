@@ -29,7 +29,7 @@ import { EXEC_END_OPACITY, executionFade, GHOST_OPACITY, GHOST_SPRITE, ghostFloa
 import { easeInOut, pinAt, pinLevel, pinLights } from "./pinPlan";
 import type { SceneLook } from "./presence";
 import { initialMapStatus, inputBlocked, mapStatusReducer, shouldRecreate } from "./status";
-import { rankTags } from "./tagOrder";
+import { rankTags, spaceCompactTags } from "./tagOrder";
 import type { TagBox } from "./tagOrder";
 import type { MapStatusEvent, MapStatusState } from "./status";
 import type { LightingPhase, RendererStatusEvent } from "./renderer";
@@ -1640,7 +1640,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   }
 
   /**
-   * 이름표: 머리 꼭대기 투영 좌표를 장치 픽셀에 반올림해 놓는다(밀지 않는다). 내 이름표가 맨 위, 나머지는 발끝 화면 y 가
+   * 이름표: 투영 좌표를 장치 픽셀에 반올림하고, 작은 화면의 고정 좌석만 겹치면 가까운 세로 여백을 쓴다. 내 이름표가 맨 위, 나머지는 발끝 화면 y 가
    * 큰 쪽이 위이고, 다른 이름표와 겹친 것 가운데 맨 앞 하나에만 래퍼 data-front="true" 를 붙인다(면이 overlay-ink-strong).
    */
   function writeTags(
@@ -1659,6 +1659,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       live.push(a);
     }
     let boxes: TagBox[] = [];
+    const compactSeats = new Set<number>();
     let tableCenterX: number | undefined;
     for (const a of live) {
       const tag = a.tag;
@@ -1693,11 +1694,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       const bottom = snap(framed
         ? Math.min(stage.bottom - 11, Math.max(stage.top + 45, anchor.sy - NAMETAG_GAP))
         : anchor.sy - NAMETAG_GAP);
-      const style = `translate(${x}px, ${bottom}px) translate(-50%, -100%)`;
-      if (style !== a.tagStyle) {
-        a.tagStyle = style;
-        tag.style.transform = style;
-      }
+      if (compactFixed && tableMode === undefined && framed && a.barSeat !== undefined) compactSeats.add(a.seat);
       if (tag.style.opacity !== a.tagAlpha) tag.style.opacity = a.tagAlpha;
       boxes.push({ seat: a.seat, me: a.seat === mine, ghost: a.ghost, lead: tag.hasAttribute("data-lead"), turn: tag.hasAttribute("data-turn"), foot: feet.sy, x, bottom, w });
       // 발밑 고리: 이름표(WorldStage)가 data-ring-kind 로 알린 종류를 캐릭터에 옮긴다(바뀔 때만)
@@ -1705,6 +1702,22 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       setActorRing(a, kind);
     }
     const bySeat = new Map(live.map((a) => [a.seat, a]));
+    if (compactSeats.size > 1 && width <= 430) {
+      const spaced = spaceCompactTags(
+        boxes.filter(box => compactSeats.has(box.seat)), snap(stage.top + 45), snap(stage.bottom - 11),
+      );
+      const adjusted = new Map(spaced.map(box => [box.seat, box]));
+      boxes = boxes.map(box => adjusted.get(box.seat) ?? box);
+    }
+    for (const { seat, x, bottom } of boxes) {
+      const actor = bySeat.get(seat);
+      if (!actor?.tag) continue;
+      const style = `translate(${x}px, ${bottom}px) translate(-50%, -100%)`;
+      if (style !== actor.tagStyle) {
+        actor.tagStyle = style;
+        actor.tag.style.transform = style;
+      }
+    }
     if (tableMode === "eye") {
       const focus = look?.table?.focus;
       const priority = (box: TagBox): number => box.seat === focus ? 0 : box.seat === speaker || box.turn ? 1 : 2;

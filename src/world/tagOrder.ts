@@ -52,3 +52,29 @@ export function rankTags(boxes: readonly TagBox[], h: number = NAMETAG_H): TagRa
     return { seat: b.seat, z: mine, front: touching && above };
   });
 }
+
+/** Give cramped fixed seats a nearby vertical lane while keeping their horizontal association. */
+export function spaceCompactTags(
+  boxes: readonly TagBox[], minBottom: number, maxBottom: number,
+): TagBox[] {
+  const gap = 4;
+  const step = NAMETAG_H + gap;
+  const placed: TagBox[] = [];
+  const bySeat = new Map<number, TagBox>();
+  const order = [...boxes].sort((a, b) => Number(b.me) - Number(a.me)
+    || Number(Boolean(b.lead || b.turn)) - Number(Boolean(a.lead || a.turn))
+    || b.foot - a.foot || a.seat - b.seat);
+  for (const box of order) {
+    const neighbors = placed.filter(other => Math.abs(other.x - box.x) < (other.w + box.w) / 2 + gap);
+    // Keep the closest available lane; moving down first on a tie avoids covering a face above.
+    const candidates = [box.bottom, ...neighbors.flatMap(other => [other.bottom + step, other.bottom - step])];
+    candidates.sort((a, b) => Math.abs(a - box.bottom) - Math.abs(b - box.bottom) || b - a);
+    const bottom = candidates.find(y => y >= minBottom && y <= maxBottom
+      && Math.abs(y - box.bottom) <= 2 * step
+      && neighbors.every(other => Math.abs(other.bottom - y) >= step)) ?? box.bottom;
+    const next = bottom === box.bottom ? box : { ...box, bottom };
+    bySeat.set(box.seat, next);
+    placed.push(next);
+  }
+  return boxes.map(box => bySeat.get(box.seat) ?? box);
+}
