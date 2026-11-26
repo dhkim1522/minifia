@@ -7,6 +7,7 @@ import { isAlive } from "../../shared/game/alive";
 import { BAR_SEATS_FX, barChairAssignment, STAGE_SPOT, UNIT } from "../../shared/game/map";
 import type { MapId, PhaseId, RoomView } from "../../shared/protocol";
 import { GHOST_FADE_END_MS, GHOST_RISE_MS, pointsTally } from "../game/dayView";
+import { keywordPresentationOf } from "../game/keywordView";
 import { pointSeatsOf, revealPoints, showdownStageOf } from "../game/showdownView";
 import { suspectStacks } from "../game/suspectView";
 import { ZOOM_IN_MS } from "../game/verdictMoment";
@@ -56,6 +57,10 @@ export interface SceneLook {
   spectator?: true;
   /** 재즈 바 착석 화면과 공개 채팅에서 발생한 짧은 시선 신호. */
   table?: { mode: "eye" | "wide"; centerTable?: boolean; focus?: number; focusAt?: number; voice?: { seat: number; at: number } };
+  /** 작은 화면의 원탁 토론에서 인접한 이름표를 위로 나눠 놓는다. */
+  spreadTableTags?: true;
+  /** 답안 발표 중 참가자 패널이 열려도 발표자의 얼굴을 위쪽 공간에 담는다. */
+  frameAnswerSpeaker?: true;
   /** 밤에 그리는 공개 좌석 배치. 실제 이동 구간과 별개다. */
   nightTable?: Readonly<Record<number, NightTableChair>>;
   lighting: LightingStage;
@@ -231,6 +236,8 @@ export function sceneLook(view: RoomView, opts: { stageH: number; fading?: Reado
   return {
     camera: cameraModeOf(view, opts.stageH, opts.verdictZoom !== undefined ? { verdictZoom: opts.verdictZoom } : {}),
     ...(spectator === undefined ? {} : { spectator: true }),
+    ...(view.map === "bar" && view.phase === "discussion" ? { spreadTableTags: true } : {}),
+    ...(view.map === "bar" && keywordPresentationOf(view) !== undefined ? { frameAnswerSpeaker: true } : {}),
     lighting: lightingFor(view),
     tension: tension.level,
     ...(tension.focus !== undefined ? { focusSeat: tension.focus } : {}),

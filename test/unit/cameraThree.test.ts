@@ -51,6 +51,23 @@ describe("재즈 바 착석 카메라", () => {
     }
   });
 
+  it("답안 카드와 참가자 탭이 열린 짧은 무대에서 옆자리 얼굴을 화면 위쪽에 담는다", () => {
+    const camera = createTableCamera();
+    const { w, h } = { w: 360, h: 640 };
+    const top = 62;
+    const bottom = 192;
+    const eye = tableEyeAt({ x: 0, z: 2.04 });
+    const head = { x: 1.44, y: 2.10, z: 1.44 };
+    const face = tableAim(eye, { ...head, y: 1.11 });
+    const horizontalFov = 86 * Math.PI / 180;
+    const offsetY = stageOffsetY(h, top, bottom);
+    const pitch = Math.max(face.pitch, tableHeadPitch(eye, head, w, (bottom - top) / 2, horizontalFov));
+    configureTableCamera(camera, eyeTableCamera(eye, face.yaw, pitch, horizontalFov), { w, h }, offsetY);
+    const screenY = (y: number) => (1 - new Vector3(head.x, y, head.z).project(camera).y) * h / 2;
+    expect(screenY(head.y)).toBeGreaterThan(top);
+    expect(screenY(1.42)).toBeLessThan(bottom);
+  });
+
   it("어느 의자에서도 시선 투영과 탭 방향이 일치하고 카메라 뒤는 프러스텀에서 빠진다", () => {
     const camera = createTableCamera();
     const ray = new Raycaster();

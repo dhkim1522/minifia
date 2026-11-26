@@ -17,11 +17,18 @@ const CLUE_SEND: FirstGameGuideStep = { ...CLUE_INPUT, target: "[data-answer-sen
 const ANSWER_SUSPECT: FirstGameGuideStep = {
   id: "answer-suspect", title: "답안에 의심 표시", text: "발표자의 답이 의심스러우면 눌러 보세요.",
   target: "[data-answer-suspect]:not([aria-pressed='true'])", cardBoundary: "[data-answer-presentation]",
+  inlineWhenShort: ".mf-answer-presentation__action", pointFromSide: true,
 };
 const HOLD_SUSPECT: FirstGameGuideStep = {
   id: "hold-suspect", title: "의심 표시", text: "의심 가는 상대의 카드를 꾹 눌렀다 떼면 의심 고깔을 씌울 수 있어요.",
   target: "[data-dock-pane='people'] [data-table-controls]:has([data-suspect-holdable])",
   cardBoundary: "[data-dock-pane='people']", hold: true, group: true,
+};
+const HOLD_SUSPECT_TAB: FirstGameGuideStep = {
+  id: "hold-suspect-tab", title: "의심 표시", text: "참가자를 열어 의심할 상대를 찾아요.",
+  target: "[data-dock-tab='people'][aria-expanded='false']",
+  completed: "[data-dock-pane='people']",
+  cardBoundary: "[data-table-dock]",
 };
 const VERDICT: FirstGameGuideStep = {
   id: "verdict", title: "찬반 투표", text: "지목 투표를 진행할지 골라 주세요.",
@@ -81,6 +88,9 @@ export function firstGameGuideSteps(view: RoomView, options: {
     }
   }
   if (options.ghostChat) steps.push(GHOST_INPUT, GHOST_CHAT);
-  if (options.holdSuspect) steps.push(HOLD_SUSPECT);
+  if (options.holdSuspect) {
+    steps.push(HOLD_SUSPECT);
+    if (view.day?.n === 1) steps.push(HOLD_SUSPECT_TAB);
+  }
   return steps;
 }

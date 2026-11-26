@@ -142,6 +142,7 @@ interface GameMapProps {
   /** 헤더의 [역할 카드] 아이콘 버튼 재료: 안 읽은 일지가 있는가와 여는 동작 */
   roleCard?: { unread: boolean; onOpen: () => void };
   headerAction?: ReactNode;
+  onOpenKeywordRecords?: (opener: HTMLButtonElement) => void;
   /** 재즈 바의 착석·역할·라이어 화면을 같은 무대 위에 그린다. */
   opening?: ReactNode;
   firstGameGuide?: FirstGameGuideSession | undefined;
@@ -220,7 +221,7 @@ function TurnBlock({ view, offset, line, compact, reducedMotion }: { view: RoomV
 // 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내 + 시간 링 + [역할 카드]), [테스트], 결과 알림, 아래 패널을 얹는다.
 // 낮 시작·낮 토론·찬반·지목·유언·처형이 이 화면 하나를 같은 장면 키로 그려 단계가 바뀌어도 맵이 다시 만들어지지 않는다.
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)·알림 글자는 React 텍스트 노드로만 그린다.
-export function GameMap({ view, store, chat, send, canSend: connected = true, offset = 0, roleCard, headerAction, opening, firstGameGuide, pauseGuide = false, introAt, ending, tod = true, panelless, camera, testButton, announce = null, deny, fading, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onLeave, bottomExtra = 0, timeless = false }: GameMapProps) {
+export function GameMap({ view, store, chat, send, canSend: connected = true, offset = 0, roleCard, headerAction, onOpenKeywordRecords, opening, firstGameGuide, pauseGuide = false, introAt, ending, tod = true, panelless, camera, testButton, announce = null, deny, fading, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onLeave, bottomExtra = 0, timeless = false }: GameMapProps) {
   const introActive = introAt !== undefined;
   const canSend = connected && !introActive;
   const toast = useTopToast();
@@ -896,6 +897,13 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
           extra={(
             <>
               {!introActive ? <PhaseSkip view={headerView} offset={offset} canSend={canSend} send={send} rejected={rejects} tutorial={timeless} /> : null}
+              {!introActive && view.phase === "discussion" && view.day?.n === 1 && view.day.keyword?.answer !== undefined &&
+                view.me.role !== undefined && onOpenKeywordRecords ? (
+                <button type="button" className="mf-btn mf-btn--compact mf-btn--secondary mf-keyword-records-open"
+                  data-keyword-records-open="" aria-haspopup="dialog" onClick={(event) => onOpenKeywordRecords(event.currentTarget)}>
+                  답과 의심
+                </button>
+              ) : null}
               {testButton ? <div className="mf-game__test">{testButton}</div> : null}
               {headerAction ?? (roleCard ? <RoleCardButton iconOnly unread={roleCard.unread} onOpen={roleCard.onOpen} /> : null)}
             </>

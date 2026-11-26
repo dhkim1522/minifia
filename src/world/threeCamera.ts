@@ -16,7 +16,7 @@ export function createTableCamera(): PerspectiveCamera {
 export function configureTableCamera(
   camera: PerspectiveCamera, view: TableCamera, { w, h }: { w: number; h: number }, offsetY: number,
 ): void {
-  const horizontal = view.mode === "wide" ? 47 * Math.PI / 180 : TABLE_EYE_FOV;
+  const horizontal = view.mode === "wide" ? 47 * Math.PI / 180 : view.horizontalFov ?? TABLE_EYE_FOV;
   camera.aspect = w / h;
   camera.fov = 2 * Math.atan(Math.tan(horizontal / 2) / camera.aspect) * 180 / Math.PI;
   camera.position.set(view.position.x, view.position.y, view.position.z);

@@ -333,6 +333,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   const [gameMenu, setGameMenu] = useState<"menu" | "leave" | null>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
   const returnToMenu = useRef(false);
+  const recordsOpener = useRef<HTMLButtonElement | null>(null);
   const [seenFront, setSeenFront] = useState(false);
   const onSeenFront = useCallback(() => setSeenFront(true), []);
 
@@ -395,9 +396,11 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   const menuAvailable = shown !== null && (inGame || shown.phase === "lobby" || shown.phase === "ended" || shown.phase === "assigning") && !shown.resting && status !== "replaced" && status !== "failed";
   useEffect(() => {
     if (!menuAvailable && gameMenu !== null) setGameMenu(null);
-    if (gameMenu !== null || roleCard.open || !returnToMenu.current) return;
+    if (gameMenu !== null || roleCard.open || (!returnToMenu.current && recordsOpener.current === null)) return;
     returnToMenu.current = false;
-    const target = menuButton.current;
+    const opener = recordsOpener.current;
+    recordsOpener.current = null;
+    const target = opener?.isConnected ? opener : menuButton.current;
     target?.focus({ preventScroll: true });
   }, [gameMenu, menuAvailable, roleCard.open]);
   const playtestHeader = shown?.playtest === true && (MAP_PHASES.has(shown.phase) || shown.phase === "roleReveal" || shown.phase === "keyword");
@@ -610,6 +613,10 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
             store={store}
             chat={chat}
             headerAction={menuAction}
+            onOpenKeywordRecords={(opener) => {
+              recordsOpener.current = opener;
+              setRoleCard({ open: true, tab: "records" });
+            }}
             opening={opening}
             firstGameGuide={firstGameGuide}
             pauseGuide={gameMenu !== null || roleCard.open || testOpen}

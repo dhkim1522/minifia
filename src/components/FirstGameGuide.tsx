@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { RefObject } from "react";
+import { createPortal } from "react-dom";
 import type { FirstGameGuideSession } from "../net/useFirstGameGuide";
 import "../styles/first-game-guide.css";
 
@@ -13,6 +14,8 @@ export interface FirstGameGuideStep {
   group?: boolean;
   hold?: boolean;
   preferBelow?: boolean;
+  inlineWhenShort?: string;
+  pointFromSide?: boolean;
 }
 
 interface Placement {
@@ -26,6 +29,7 @@ interface Placement {
   pointerLeft: number;
   below: boolean;
   fit: "full" | "text" | "ring";
+  inlineHost: HTMLElement | null;
 }
 
 function visibleTarget(root: HTMLElement, selector: string): HTMLElement | undefined {
@@ -42,7 +46,8 @@ function visibleTarget(root: HTMLElement, selector: string): HTMLElement | undef
 function locate(root: HTMLElement, target: HTMLElement, step: FirstGameGuideStep, cardHeight: number): Placement {
   const frame = root.getBoundingClientRect();
   const rect = target.getBoundingClientRect();
-  const boundary = (step.cardBoundary === undefined ? null : target.closest(step.cardBoundary))?.getBoundingClientRect() ?? rect;
+  const boundaryElement = step.cardBoundary === undefined ? null : target.closest(step.cardBoundary);
+  const boundary = boundaryElement?.getBoundingClientRect() ?? rect;
   const viewport = window.visualViewport;
   const safeTop = Math.max(0, (viewport?.offsetTop ?? 0) - frame.top) + 64;
   const visibleBottom = Math.min(frame.height, (viewport?.offsetTop ?? 0) + (viewport?.height ?? window.innerHeight) - frame.top);
@@ -60,14 +65,17 @@ function locate(root: HTMLElement, target: HTMLElement, step: FirstGameGuideStep
   const belowAnchor = boundary.bottom - frame.top + 2;
   const above = aboveAnchor - safeTop;
   const belowSpace = visibleBottom - belowAnchor;
+  const inlineHost = step.inlineWhenShort !== undefined && above < 180
+    ? boundaryElement?.querySelector<HTMLElement>(step.inlineWhenShort) ?? null
+    : null;
   const fullGap = step.cardBoundary === undefined ? 32 : 8;
   const fullSize = cardHeight + fullGap + 4;
   const below = (step.preferBelow === true && belowSpace >= fullSize) || (above < fullSize && belowSpace > above);
   const space = below ? belowSpace : above;
-  const fit = space >= fullSize ? "full" : space >= cardHeight + 8 ? "text" : "ring";
+  const fit = inlineHost !== null || space >= fullSize ? "full" : space >= cardHeight + 8 ? "text" : "ring";
   const gap = fit === "full" ? fullGap : 4;
   const cardAnchor = below ? belowAnchor + gap : aboveAnchor - gap;
-  return { step, left, top, width, height, cardLeft, cardAnchor, pointerLeft: Math.min(Math.max(16, pointer), frame.width - 16), below, fit };
+  return { step, left, top, width, height, cardLeft, cardAnchor, pointerLeft: Math.min(Math.max(16, pointer), frame.width - 16), below, fit, inlineHost };
 }
 
 /** 정보만 덧그린다. 버튼의 입력, 포커스, 카메라와 서버 단계·시간은 기존 화면이 관리한다. */
@@ -125,7 +133,8 @@ export function FirstGameGuide({ rootRef, session, scope, steps }: {
         if (next.fit !== "ring") session.markSeen(step.id);
         setPlacement((old) => old?.scope === scope && old.step === step && old.left === next.left && old.top === next.top &&
           old.width === next.width && old.height === next.height && old.cardLeft === next.cardLeft && old.cardAnchor === next.cardAnchor &&
-          old.pointerLeft === next.pointerLeft && old.below === next.below && old.fit === next.fit ? old : { ...next, scope });
+          old.pointerLeft === next.pointerLeft && old.below === next.below && old.fit === next.fit &&
+          old.inlineHost === next.inlineHost ? old : { ...next, scope });
         return;
       }
       if (watched !== undefined) resize?.unobserve(watched);
@@ -163,18 +172,19 @@ export function FirstGameGuide({ rootRef, session, scope, steps }: {
   }, [rootRef, session, scope, steps, descriptionId]);
 
   if (placement === null || placement.scope !== scope || !steps.includes(placement.step)) return null;
-  const { step, left, top, width, height, cardLeft, cardAnchor, pointerLeft, below, fit } = placement;
+  const { step, left, top, width, height, cardLeft, cardAnchor, pointerLeft, below, fit, inlineHost } = placement;
   return (
     <div className="mf-first-guide" data-first-game-guide={step.id} data-guide-placement={below ? "below" : "above"} data-guide-fit={fit}>
       <div className="mf-first-guide__ring" aria-hidden="true" style={{ left, top, width, height }} />
-      <span key={`${step.id}:${step.target}`} className="mf-first-guide__hand" data-guide-hold={step.hold ? "" : undefined}
-        aria-hidden="true" style={{ left: pointerLeft, top: below ? top + height + 1 : top - 1 }}>
-        {below ? "👆" : "👇"}
-      </span>
-      <div ref={cardRef} id={descriptionId} className="mf-first-guide__info" role="status" style={{ left: cardLeft, top: cardAnchor }}>
+      {inlineHost === null ? <span key={`${step.id}:${step.target}`} className="mf-first-guide__hand" data-guide-hold={step.hold ? "" : undefined}
+        data-guide-side={step.pointFromSide ? "" : undefined} aria-hidden="true"
+        style={step.pointFromSide ? { left: left + width + 3, top: top + height / 2 } : { left: pointerLeft, top: below ? top + height + 1 : top - 1 }}>
+        {step.pointFromSide ? "👈" : below ? "👆" : "👇"}
+      </span> : null}
+      {inlineHost === null ? <div ref={cardRef} id={descriptionId} className="mf-first-guide__info" role="status" style={{ left: cardLeft, top: cardAnchor }}>
         <span className="mf-first-guide__icon" aria-hidden="true">i</span>
         <div><strong>{step.title}</strong><p>{step.text}</p></div>
-      </div>
+      </div> : createPortal(<span id={descriptionId} className="mf-first-guide__inline" role="status">{step.text}</span>, inlineHost)}
     </div>
   );
 }

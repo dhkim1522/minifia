@@ -242,6 +242,52 @@ describe("정답 공개 화면 — 큰 글 (23-07, P23-20, D-22)", () => {
     expect(buttons()).toHaveLength(0);
   });
 
+  it("목록에서 아래 답안이 남을 때만 스크롤 안내를 보여 준다", () => {
+    const base = makeView({ role: "citizen" });
+    const answers = base.players.map(({ seat }) => ({ seat, order: seat + 1, text: "공개 단서" }));
+    const m = mount({ ...base, day: { ...base.day!, keyword: { ...base.day!.keyword!, answers } } });
+    const list = m.getByRole("list", { name: "참가자 답안" });
+    const hint = () => m.queryByText("아래에 답안 더 있음");
+
+    expect(hint()).toBeNull();
+    Object.defineProperties(list, {
+      clientHeight: { value: 216 },
+      scrollHeight: { value: 454 },
+    });
+    fireEvent.scroll(list);
+    expect(hint()?.id).toBe(list.getAttribute("aria-describedby"));
+
+    list.scrollTop = 238;
+    fireEvent.scroll(list);
+    expect(hint()).toBeNull();
+    expect(list.hasAttribute("aria-describedby")).toBe(false);
+
+    list.scrollTop = 120;
+    fireEvent.scroll(list);
+    expect(hint()).not.toBeNull();
+  });
+
+  it("첫 토론의 답과 의심 버튼은 기존 기록을 바로 열고 닫으면 초점을 되돌린다", () => {
+    const base = makeView({ phase: "discussion", role: "citizen" });
+    const m = mount(base);
+    const opener = m.getByRole("button", { name: "답과 의심" });
+    opener.focus();
+    fireEvent.click(opener);
+
+    const sheet = m.getByRole("dialog", { name: "답과 의심" });
+    const selected = m.getByRole("tab", { name: "답과 의심" });
+    expect(selected.getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(selected);
+    expect(sheet.querySelector("[data-answer-correct]")?.textContent).toBe(ANSWER);
+    fireEvent(sheet, new Event("cancel", { cancelable: true }));
+    advance(260);
+    expect(m.queryByRole("dialog", { name: "답과 의심" })).toBeNull();
+    expect(document.activeElement).toBe(opener);
+
+    m.show({ ...base, day: { ...base.day!, n: 2 } });
+    expect(m.queryByRole("button", { name: "답과 의심" })).toBeNull();
+  });
+
   it("정답이 아직 없는 view(answer 키 없음)에는 큰 글이 없다", () => {
     const { container } = mount(makeView({ answer: false }));
     expect(announceEl(container)).toBeNull();

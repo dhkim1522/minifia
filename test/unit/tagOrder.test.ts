@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { NAMETAG_H } from "../../src/world/camera";
-import { rankTags, spaceCompactTags } from "../../src/world/tagOrder";
+import { eyeTagsOverlap, rankTags, spaceCompactTags } from "../../src/world/tagOrder";
 import type { TagBox } from "../../src/world/tagOrder";
 
 // 06-22 (G-06-4): 이름표 순위·맨 앞 겹침 판정. 순수 함수 — 내 이름표 맨 위, 나머지는 발 y(큰 쪽이 위)·seat(큰 쪽이 위).
@@ -181,5 +181,25 @@ describe("작은 화면 고정 좌석 이름표", () => {
     expect(spaceCompactTags(cramped, 199, 201)).toEqual(cramped);
     const separated = [box(0), box(1, { x: 240 })];
     expect(spaceCompactTags(separated, 100, 300)).toEqual(separated);
+  });
+
+  it("360px 원탁에서는 긴 이름을 얼굴 쪽으로 내리지 않고 가운데 이름표의 위로 분리한다", () => {
+    const input = [box(0, { x: 75, w: 126, bottom: 107 }), box(1, { x: 193, w: 56, bottom: 132 }),
+      box(2, { x: 285, w: 126, bottom: 120 })];
+    const result = spaceCompactTags(input, 91, 320, { center: 180 });
+    expect(result.map(tag => tag.x)).toEqual(input.map(tag => tag.x));
+    expect(result.map(tag => tag.bottom)).toEqual([107, 132, 101]);
+    expect(rankTags(result).every(tag => !tag.front)).toBe(true);
+  });
+
+  it("320px 원탁에서 위쪽 공간이 부족하면 얼굴 순서를 유지한 채 가로로 나눠 세 이름을 보인다", () => {
+    const input = [box(0, { x: 47, w: 70, bottom: 107 }), box(1, { x: 171, w: 84, bottom: 119 }),
+      box(2, { x: 252, w: 112, bottom: 112 })];
+    const result = spaceCompactTags(input, 91, 280, { center: 160 });
+    expect(result.map(tag => tag.bottom)).toEqual(input.map(tag => tag.bottom));
+    expect(result[0]!.x).toBeLessThan(result[1]!.x);
+    expect(result[1]!.x).toBeLessThan(result[2]!.x);
+    expect(result[2]!.x + result[2]!.w / 2).toBeLessThanOrEqual(314);
+    expect(result.some((box, i) => result.slice(i + 1).some(other => eyeTagsOverlap(box, other)))).toBe(false);
   });
 });

@@ -29,6 +29,11 @@
   animation-duration: 1.24s;
 }
 
+.mf-first-guide__hand[data-guide-side] {
+  transform: translateY(-50%);
+  animation-name: mf-first-guide-point-side;
+}
+
 .mf-first-guide[data-guide-placement="below"] .mf-first-guide__hand {
   --mf-guide-position: 0%;
   --mf-guide-nudge: 7px;
@@ -73,6 +78,11 @@
 @keyframes mf-first-guide-point {
   0%, 100% { transform: translate(-50%, var(--mf-guide-position)); }
   36% { transform: translate(-50%, calc(var(--mf-guide-position) + var(--mf-guide-nudge))); }
+}
+
+@keyframes mf-first-guide-point-side {
+  0%, 100% { transform: translate(3px, -50%); }
+  36% { transform: translate(0, -50%); }
 }
 
 @keyframes mf-first-guide-hold {

@@ -99,6 +99,7 @@ export type TableCamera = {
   mode: "eye" | "wide";
   position: V3;
   target: V3;
+  horizontalFov?: number;
 };
 
 export const TABLE_PAN_LIMIT = 66 * Math.PI / 180;
@@ -119,8 +120,8 @@ export function tableAim(position: V3, target: V3): { yaw: number; pitch: number
 }
 
 /** 상대 머리와 장식이 헤더 아래에 들어오는 데 필요한 최소 상향 각도. */
-export function tableHeadPitch(eye: V3, head: V3, width: number, roomAbove: number): number {
-  const focalLength = width / (2 * Math.tan(TABLE_EYE_FOV / 2));
+export function tableHeadPitch(eye: V3, head: V3, width: number, roomAbove: number, horizontalFov = TABLE_EYE_FOV): number {
+  const focalLength = width / (2 * Math.tan(horizontalFov / 2));
   // 짧은 휴대폰에서는 눈이 참가자 조작줄에 가리지 않도록 위쪽 틈을 좁힌다.
   const headerGap = Math.min(24, Math.max(8, (roomAbove - 80) * 0.32 + 8));
   const above = Math.max(0, roomAbove - headerGap);
@@ -132,12 +133,12 @@ export function tableYaw(yaw: number, center: number): number {
   return center + Math.max(-TABLE_PAN_LIMIT, Math.min(TABLE_PAN_LIMIT, delta));
 }
 
-export function eyeTableCamera(position: V3, yaw: number, pitch: number): TableCamera {
+export function eyeTableCamera(position: V3, yaw: number, pitch: number, horizontalFov?: number): TableCamera {
   return { mode: "eye", position, target: {
     x: position.x + Math.sin(yaw),
     y: position.y + Math.tan(pitch),
     z: position.z - Math.cos(yaw),
-  } };
+  }, ...(horizontalFov === undefined ? {} : { horizontalFov }) };
 }
 
 export const WIDE_TABLE_CAMERA: TableCamera = {

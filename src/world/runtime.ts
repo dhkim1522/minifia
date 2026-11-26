@@ -14,7 +14,7 @@ import type { MapId } from "../../shared/protocol";
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
 import { NETWORK_TEXT } from "../net/copy";
-import { BAR_FOLLOW_SHARE, BAR_TABLE_CAMERA, BAR_WALK_CAMERA, barNameTagFoot, barSeatAt, barSeatYaw, barTableZoom, cameraScale, clampTarget, DEFAULT_CAMERA, DEFAULT_TARGET, eyeTableCamera, followStep, gatherGroupZoom, gatherView, NAMETAG_GAP, NAMETAG_MAX_W, PAN_BOX, RESIZE_SETTLE_MS, stageOffsetY, tableAim, tableEyeAt, tableHeadPitch, tableYaw, WIDE_TABLE_CAMERA } from "./camera";
+import { BAR_FOLLOW_SHARE, BAR_TABLE_CAMERA, BAR_WALK_CAMERA, barNameTagFoot, barSeatAt, barSeatYaw, barTableZoom, cameraScale, clampTarget, DEFAULT_CAMERA, DEFAULT_TARGET, eyeTableCamera, followStep, gatherGroupZoom, gatherView, NAMETAG_GAP, NAMETAG_MAX_W, PAN_BOX, RESIZE_SETTLE_MS, stageOffsetY, TABLE_EYE_FOV, tableAim, tableEyeAt, tableHeadPitch, tableYaw, WIDE_TABLE_CAMERA } from "./camera";
 import type { V3 } from "./camera";
 import { figForSeat } from "./characterData";
 import type { OutfitId } from "./characterData";
@@ -29,7 +29,7 @@ import { EXEC_END_OPACITY, executionFade, GHOST_OPACITY, GHOST_SPRITE, ghostFloa
 import { easeInOut, pinAt, pinLevel, pinLights } from "./pinPlan";
 import type { SceneLook } from "./presence";
 import { initialMapStatus, inputBlocked, mapStatusReducer, shouldRecreate } from "./status";
-import { rankTags, spaceCompactTags } from "./tagOrder";
+import { eyeTagsOverlap, rankTags, spaceCompactTags } from "./tagOrder";
 import type { TagBox } from "./tagOrder";
 import type { MapStatusEvent, MapStatusState } from "./status";
 import type { LightingPhase, RendererStatusEvent } from "./renderer";
@@ -443,7 +443,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     seat: number; mode: "eye" | "wide"; center: number;
     centerTable: boolean;
     focus: number | undefined; focusAt: number | undefined; yaw: number; pitch: number;
-    goalYaw: number; goalPitch: number; panning: boolean;
+    goalYaw: number; goalPitch: number; horizontalFov: number; panning: boolean;
   } | null = null;
   let nightRenderer: WorldRenderer | null = null;
   let nightLook: SceneLook | null = null;
@@ -1185,20 +1185,24 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       tableView = { seat: local.slot, mode: table.mode, center: center.yaw, centerTable,
         focus: table.focus, focusAt: table.focusAt,
         yaw: sameChair ? previous.yaw : yaw, pitch: sameChair ? previous.pitch : aim.pitch,
-        goalYaw: lastAim?.yaw ?? yaw, goalPitch: lastAim?.pitch ?? aim.pitch, panning: false };
+        goalYaw: lastAim?.yaw ?? yaw, goalPitch: lastAim?.pitch ?? aim.pitch,
+        horizontalFov: previous?.horizontalFov ?? TABLE_EYE_FOV, panning: false };
     }
     if (tableView === null) return;
+    const blend = immediate ? 1 : 1 - Math.exp(-13 * dt);
+    const shortStage = Math.min(1, Math.max(0, (115 - roomAbove) / 55));
+    const framingFov = look?.frameAnswerSpeaker === true && table.mode === "eye" ? shortStage * Math.PI / 6 : 0;
+    tableView.horizontalFov = mix(tableView.horizontalFov, TABLE_EYE_FOV + framingFov, blend);
     if (!tableView.panning) {
-      const blend = immediate ? 1 : 1 - Math.exp(-13 * dt);
       let pitch = tableView.goalPitch;
       const actor = table.mode === "eye" && !centerTable && table.focus !== undefined ? actors.get(table.focus) : undefined;
       if (actor && actor.barSeat !== undefined && actor.barSeat !== local.slot && !actor.ghost && actor.exit === null) {
-        pitch = Math.max(pitch, tableHeadPitch(eye, { ...actor.pos, y: actor.headY }, width, roomAbove));
+        pitch = Math.max(pitch, tableHeadPitch(eye, { ...actor.pos, y: actor.headY }, width, roomAbove, tableView.horizontalFov));
       }
       tableView.yaw = mix(tableView.yaw, tableView.goalYaw, blend);
       tableView.pitch = mix(tableView.pitch, pitch, blend);
     }
-    r.setTableView?.(table.mode === "eye" ? eyeTableCamera(eye, tableView.yaw, tableView.pitch) : WIDE_TABLE_CAMERA, offsetY);
+    r.setTableView?.(table.mode === "eye" ? eyeTableCamera(eye, tableView.yaw, tableView.pitch, tableView.horizontalFov) : WIDE_TABLE_CAMERA, offsetY);
   }
 
   function aimSeatedActor(
@@ -1466,7 +1470,10 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     // 카메라: 기본은 내 캐릭터를 따라간다(한계 상자 안에서). 장면이 고정이면 모이는 자리 구도로 옮긴 뒤 움직이지 않는다(UI-SPEC 카메라 표)
     const s = size();
     const rect = deps.stageRect();
-    const stageOff = stageOffsetY(s.h, rect.top, rect.bottom);
+    // Keep a small lane above seated faces when long discussion names need a second row.
+    const nameRoom = s.w <= 430 && table?.mode === "eye" && look?.spreadTableTags === true
+      ? Math.min(18, Math.max(0, (rect.bottom - rect.top - 120) * 0.2)) : 0;
+    const stageOff = stageOffsetY(s.h, rect.top, rect.bottom) - nameRoom;
     const camLook = look?.camera;
     const compactFixed = compactBar && camLook?.mode === "fixed" && camLook.barSeats === true;
     const rig = compactFixed ? BAR_TABLE_CAMERA : compactBar && camLook?.mode !== "fixed" ? BAR_WALK_CAMERA : DEFAULT_CAMERA;
@@ -1650,6 +1657,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
     const snap = (v: number): number => Math.round(v * dpr) / dpr;
     const mine = deps.mySeat();
+    const spaceTableTags = tableMode === "eye" && width <= 430 && look?.spreadTableTags === true;
     const live: Actor[] = [];
     for (const a of actors.values()) {
       if (a.tag === null || !a.tag.isConnected) a.tag = tagLayer.querySelector<HTMLElement>(`[data-seat="${a.seat}"]`);
@@ -1667,8 +1675,9 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       const feet = r.project({ x: a.pos.x, y: 0, z: a.pos.z });
       const tagFoot = tableMode !== undefined || a.barSeat === undefined ? undefined : barNameTagFoot(a.pos, a.barSeat);
       const anchor = r.project(tagFoot ?? { x: a.pos.x, y: a.headY, z: a.pos.z });
+      const margin = spaceTableTags ? 0 : 12;
       const hidden = tableMode !== undefined && (
-        (tableMode === "eye" && a.seat === mine) || anchor.visible === false || anchor.sx < 12 || anchor.sx > width - 12
+        (tableMode === "eye" && a.seat === mine) || anchor.visible === false || anchor.sx < margin || anchor.sx > width - margin
         || anchor.sy >= stage.bottom
       );
       const visibility = hidden ? "hidden" : "";
@@ -1702,7 +1711,14 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       setActorRing(a, kind);
     }
     const bySeat = new Map(live.map((a) => [a.seat, a]));
-    if (compactSeats.size > 1 && width <= 430) {
+    if (spaceTableTags && boxes.length > 1) {
+      const focus = look?.table?.focus;
+      boxes = spaceCompactTags(boxes, snap(stage.top + 29), snap(stage.bottom - 11), {
+        center: width / 2,
+        ...(focus === undefined ? {} : { focus }),
+        ...(speaker === undefined ? {} : { speaker }),
+      });
+    } else if (compactSeats.size > 1 && width <= 430) {
       const spaced = spaceCompactTags(
         boxes.filter(box => compactSeats.has(box.seat)), snap(stage.top + 45), snap(stage.bottom - 11),
       );
@@ -1724,8 +1740,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       const ordered = boxes.sort((a, b) => priority(a) - priority(b) || Math.abs(a.x - width / 2) - Math.abs(b.x - width / 2));
       boxes = [];
       for (const box of ordered) {
-        const overlaps = boxes.some(other => Math.abs(other.bottom - box.bottom) < 31
-          && Math.abs(other.x - box.x) < (other.w + box.w) / 2 + 5);
+        const overlaps = boxes.some(other => eyeTagsOverlap(box, other));
         const tag = bySeat.get(box.seat)?.tag;
         if (overlaps && tag) tag.style.visibility = "hidden";
         else boxes.push(box);

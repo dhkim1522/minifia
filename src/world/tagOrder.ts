@@ -28,6 +28,13 @@ export interface TagRank {
   front: boolean;
 }
 
+const EYE_TAG_GAP = 5;
+const EYE_TAG_VERTICAL_GAP = 31;
+
+export function eyeTagsOverlap(a: TagBox, b: TagBox): boolean {
+  return Math.abs(a.bottom - b.bottom) < EYE_TAG_VERTICAL_GAP && Math.abs(a.x - b.x) < (a.w + b.w) / 2 + EYE_TAG_GAP;
+}
+
 /**
  * z 순위: 내 이름표가 맨 위, 그다음 산 사람, 유령 이름표가 맨 아래(18.1 C-3), 같은 등급 안에서는 발끝 화면 y 가 큰 쪽이 위(동점이면 seat 이 큰 쪽). lead·turn 은 순위에 10 을 더한다(선두·차례 이름표가 겹쳐도 가려지지 않게).
  * front: 이름표 사각형 [x − w/2, x + w/2] × [bottom − h, bottom] 이 면적을 가지고 겹치는(변만 맞닿으면 아님)
@@ -53,28 +60,54 @@ export function rankTags(boxes: readonly TagBox[], h: number = NAMETAG_H): TagRa
   });
 }
 
-/** Give cramped fixed seats a nearby vertical lane while keeping their horizontal association. */
+/** Give cramped seats a nearby vertical lane while keeping their horizontal association. */
 export function spaceCompactTags(
   boxes: readonly TagBox[], minBottom: number, maxBottom: number,
+  eye?: { focus?: number; speaker?: number; center: number },
 ): TagBox[] {
-  const gap = 4;
-  const step = NAMETAG_H + gap;
+  const gap = eye === undefined ? 4 : EYE_TAG_GAP;
+  const step = eye === undefined ? NAMETAG_H + gap : EYE_TAG_VERTICAL_GAP;
   const placed: TagBox[] = [];
   const bySeat = new Map<number, TagBox>();
-  const order = [...boxes].sort((a, b) => Number(b.me) - Number(a.me)
-    || Number(Boolean(b.lead || b.turn)) - Number(Boolean(a.lead || a.turn))
-    || b.foot - a.foot || a.seat - b.seat);
+  const priority = (box: TagBox): number => box.seat === eye?.focus ? 0 : box.seat === eye?.speaker || box.turn ? 1 : 2;
+  const order = [...boxes].sort(eye === undefined
+    ? (a, b) => Number(b.me) - Number(a.me)
+      || Number(Boolean(b.lead || b.turn)) - Number(Boolean(a.lead || a.turn))
+      || b.foot - a.foot || a.seat - b.seat
+    : (a, b) => priority(a) - priority(b) || Math.abs(a.x - eye.center) - Math.abs(b.x - eye.center));
   for (const box of order) {
     const neighbors = placed.filter(other => Math.abs(other.x - box.x) < (other.w + box.w) / 2 + gap);
-    // Keep the closest available lane; moving down first on a tie avoids covering a face above.
-    const candidates = [box.bottom, ...neighbors.flatMap(other => [other.bottom + step, other.bottom - step])];
+    // Eye view puts names directly above the head, so only move them upwards.
+    const candidates = [box.bottom, ...neighbors.flatMap(other => eye === undefined
+      ? [other.bottom + step, other.bottom - step] : [other.bottom - step])];
     candidates.sort((a, b) => Math.abs(a - box.bottom) - Math.abs(b - box.bottom) || b - a);
     const bottom = candidates.find(y => y >= minBottom && y <= maxBottom
-      && Math.abs(y - box.bottom) <= 2 * step
+      && Math.abs(y - box.bottom) <= 2 * step && (eye === undefined || y <= box.bottom)
       && neighbors.every(other => Math.abs(other.bottom - y) >= step)) ?? box.bottom;
     const next = bottom === box.bottom ? box : { ...box, bottom };
     bySeat.set(box.seat, next);
     placed.push(next);
   }
-  return boxes.map(box => bySeat.get(box.seat) ?? box);
+  const spaced = boxes.map(box => bySeat.get(box.seat) ?? box);
+  if (eye === undefined || !spaced.some((box, i) => spaced.slice(i + 1).some(other => eyeTagsOverlap(box, other)))) return spaced;
+
+  // When the header leaves no spare row, fit the names left to right within their head positions.
+  const inset = 6;
+  const sorted = [...spaced].sort((a, b) => a.x - b.x);
+  let left = inset;
+  const centers = sorted.map(box => {
+    const x = Math.max(box.x, left + box.w / 2);
+    left = x + box.w / 2 + EYE_TAG_GAP;
+    return x;
+  });
+  let right = 2 * eye.center - inset;
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const box = sorted[i]!;
+    const x = Math.min(centers[i]!, right - box.w / 2);
+    if (x - box.w / 2 < inset || Math.abs(x - box.x) > 28) return spaced;
+    centers[i] = x;
+    right = x - box.w / 2 - EYE_TAG_GAP;
+  }
+  sorted.forEach((box, i) => bySeat.set(box.seat, { ...box, x: centers[i]! }));
+  return spaced.map(box => bySeat.get(box.seat) ?? box);
 }

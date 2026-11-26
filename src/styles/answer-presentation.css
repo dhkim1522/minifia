@@ -53,6 +53,18 @@
   min-block-size: var(--tap-min);
 }
 
+.mf-answer-presentation__action:has(.mf-first-guide__inline) {
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.mf-answer-presentation__action:has(.mf-first-guide__inline) button { flex: none; }
+.mf-answer-presentation__action > .mf-first-guide__inline {
+  order: -1;
+  font: var(--type-label);
+  word-break: keep-all;
+}
+
 .mf-btn.mf-answer-presentation__suspect {
   background: var(--noir-inset);
   border-color: var(--crimson-300);
@@ -103,10 +115,7 @@
   background: #812f4a;
 }
 .mf-game__panel[data-answer-panel] > .mf-answer-presentation {
-  position: absolute;
-  inset-inline: 0;
-  bottom: max(56px, calc(50dvh - 65px));
-  margin-inline: auto;
+  /* 카메라가 답안 카드 위의 가용 높이를 쓰도록 하단 패널의 흐름에 둔다. */
   width: min(calc(100% - 32px), 352px);
 }
 .mf-answer-presentation [data-player-name] { color: var(--noir-ink) !important; }
