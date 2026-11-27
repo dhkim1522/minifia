@@ -1257,11 +1257,11 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       if (night?.[seat] && !look?.seats[seat]?.ghost) continue;
       if (!actors.has(seat) && isShown(seat)) createActor(seat, now);
     }
-    // 산 사람 화면의 탈락자: 서버 구간이 없어도 마지막 구간이 있으면 유령으로 세운다(18.1 C-6)
+    // 탈락 좌석의 이동 구간이 이미 빠졌어도, 마지막 위치에 먼지나 유령을 그린다.
     if (look !== null) {
       for (const [key, l] of Object.entries(look.seats)) {
         const seat = Number(key);
-        if (l.ghost && !actors.has(seat) && segFor(seat) !== undefined) createActor(seat, now);
+        if ((l.ghost || l.fadeAt !== undefined) && !actors.has(seat) && segFor(seat) !== undefined) createActor(seat, now);
       }
     }
 
@@ -1406,7 +1406,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       }
       a.pos = { x: at.x, z: at.z };
       const eyeView = table?.mode === "eye" && localTable !== null;
-      a.handle.root.visible = !(eyeView && a.seat === mySeat && wantGhost);
+      const ownSpectatorBody = wantGhost || (look?.spectator === true && seatLook?.fadeAt !== undefined);
+      a.handle.root.visible = !(eyeView && a.seat === mySeat && ownSpectatorBody);
       a.handle.setHeadDensity?.(posed && eyeView ? "close" : "world");
       a.handle.setSeated?.(posed, posed && eyeView && a.seat === mySeat);
       const picked = aim === undefined ? null : tablePosition(aim, sNow);

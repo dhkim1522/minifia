@@ -1,6 +1,6 @@
 // 06-11 3D 캐릭터 — 원본 design/v2.0/blockout/character.js(결정 0048)를 관절 병합으로 옮긴 모듈 (MAP-01, MAP-02).
 // WebGL 없이 node 에서 장면 그래프로 검사한다.
-import { Box3, BufferGeometry, CircleGeometry, Color, Euler, type Group, type Material, type Mesh, MeshBasicMaterial, MeshStandardMaterial, type Object3D, Quaternion } from "three";
+import { Box3, BufferGeometry, CircleGeometry, Color, EqualDepth, Euler, type Group, type Material, type Mesh, MeshBasicMaterial, MeshStandardMaterial, type Object3D, Quaternion } from "three";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MOVE_SPEED } from "../../shared/game/world";
 import { ANIMAL_IDS } from "../../shared/game/animals";
@@ -107,19 +107,32 @@ describe("착석 동물 리그", () => {
     const torso = character.bodyMeshes()[0] as Mesh;
     const material = torso.material as MeshStandardMaterial;
     const head = joint(character.root, "neck").children[0] as Mesh;
-    const standing = head.geometry;
     character.setSeated(true, false);
     const detail = head.geometry;
     expect(detail.getAttribute("position").count).toBeGreaterThan(detailedAnimalHead("fox").getAttribute("position").count);
     character.setSeated(false, false);
-    character.setGhost(true, { animalForm: true, opacity: 0.5 });
+    character.setGhost(true, { animalForm: true, opacity: 0 });
     expect(character.root.getObjectByName("ghost-3d")).toBeUndefined();
     expect(head.geometry).toBe(detail);
+    const depths = character.bodyMeshes().map((mesh) => {
+      const depth = mesh.getObjectByName("ghost-depth") as Mesh;
+      expect(depth.geometry).toBe(mesh.geometry);
+      expect(depth.visible).toBe(false);
+      expect((depth.material as MeshBasicMaterial).colorWrite).toBe(false);
+      return depth;
+    });
+    character.setOpacity(0.5);
     expect((torso.material as MeshStandardMaterial).opacity).toBeCloseTo(0.5);
+    expect((torso.material as MeshStandardMaterial).depthFunc).toBe(EqualDepth);
+    expect(depths.every((depth) => depth.visible)).toBe(true);
+    character.applyOutfit("police");
+    character.bodyMeshes().forEach((mesh, index) => expect(depths[index]!.geometry).toBe(mesh.geometry));
+    const disposeGhostMaterial = vi.spyOn(torso.material as MeshStandardMaterial, "dispose");
     expect(torso.visible).toBe(true);
     character.setGhost(false);
     expect(torso.material).toBe(material);
-    expect(head.geometry).toBe(standing);
+    expect(depths.every((depth) => depth.parent === null)).toBe(true);
+    expect(disposeGhostMaterial).toHaveBeenCalledOnce();
     character.dispose();
   });
 });

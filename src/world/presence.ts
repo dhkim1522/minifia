@@ -103,7 +103,7 @@ function isGhostViewer(view: RoomView): boolean {
 }
 
 /**
- * 생존자에게는 생존 좌석과 공개 처형 연출을 그린다. 탈락자에게는 탈락 좌석을 반투명 캐릭터로 그린다.
+ * 모두에게 공개 처형 연출을 그리고, 끝난 뒤에는 탈락자에게만 유령을 그린다.
  * 이 표에는 직업 의상 키가 없다.
  * 밤은 서버가 산 사람에게 본인만 보내는 단계라(결정 0074 D-05) 산 viewer 의 탈락 좌석을 넣지 않는다 — 역할마다 겉보기가 달라지지 않게(0074-4).
  * fading = 좌석 → 처형 연출 시작 시각(화면이 처형 이벤트를 본 시각). now 를 생략하면 표에 있는 연출은 아직 진행 중으로 본다.
@@ -122,7 +122,7 @@ export function visibleSeats(view: RoomView, fading?: ReadonlyMap<number, number
     if (dead && !ghostViewer && !fadingNow) continue;
     seats[p.seat] = {
       show: true,
-      ghost: dead && (ghostViewer || !fadingNow),
+      ghost: dead && !fadingNow,
       ...(fadingNow ? { fadeAt: startedAt } : {}),
     };
   }
@@ -251,7 +251,7 @@ export function sceneLook(view: RoomView, opts: { stageH: number; fading?: Reado
 // ---- 처형 연출·유령·무대·지목 방향 ----
 
 /**
- * 유령 그림(ghost_default, 0083-2) 값: 불투명도 0.88(85~90%), 등장 시간 0.3초(처형 연출이 끝나 좌석이 ghost 가 될 때), 폭:높이 = 3:4.
+ * 유령 등장 진행도는 0.3초 동안 1까지 오른다. 실제 겉면의 반투명도는 재질에서 정한다.
  * 키는 캐릭터와 같다(character.ts 의 로컬 높이 2.45 = 이름표가 서는 머리 꼭대기).
  */
 export const GHOST_SPRITE = { opacity: 1, inMs: 300, aspect: 0.75 } as const;

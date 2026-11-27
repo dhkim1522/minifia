@@ -124,6 +124,19 @@ describe("visibleSeats (GHOST-01, T-08-25)", () => {
     expect(seats[0]?.fadeAt).toBeUndefined();
   });
 
+  it("유령 관전자에게도 새 처형의 먼지가 걷힌 뒤 유령이 나타난다", () => {
+    const view = viewOf("execution", { dead: [1, 3], mySeat: 1, spectate: true });
+    const fading = new Map([[3, 1000]]);
+    for (const now of [999, 1000, 1000 + EXECUTION_DUST_MS - 1]) {
+      const seats = visibleSeats(view, fading, now);
+      expect(seats[1]).toEqual({ show: true, ghost: true });
+      expect(seats[3]).toEqual({ show: true, ghost: false, fadeAt: 1000 });
+    }
+    for (const seats of [visibleSeats(view, fading, 1000 + EXECUTION_DUST_MS), visibleSeats(view)]) {
+      expect(seats[3]).toEqual({ show: true, ghost: true });
+    }
+  });
+
   it("연출 표시에 산 좌석이 섞여 있어도 산 좌석 상태는 바뀌지 않는다", () => {
     const seats = visibleSeats(viewOf("execution", { dead: [3] }), new Map([[1, 0]]), 100);
     same(Object.keys(seats).map(Number), [0, 1, 2, 4]);

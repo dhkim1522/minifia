@@ -2,6 +2,7 @@
 import {
   Color,
   DoubleSide,
+  EqualDepth,
   Float32BufferAttribute,
   Group,
   LatheGeometry,
@@ -15,6 +16,29 @@ import {
 } from "three";
 
 export const GHOST3D_COLORS = { body: "#9fc6ec", bodyGlow: "#527db8", halo: "#8ebde5", mark: "#23344c", cheek: "#84a9d3" } as const;
+
+/** 깊이 전용 면과 일치하는 겉면만 합성하고, 가장자리의 밝은 색은 더 옅게 남긴다. */
+export function animalGhostMaterial(source: MeshStandardMaterial): MeshStandardMaterial {
+  const material = source.clone();
+  material.transparent = true;
+  material.depthWrite = false;
+  material.depthFunc = EqualDepth;
+  material.customProgramCacheKey = () => `${source.customProgramCacheKey()}|animal-ghost`;
+  material.onBeforeCompile = (shader, renderer) => {
+    source.onBeforeCompile(shader, renderer);
+    shader.uniforms.ghostTint = { value: material.color };
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nuniform vec3 ghostTint;")
+      .replace("#include <opaque_fragment>", `float facing = abs(dot(normalize(normal), normalize(vViewPosition)));
+        float rim = 1.0 - smoothstep(0.03, 0.58, facing);
+        float luminance = dot(outgoingLight, vec3(0.2126, 0.7152, 0.0722));
+        outgoingLight = mix(outgoingLight, luminance * vec3(0.75, 0.91, 1.12), 0.35);
+        outgoingLight = mix(outgoingLight, vec3(0.45, 0.63, 0.80) * ghostTint, 0.08 + rim * 0.20);
+        diffuseColor.a *= mix(0.34, 0.72, smoothstep(0.05, 0.60, facing));
+        #include <opaque_fragment>`);
+  };
+  return material;
+}
 /** 유령 전체 높이(후광 꼭대기까지, 로컬 단위) */
 export const GHOST3D_HEIGHT = 2.45;
 

@@ -35,7 +35,7 @@ import { animalMaterial, FINISH, type Finish } from "./animalFinish";
 import { applyDetailedFace, detailedAnimalHead } from "./barAssets/animal-detail";
 import type { HeadDensity } from "./barAssets/head-sculpt";
 import { MOVE_SPEED } from "../../shared/game/world";
-import { buildGhost3d, type Ghost3d } from "./ghost3d";
+import { animalGhostMaterial, buildGhost3d, type Ghost3d } from "./ghost3d";
 import { createNoteRig, type NoteRig } from "./postit";
 import { emoteCycles, REDUCED_Y_SCALE } from "./emoteCap";
 import { createExecutionDust } from "./executionDust";
@@ -1095,8 +1095,9 @@ const bodyMaterial = new MeshStandardMaterial({ vertexColors: true, roughness: 0
 const glassMaterial = new MeshStandardMaterial({ color: "#9ec2ff", transparent: true, opacity: 0.6 });
 const shadowMaterial = new MeshBasicMaterial({ color: "#000000", transparent: true, opacity: 0.3, depthWrite: false });
 const shadowGeometry = new CircleGeometry(0.42, 24);
-/** 대체 몸(그림이 없을 때)의 불투명도 */
+/** 예전 유령 그림이 없을 때 쓰는 대체 몸의 불투명도 */
 const GHOST_DEFAULT_OPACITY = 0.6;
+const ghostDepthMaterial = new MeshBasicMaterial({ colorWrite: false });
 /** 발밑 고리 모양(그림자 원판 반지름 0.42 바깥) */
 const RING_INNER = 0.5;
 const RING_OUTER = 0.62;
@@ -1159,8 +1160,10 @@ export function createCharacter(
   let gazeYaw = 0;
   let gazePitch = 0;
   let pointYaw = 0;
-  /** 대체 몸(그림이 없는 유령)일 때만 있는 이 캐릭터 전용 복제 재질 */
+  /** 반투명 몸과 별도 유리 조각에 쓰는 이 캐릭터 전용 재질 */
   let ghostMat: MeshStandardMaterial | null = null;
+  let ghostGlassMat: MeshStandardMaterial | null = null;
+  const ghostDepthMeshes = new Map<JointName, Mesh>();
   /** 유령 상태(켜짐·불투명도·밝기 배율)와 유령 그림 스프라이트(그림이 준비된 뒤 처음 켤 때 만든다) */
   let ghostOn = false;
   let animalGhost = false;
@@ -1268,6 +1271,18 @@ export function createCharacter(
       groups.armB.add(glassMesh);
     }
     glassMesh.geometry = geo;
+    if (ghostOn && animalGhost) {
+      if (!ghostGlassMat) {
+        ghostGlassMat = glassMaterial.clone();
+        ghostGlassMat.depthWrite = false;
+      }
+      ghostGlassMat.opacity = glassMaterial.opacity * ghostAlpha;
+      glassMesh.material = ghostGlassMat;
+      glassMesh.renderOrder = 1;
+    } else {
+      glassMesh.material = glassMaterial;
+      glassMesh.renderOrder = 0;
+    }
     glassMesh.visible = true;
   }
   /** 지금 몸 대신 유령 그림이 보이나 */
@@ -1320,6 +1335,8 @@ export function createCharacter(
       meshes[j].geometry = merged(j).geo;
       const shell = pickShells.get(j);
       if (shell) shell.geometry = meshes[j].geometry;
+      const depth = ghostDepthMeshes.get(j);
+      if (depth) depth.geometry = meshes[j].geometry;
     }
     if (js.includes("head")) {
       detailExpression();
@@ -1364,14 +1381,20 @@ export function createCharacter(
 
   /** 지금 화면에 올린 유령 모습이 그림인가(그림이 나중에 오거나 사라지면 update 가 다시 맞춘다) */
   let appliedSprite = false;
-  /** 유령 상태를 보이는 것에 맞춘다: 그림이 있으면 몸을 숨기고 스프라이트, 없으면 예전 반투명 몸(0.6) */
+  function clearGhostMaterials(): void {
+    if (!ghostMat) return;
+    for (const j of JOINTS) meshes[j].material = surfaceMaterial();
+    for (const depth of ghostDepthMeshes.values()) depth.removeFromParent();
+    ghostDepthMeshes.clear();
+    ghostMat.dispose();
+    ghostMat = null;
+    ghostGlassMat?.dispose();
+    ghostGlassMat = null;
+  }
+
   function applyGhost(): void {
     if (!ghostOn) {
-      if (ghostMat) {
-        for (const j of JOINTS) meshes[j].material = surfaceMaterial();
-        ghostMat.dispose();
-        ghostMat = null;
-      }
+      clearGhostMaterials();
       for (const j of JOINTS) meshes[j].visible = true;
       if (sprite) sprite.root.visible = false;
       disc.visible = true;
@@ -1381,11 +1404,7 @@ export function createCharacter(
     }
     disc.visible = false;
     if (spriteShown()) {
-      if (ghostMat) {
-        for (const j of JOINTS) meshes[j].material = surfaceMaterial();
-        ghostMat.dispose();
-        ghostMat = null;
-      }
+      clearGhostMaterials();
       for (const j of JOINTS) meshes[j].visible = false;
       if (!sprite) {
         sprite = buildGhost3d();
@@ -1399,20 +1418,33 @@ export function createCharacter(
       refreshGlass();
       return;
     }
-    // 대체 몸: 그림이 오기 전·불러오기 실패 — 탈락자가 사라지지 않는다(T-18.1-42)
+    // 관전에서는 원래 동물과 의상을 유지하고, 예전 그림이 없는 경로도 반투명 몸을 쓴다.
     if (sprite) sprite.root.visible = false;
     for (const j of JOINTS) meshes[j].visible = true;
     if (!ghostMat) {
       const source = animalGhost ? surfaceMaterial() : bodyMaterial;
-      ghostMat = source.clone();
-      ghostMat.onBeforeCompile = source.onBeforeCompile;
-      ghostMat.customProgramCacheKey = source.customProgramCacheKey;
-      ghostMat.transparent = true;
-      ghostMat.depthWrite = false;
+      if (animalGhost) {
+        ghostMat = animalGhostMaterial(source);
+        for (const j of JOINTS) {
+          // 같은 지오메트리와 자세의 가장 가까운 깊이만 기록해 관절 안쪽이 겹쳐 보이지 않게 한다.
+          const depth = new Mesh(meshes[j].geometry, ghostDepthMaterial);
+          depth.name = "ghost-depth";
+          depth.renderOrder = 10000; // 불투명 배경을 먼저 그려야 유령 너머의 색이 남는다.
+          meshes[j].add(depth);
+          ghostDepthMeshes.set(j, depth);
+        }
+      } else {
+        ghostMat = source.clone();
+        ghostMat.transparent = true;
+        ghostMat.depthWrite = false;
+      }
       for (const j of JOINTS) meshes[j].material = ghostMat;
     }
-    ghostMat.opacity = Math.min(ghostAlpha, GHOST_DEFAULT_OPACITY);
-    if (animalGhost) ghostMat.color.setScalar(ghostTint);
+    ghostMat.opacity = animalGhost ? ghostAlpha : Math.min(ghostAlpha, GHOST_DEFAULT_OPACITY);
+    if (animalGhost) {
+      ghostMat.color.setScalar(ghostTint);
+      for (const depth of ghostDepthMeshes.values()) depth.visible = ghostAlpha > 0;
+    }
     appliedSprite = false;
     refreshGlass();
   }
@@ -1560,9 +1592,15 @@ export function createCharacter(
     },
     applyAnimal(next) {
       if (disposed || species === next) return;
+      const previousMaterial = surfaceMaterial();
       species = next;
       refresh(JOINTS);
-      if (!ghostMat) for (const j of JOINTS) meshes[j].material = surfaceMaterial();
+      if (animalGhost && previousMaterial !== surfaceMaterial()) {
+        clearGhostMaterials();
+        applyGhost();
+      } else if (!ghostMat) {
+        for (const j of JOINTS) meshes[j].material = surfaceMaterial();
+      }
       releaseOtherAppearances();
     },
     playEmote(id, opts) {
@@ -1609,8 +1647,7 @@ export function createCharacter(
       }
       if (opts?.animalForm !== undefined && opts.animalForm !== animalGhost) {
         animalGhost = opts.animalForm;
-        ghostMat?.dispose();
-        ghostMat = null;
+        clearGhostMaterials();
       }
       if (opts?.opacity !== undefined) ghostAlpha = clamp01(opts.opacity);
       if (opts?.tint !== undefined) ghostTint = clamp01(opts.tint);
@@ -1757,10 +1794,7 @@ export function createCharacter(
       transitionMat = null;
       noteRig?.detach();
       noteRig = null;
-      if (ghostMat) {
-        ghostMat.dispose();
-        ghostMat = null;
-      }
+      clearGhostMaterials();
       if (sprite) {
         root.remove(sprite.root);
         sprite.dispose();

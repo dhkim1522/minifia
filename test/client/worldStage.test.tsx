@@ -2281,7 +2281,9 @@ describe("탈락자 동물 유령", () => {
     const s = await openGhost({ ...ALIVE, 3: { fadeAt: Date.now() } });
     frames(EXECUTION_DUST_MS + 50);
     const h3 = handleOf(s, 3);
-    s.rerender({ scene: sceneOf({ ...ALIVE, 3: { ghost: true } }) });
+    expect(h3.setExecutionDust).toHaveBeenCalledWith(expect.any(Number), false);
+    expect(h3.setGhost).not.toHaveBeenCalled();
+    s.rerender({ scene: sceneOf({ ...ALIVE, 3: { ghost: true } }, { spectator: true }) });
     frames(400);
     expect(handleOf(s, 3)).toBe(h3);
     expect(h3.disposed).toBe(0);
