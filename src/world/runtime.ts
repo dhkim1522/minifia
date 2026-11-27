@@ -14,6 +14,7 @@ import type { MapId } from "../../shared/protocol";
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
 import { NETWORK_TEXT } from "../net/copy";
+import { EXECUTION_DUST_MS } from "../game/dayView";
 import { BAR_FOLLOW_SHARE, BAR_TABLE_CAMERA, BAR_WALK_CAMERA, barNameTagFoot, barSeatAt, barSeatYaw, barTableZoom, cameraScale, clampTarget, DEFAULT_CAMERA, DEFAULT_TARGET, eyeTableCamera, followStep, gatherGroupZoom, gatherView, NAMETAG_GAP, NAMETAG_MAX_W, PAN_BOX, RESIZE_SETTLE_MS, stageOffsetY, TABLE_EYE_FOV, tableAim, tableEyeAt, tableHeadPitch, tableYaw, WIDE_TABLE_CAMERA } from "./camera";
 import type { V3 } from "./camera";
 import { figForSeat } from "./characterData";
@@ -25,7 +26,7 @@ import { NOTE_COLORS } from "./palette";
 import { BLEND_SNAP_DIST, blendRemaining, createOwnMoves, predictSegment, stepYaw, travelYaw } from "./motion";
 import { DEFAULT_BUDGET_STEP, LIGHT_BLEND_SEC, nextLadderStep } from "./renderer";
 import type { CharacterHandle, NightRestSeat, WorldRenderer } from "./renderer";
-import { EXEC_END_OPACITY, executionFade, GHOST_OPACITY, GHOST_SPRITE, ghostFloatY, ghostTintOf, stageLiftY } from "./presence";
+import { GHOST_SPRITE, ghostFloatY, ghostTintOf, stageLiftY } from "./presence";
 import { easeInOut, pinAt, pinLevel, pinLights } from "./pinPlan";
 import type { SceneLook } from "./presence";
 import { initialMapStatus, inputBlocked, mapStatusReducer, shouldRecreate } from "./status";
@@ -343,8 +344,9 @@ interface Actor {
   /** handle.setRing 에 마지막으로 보낸 고리 종류(null = 고리 없음) */
   ringKind: string | null;
   suspectOutline: "pulse" | "fixed" | null;
-  /** 처형 연출로 handle.setOpacity 에 마지막으로 보낸 불투명도(1 = 연출 없음) */
+  /** 유령 또는 결과 화면에서 handle.setOpacity 에 마지막으로 보낸 불투명도 */
   fadeOpacity: number;
+  dusting: boolean;
   /** 지금 유령으로 그리고 있나(handle.setGhost 에 마지막으로 보낸 값) */
   ghost: boolean;
   /** 유령이 된 시각(ms) — 유령 그림이 0 → 0.88 로 오르는 시작점 */
@@ -850,6 +852,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       ringKind: null,
       suspectOutline: null,
       fadeOpacity: 1,
+      dusting: false,
       ghost: false,
       ghostAt: 0,
       ghostTint: 1,
@@ -1111,11 +1114,11 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     a.handle.setNotes?.(want, { animate: !(instant || first) });
   }
 
-  function tablePosition(seat: number, serverNow: number, anchor = false): { x: number; z: number; slot: number } | null {
+  function tablePosition(seat: number, serverNow: number, mode: "live" | "anchor" | "execution" = "live"): { x: number; z: number; slot: number } | null {
     const included = look?.seats[seat];
-    if (!included?.show || (!anchor && (included.ghost || included.fadeAt !== undefined))) return null;
+    if (mode !== "execution" && (!included?.show || (mode === "live" && (included.ghost || included.fadeAt !== undefined)))) return null;
     if (look?.nightTable !== undefined) return look.nightTable[seat] ?? null;
-    const segment = store.segOf(seat);
+    const segment = store.segOf(seat) ?? (mode === "execution" ? store.lastSegOf(seat) : undefined);
     if (!segment || segmentEndsAt(segment) > serverNow) return null;
     const position = positionAt(segment, serverNow);
     const slot = barSeatAt(position);
@@ -1156,11 +1159,13 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     }
     const eye = tableEyeAt(local);
     const center = tableAim(eye, { x: -local.x, y: 1.11, z: -local.z });
-    const centerTable = table.centerTable === true;
+    // 처형된 자리의 마지막 공개 좌표를 봐 몸이 사라진 뒤에도 시선이 튀지 않게 한다.
+    const departing = table.executionFocus && table.focus !== undefined ? tablePosition(table.focus, serverNow, "execution") : null;
+    const centerTable = table.centerTable === true || (table.executionFocus === true && departing === null);
     const previous = tableView;
     const sameChair = previous !== null && previous.seat === local.slot && previous.mode === table.mode;
     if (!sameChair || previous.centerTable !== centerTable || previous.focus !== table.focus || previous.focusAt !== table.focusAt) {
-      let other = table.focus === undefined ? null : tablePosition(table.focus, serverNow);
+      let other = table.executionFocus ? departing : table.focus === undefined ? null : tablePosition(table.focus, serverNow);
       if (other?.slot === local.slot) other = null;
       // 처음 앉으면 맞은편에 실제로 앉아 있는 가장 먼 상대를 본다.
       if (!other && !sameChair && !centerTable) {
@@ -1268,7 +1273,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     const table: SceneLook["table"] = night !== undefined
       ? { mode: look?.table?.mode ?? "eye", centerTable: true }
       : compactBar ? look?.table : undefined;
-    const localTable = table === undefined ? null : tablePosition(mySeat, sNow, true);
+    const localTable = table === undefined ? null : tablePosition(mySeat, sNow, "anchor");
     showNightRest(r, night === undefined ? null : look, night !== undefined && table?.mode === "eye" && localTable !== null ? mySeat : undefined);
     const voice = table?.voice;
     const voiceAge = voice === undefined ? Infinity : sNow - voice.at;
@@ -1298,6 +1303,11 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         if (!actors.has(a.seat)) continue; // 모션 줄이기면 바로 지워졌다
       }
       const wantGhost = seatLook?.ghost === true;
+      const fadeAt = wantGhost ? undefined : seatLook?.fadeAt;
+      const elapsedDust = fadeAt !== undefined && a.exit === null ? now - fadeAt
+        : a.exit !== null && a.dusting && !wantGhost ? EXECUTION_DUST_MS : null;
+      const wasDusting = a.dusting;
+      a.dusting = elapsedDust !== null && elapsedDust >= 0;
       // 장면이 허용한 직업 의상. 장면에서 지정한 동안만 입고 걷히면 고른 look 으로 돌아온다.
       const wantCostume = wantGhost && !look?.spectator ? null : (seatLook?.costume ?? null);
       if (wantCostume !== a.costume) {
@@ -1338,7 +1348,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         a.handle.setGhost?.(true, { tint: ghostTint, animalForm: true });
       }
       // 받은 의심 목록에 변화가 있을 때만 고깔을 배치한다. 유령 전환과 모션 줄이기는 즉시 반영한다.
-      if (look !== null) syncNotes(a, wantGhost ? EMPTY_NOTES : (look.notes?.[a.seat] ?? EMPTY_NOTES), reduced || ghostFlipped);
+      if (look !== null) syncNotes(a, wantGhost || a.dusting ? EMPTY_NOTES : (look.notes?.[a.seat] ?? EMPTY_NOTES), reduced || ghostFlipped || a.dusting);
       // 손가락 자세: 지목 중인 좌석만 유지하고, 풀리면 평소 자세로 돌아온다
       const pointAt = seatLook?.pointAt;
       if ((pointAt !== undefined) !== a.pointing) {
@@ -1430,40 +1440,29 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         alpha = e;
         if (p >= 1) a.enter = null;
       }
-      // 처형 연출은 몸을 띄워 흐리게 한다. 관전자의 장면은 이후 같은 캐릭터를 반투명한 유령으로 이어 그린다.
-      let rise = 0;
-      let fade = 1;
-      let tagFade = 1; // 유령 이름표로 이어지는 동안 읽기를 유지한다.
-      const fadeAt = wantGhost ? undefined : seatLook?.fadeAt;
-      if (fadeAt !== undefined && a.exit === null) {
-        const f = executionFade(now - fadeAt, reduced);
-        rise = f.rise;
-        fade = f.opacity;
-        tagFade = fade >= GHOST_OPACITY ? fade : GHOST_OPACITY + ((1 - GHOST_OPACITY) * (GHOST_OPACITY - fade)) / (GHOST_OPACITY - EXEC_END_OPACITY);
-      }
-      // 결과 화면의 반투명 좌석(쉬었던 사람, 11-12): 장면 표의 opacity 와 처형 연출 불투명도 중 낮은 쪽을 몸에 쓴다. 이름표(alpha)는 연출만 따른다
-      // 유령 몸은 나타날 때 투명도를 올리고 모션을 줄이면 즉시 표시한다.
-      const ghostIn = a.ghost ? (reduced ? GHOST_SPRITE.opacity : GHOST_SPRITE.opacity * Math.min(1, (now - a.ghostAt) / GHOST_SPRITE.inMs)) : fade;
+      if (a.dusting && elapsedDust !== null) alpha = Math.min(alpha, reduced ? 0 : Math.max(0, 1 - elapsedDust / 720));
+      // 관전자 유령과 쉬었다 합류한 결과 화면의 반투명 좌석은 별도로 처리한다.
+      const ghostIn = a.ghost ? (reduced ? GHOST_SPRITE.opacity : GHOST_SPRITE.opacity * Math.min(1, (now - a.ghostAt) / GHOST_SPRITE.inMs)) : 1;
       const bodyFade = Math.min(ghostIn, seatLook?.opacity ?? 1);
       if (bodyFade !== a.fadeOpacity) {
         a.fadeOpacity = bodyFade;
-        a.handle.setOpacity?.(bodyFade, fadeAt !== undefined || seatLook?.opacity !== undefined || bodyFade === 1);
+        a.handle.setOpacity?.(bodyFade, seatLook?.opacity !== undefined || bodyFade === 1);
       }
-      alpha = Math.min(alpha, tagFade);
       const standY = look === null ? 0 : compactBar ? (at.x * at.x + at.z * at.z <= BAR_STAGE_RADIUS ** 2 ? BAR_STAGE_HEIGHT : 0) : stageLiftY(at, mapId);
       const baseY = posed ? BAR_SEAT_HEIGHT - 0.30 : standY;
-      const y = lift + baseY + (a.ghost ? ghostFloatY(now / 1000, reduced) : 0) + rise;
+      const y = lift + baseY + (a.ghost ? ghostFloatY(now / 1000, reduced) : 0);
       a.handle.root.scale.setScalar(a.base * scale);
       a.handle.root.position.set(at.x, y, at.z);
       if (a.notes !== null && a.notes.length > 0) {
         a.handle.setNoteView?.(eyeView && viewer ? Math.atan2(viewer.x - at.x, viewer.z - at.z) - a.yaw : undefined);
       }
-      const suspectOutline = a.exit === null && !wantGhost && suspectTargets?.has(a.seat) ? (reduced ? "fixed" : "pulse") : null;
+      const suspectOutline = a.exit === null && !wantGhost && !a.dusting && suspectTargets?.has(a.seat) ? (reduced ? "fixed" : "pulse") : null;
       if (suspectOutline !== a.suspectOutline) {
         a.suspectOutline = suspectOutline;
         a.handle.setPickMark?.(suspectOutline !== null, { color: NOTE_COLORS.outline, animate: suspectOutline === "pulse", pulseOutline: true });
       }
       a.headY = y + a.handle.update(dt, now / 1000, moving).headY * scale;
+      if (a.dusting || wasDusting) a.handle.setExecutionDust?.(a.dusting ? elapsedDust : null, reduced);
       a.tagAlpha = alpha === 1 ? "1" : String(Math.round(alpha * 1000) / 1000);
     }
 
@@ -1784,7 +1783,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   }
 
   function panTable(deltaX: number): void {
-    if (disposed || tableView?.mode !== "eye" || look?.table?.mode !== "eye" || look.table.centerTable || look.nightTable !== undefined || inputBlocked(status) || !Number.isFinite(deltaX)) return;
+    if (disposed || tableView?.mode !== "eye" || look?.table?.mode !== "eye" || look.table.centerTable || look.table.executionFocus || look.nightTable !== undefined || inputBlocked(status) || !Number.isFinite(deltaX)) return;
     tableView.yaw = tableYaw(tableView.yaw - deltaX * 0.0047, tableView.center);
     tableView.panning = true;
   }

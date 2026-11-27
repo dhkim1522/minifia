@@ -750,17 +750,21 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
   const whisperPeer = whisper.target === null ? undefined : view.players.find((player) => player.seat === whisper.target);
   const tableVoice = tableOn && liveTableVoice?.phase === phase && liveTableVoice.epoch === epoch
     && view.players.some((p) => p.seat === liveTableVoice.seat && isAlive(p)) ? liveTableVoice : undefined;
+  const executionSeat = view.phase === "execution" && meAlive && !ghost && executed?.seat !== view.me.seat
+    ? executed?.seat
+    : undefined;
   // 기존 중앙 공개 연출도 화면을 시작할 때 같은 의자에서 탁자 중앙을 본다.
   const centerTable = introActive || view.phase === "assigning" || view.phase === "answerReveal" ||
-    view.phase === "execution" || view.phase === "morning" || (view.phase === "dayAnnounce" && presentation === undefined);
+    (view.phase === "execution" && executionSeat === undefined) || view.phase === "morning" || (view.phase === "dayAnnounce" && presentation === undefined);
   const nomination = view.phase === "nomination" && (turnStage === "turn" || turnStage === "done") ? view.day?.turn : undefined;
   const phaseSeat = presentation?.seat ?? nomination?.order[nomination.i] ?? (view.phase === "defense" ? view.day?.candidate : undefined);
   const phaseFocusAt = presentation !== undefined && view.phaseEndsAt !== null && view.phaseDurationMs !== null
     ? view.phaseEndsAt - view.phaseDurationMs
     : nomination?.endsAt !== undefined ? nomination.endsAt - PICK_TURN_MS : view.phaseStartsAt;
   const chooseManually = tableFocusAt !== undefined && (phaseSeat === undefined || (phaseFocusAt !== undefined && tableFocusAt >= phaseFocusAt));
-  const preferredSeat = chooseManually ? tableFocus : phaseSeat;
+  const preferredSeat = executionSeat ?? (chooseManually ? tableFocus : phaseSeat);
   const cameraFocus = centerTable || preferredSeat === view.me.seat ? undefined : preferredSeat;
+  const executionFocus = executionSeat !== undefined && cameraFocus === executionSeat;
   const cameraFocusAt = chooseManually ? tableFocusAt : phaseFocusAt;
 
   const lookAtTableSeat = (seat: number): void => {
@@ -856,12 +860,13 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
   }, [firstGameGuide, view.me, firstChoice, nominating, serverMine, nighting]);
 
   const scene = useMemo(() => {
-    const look = sceneLook(view, { stageH, ...(fading ? { fading } : {}), ...(mine !== undefined ? { mine } : {}), ...(verdictZoom !== undefined ? { verdictZoom } : {}) });
+    const look = sceneLook(view, { stageH, ...(view.phase === "execution" && fading ? { fading } : {}), ...(mine !== undefined ? { mine } : {}), ...(verdictZoom !== undefined ? { verdictZoom } : {}) });
     if (camera) look.camera = camera;
     if (tableCameraOn) look.table = {
       mode: "eye",
       ...(centerTable ? { centerTable: true } : {}),
       ...(cameraFocus !== undefined ? { focus: cameraFocus } : {}),
+      ...(executionFocus ? { executionFocus: true } : {}),
       ...(cameraFocusAt !== undefined ? { focusAt: cameraFocusAt } : {}),
       ...(tableVoice ? { voice: { seat: tableVoice.seat, at: tableVoice.at } } : {}),
     };
@@ -880,7 +885,7 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
     const ownRoleOutfit = role === "mafia" || (ownAnimalOf(view) !== undefined && (role === "police" || role === "doctor"));
     if (!inOpening && ownSeat && meAlive && view.spectate === undefined && ownRoleOutfit) ownSeat.costume = jobOutfit(role);
     return look;
-  }, [view, stageH, fading, mine, verdictZoom, camera, meAlive, inOpening, tableCameraOn, tableOn, tableBallot, centerTable, cameraFocus, cameraFocusAt, tableVoice]);
+  }, [view, stageH, fading, mine, verdictZoom, camera, meAlive, inOpening, tableCameraOn, tableOn, tableBallot, centerTable, cameraFocus, executionFocus, cameraFocusAt, tableVoice]);
 
   return (
     <main ref={rootRef} className={inOpening ? "mf-root mf-pregame mf-pregame--seated" : "mf-root mf-game"} data-game-stage={inOpening || inEnding ? undefined : ""} data-phase={view.phase} data-night-dark={nightDark ? "true" : undefined} data-ghost-view={ghost ? "true" : undefined} data-kb-open={kbLifted ? "true" : undefined} data-suspect-mode={inOpening || inEnding ? undefined : suspect.mode ? "on" : "off"} data-suspects={suspectsMirror}>
@@ -992,7 +997,8 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
         } : {})} />
       ) : moment.active ? (
         willReveal !== null || executionResult !== null ? (
-          <PhaseEvent kind="execution" title={willReveal !== null ? "마지막 유언" : "처형 결과"} interactive={false}>
+          <PhaseEvent kind="execution" title={willReveal !== null ? "마지막 유언" : "처형 결과"}
+            {...(willReveal === null ? { className: "mf-execution-result" } : {})} interactive={false}>
             {willReveal !== null ? <QuoteCard text={willReveal.text} visible still={willReveal.still} will announce={false} /> : <ResultAnnounce text={executionResult?.text ?? null} embedded />}
           </PhaseEvent>
         ) : null

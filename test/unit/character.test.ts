@@ -8,6 +8,7 @@ import { emoteDurationMs } from "../../src/world/emoteCap";
 import { CHAR_SCALE, characterKit, createCharacter, figForSeat, POSE_BLEND_MS, setGhostArt, WALK_PHASE_RATE, type WorldCharacter } from "../../src/world/character";
 import { EMOTE_KEYS, EMOTES, type EmoteId, FACE_IDS, FIGS, OUTFITS, SKIN, type OutfitId } from "../../src/world/characterData";
 import { detailedAnimalHead } from "../../src/world/barAssets/animal-detail";
+import { EXECUTION_COLLAPSE_MS, EXECUTION_DUST_MS } from "../../src/game/dayView";
 
 function meshes(root: Object3D, visibleOnly = true): Mesh[] {
   const out: Mesh[] = [];
@@ -25,6 +26,50 @@ function joint(root: Object3D, name: string): Object3D {
   if (!o) throw new Error(`관절 ${name} 없음`);
   return o;
 }
+
+describe("공개 처형 먼지", () => {
+  it("공유 재질을 유지하고 좌석의 먼지 한 묶음만 그린 후 해제한다", () => {
+    const leaving = createCharacter(0, "coat", undefined, "rabbit");
+    const watching = createCharacter(1, "coat", undefined, "rabbit");
+    const shared = watching.bodyMeshes()[0]!.material;
+    const body = leaving.bodyMeshes()[0]!;
+    const pose = leaving.root.position.clone();
+    const size = leaving.root.scale.clone();
+    leaving.setExecutionDust(500, false);
+    const points = leaving.root.getObjectByName("execution-dust");
+    const material = body.material as Material;
+    const disposed = vi.fn();
+    material.addEventListener("dispose", disposed);
+    expect(points?.visible).toBe(true);
+    expect(material).not.toBe(shared);
+    expect(watching.bodyMeshes()[0]!.material).toBe(shared);
+    leaving.setExecutionDust(EXECUTION_COLLAPSE_MS + 50, false);
+    expect(leaving.root.getObjectByName("execution-dust")).toBe(points);
+    expect(leaving.bodyMeshes().every((mesh) => !mesh.visible)).toBe(true);
+    expect(leaving.root.position).toEqual(pose);
+    expect(leaving.root.scale).toEqual(size);
+    leaving.setExecutionDust(EXECUTION_DUST_MS, false);
+    expect(leaving.root.getObjectByName("execution-dust")).toBeUndefined();
+    expect(disposed).toHaveBeenCalledOnce();
+    expect(leaving.bodyMeshes().every((mesh) => !mesh.visible)).toBe(true);
+    leaving.setExecutionDust(null, false);
+    expect(body.material).toBe(shared);
+    expect(body.visible).toBe(true);
+    leaving.dispose();
+    watching.dispose();
+  });
+
+  it("모션 줄이기에서는 입자와 복제 재질 없이 빈 자리를 표시한다", () => {
+    const character = createCharacter(0, "coat", undefined, "fox");
+    const body = character.bodyMeshes()[0]!;
+    const material = body.material;
+    character.setExecutionDust(0, true);
+    expect(character.root.getObjectByName("execution-dust")).toBeUndefined();
+    expect(character.bodyMeshes().every((mesh) => !mesh.visible)).toBe(true);
+    expect(body.material).toBe(material);
+    character.dispose();
+  });
+});
 
 describe("착석 동물 리그", () => {
   it("12종이 자세와 표정을 바꿔도 같은 정교 머리를 쓴다", () => {

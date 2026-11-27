@@ -6,7 +6,7 @@
 import { isAlive } from "../../shared/game/alive";
 import { BAR_SEATS_FX, barChairAssignment, STAGE_SPOT, UNIT } from "../../shared/game/map";
 import type { MapId, PhaseId, RoomView } from "../../shared/protocol";
-import { GHOST_FADE_END_MS, GHOST_RISE_MS, pointsTally } from "../game/dayView";
+import { EXECUTION_DUST_MS, pointsTally } from "../game/dayView";
 import { keywordPresentationOf } from "../game/keywordView";
 import { pointSeatsOf, revealPoints, showdownStageOf } from "../game/showdownView";
 import { suspectStacks } from "../game/suspectView";
@@ -56,7 +56,7 @@ export interface SceneLook {
   /** 탈락 관전의 이름표는 생략하고 직업을 의상으로 보여 준다. */
   spectator?: true;
   /** 재즈 바 착석 화면과 공개 채팅에서 발생한 짧은 시선 신호. */
-  table?: { mode: "eye" | "wide"; centerTable?: boolean; focus?: number; focusAt?: number; voice?: { seat: number; at: number } };
+  table?: { mode: "eye" | "wide"; centerTable?: boolean; focus?: number; focusAt?: number; executionFocus?: boolean; voice?: { seat: number; at: number } };
   /** 작은 화면의 원탁 토론에서 인접한 이름표를 위로 나눠 놓는다. */
   spreadTableTags?: true;
   /** 답안 발표 중 참가자 패널이 열려도 발표자의 얼굴을 위쪽 공간에 담는다. */
@@ -118,7 +118,7 @@ export function visibleSeats(view: RoomView, fading?: ReadonlyMap<number, number
     if (nightCitizen && p.seat !== view.me.seat) continue;
     const dead = !isAlive(p);
     const startedAt = fading?.get(p.seat);
-    const fadingNow = dead && startedAt !== undefined && (now === undefined || now - startedAt < GHOST_FADE_END_MS);
+    const fadingNow = dead && startedAt !== undefined && (now === undefined || now - startedAt < EXECUTION_DUST_MS);
     if (dead && !ghostViewer && !fadingNow) continue;
     seats[p.seat] = {
       show: true,
@@ -250,11 +250,6 @@ export function sceneLook(view: RoomView, opts: { stageH: number; fading?: Reado
 
 // ---- 처형 연출·유령·무대·지목 방향 ----
 
-/** 처형된 사람의 반투명 불투명도(UI-SPEC 유령 모양: 블록아웃 setGhost 의 0.35 보다 UI-SPEC 0.6 이 이긴다) */
-export const GHOST_OPACITY = 0.6;
-/** 처형 연출 끝점의 몸 불투명도(18.1 C-4 값 그대로). 이름표 흐려짐 식도 이 값을 쓴다 */
-export const EXEC_END_OPACITY = 0.26;
-
 /**
  * 유령 그림(ghost_default, 0083-2) 값: 불투명도 0.88(85~90%), 등장 시간 0.3초(처형 연출이 끝나 좌석이 ghost 가 될 때), 폭:높이 = 3:4.
  * 키는 캐릭터와 같다(character.ts 의 로컬 높이 2.45 = 이름표가 서는 머리 꼭대기).
@@ -277,8 +272,6 @@ const GHOST_TINT: Readonly<Record<LightingStage, number>> = {
 export function ghostTintOf(lighting: LightingStage): number {
   return GHOST_TINT[lighting];
 }
-/** 처형 연출에서 위로 떠오르는 높이(월드 단위, UI-SPEC 처형 +1.2) */
-export const EXEC_RISE_Y = 1.2;
 /** 유령이 떠 있는 기본 높이(월드 단위) */
 export const GHOST_BASE_Y = 0.35;
 /** 유령 흔들림 진폭(월드 단위) */
@@ -287,22 +280,6 @@ export const GHOST_BOB_Y = 0.08;
 export const STAGE_TOP_R = 1.18;
 /** 무대 위 발 높이(월드 단위, 블록아웃 ctx.center.y) */
 export const STAGE_TOP_Y = 0.29;
-
-/**
- * 처형 연출 시간표(UI-SPEC 처형 + 18.1 C-4, 알림 시작 기준 ms): 0~1400 불투명도 1 → 0.6·높이 0 → 1.2,
- * 1400~2400 불투명도 0.6 → 0.26(EXEC_END_OPACITY)·높이 1.2 → 0.35(GHOST_BASE_Y), 2400 부터는 그 끝점 그대로 — 사라지지 않고 서 있다가 좌석이 ghost 가 되면 유령 그림이 나타난다.
- * 모션 줄이기면 모든 시각에 끝점(0.26·0.35)이다. 음수는 0 으로 본다.
- */
-export function executionFade(elapsedMs: number, reduced: boolean): { opacity: number; rise: number } {
-  const t = Math.max(0, elapsedMs);
-  if (reduced || t >= GHOST_FADE_END_MS) return { opacity: EXEC_END_OPACITY, rise: GHOST_BASE_Y };
-  if (t < GHOST_RISE_MS) {
-    const k = t / GHOST_RISE_MS;
-    return { opacity: 1 - (1 - GHOST_OPACITY) * k, rise: EXEC_RISE_Y * k };
-  }
-  const k = (t - GHOST_RISE_MS) / (GHOST_FADE_END_MS - GHOST_RISE_MS);
-  return { opacity: GHOST_OPACITY + (EXEC_END_OPACITY - GHOST_OPACITY) * k, rise: EXEC_RISE_Y + (GHOST_BASE_Y - EXEC_RISE_Y) * k };
-}
 
 /** 유령 떠다님 높이(월드 단위) = 0.35 + sin(2t) × 0.08, t 는 초(주기 π초). 모션 줄이기면 0.35 고정 */
 export function ghostFloatY(tSec: number, reduced: boolean): number {

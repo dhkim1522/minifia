@@ -353,8 +353,8 @@ export const RECIPES: Readonly<Record<SfxId, Recipe>> = {
     { duck: { db: -12, holdMs: 1200 } },
   ),
   "execution.rise": recipe("execution.rise", "sfx", 1, -26, [
-    osc("sine", 0, 2400, [220, 880], 1, [600, 0, 1, 500]),
-    nz(0, 2400, bp(800, 2400, 1.5), 0.5, [900, 0, 1, 500]),
+    nz(0, 650, bp(1900, 1100, 0.9), 0.78, [65, 0, 0.68, 450]),
+    nz(280, 1080, bp(1150, 480, 0.9), 0.62, [170, 0, 0.56, 650]),
   ]),
   "verdict.reject": recipe("verdict.reject", "sfx", 1, -22, [
     osc("sine", 0, 100, 150, 1, thud(100)),
@@ -602,7 +602,7 @@ export const SCREEN_COUNTERPART: Readonly<Record<SoundId, string>> = {
   "vote.cast": "찬반 카드에서 눌린 선택의 강조",
   "verdict.heart": "판결 순간의 줌과 어두워지는 화면",
   "execution.gavel": "처형 확정 알림 문구가 뜨는 모습",
-  "execution.rise": "처형된 유령이 반투명으로 떠오르는 모습",
+  "execution.rise": "탈락한 캐릭터가 먼지가 되어 가라앉는 모습",
   "verdict.reject": "처형 없음 알림 문구",
   "night.fall": "밤 장면으로 바뀌는 전환",
   "night.cue": "ambient: 밤 긴장 맥박 비네트(모든 폰이 각자 난수로 같은 규칙)",

@@ -18,8 +18,8 @@ import {
   answerStillOf,
   DAY_COPY,
   dayEvents,
-  GHOST_FADE_END_MS,
-  GHOST_RISE_MS,
+  EXECUTION_DUST_MS,
+  EXECUTION_COLLAPSE_MS,
   headerFor,
   willCardOf,
   POLICE_CARD_AT,
@@ -200,7 +200,7 @@ describe("dayEvents — 처형·처형 없음 (DAY-06, 22-12 P22-13)", () => {
     const events = dayEvents(verdictView(), executionView("잘 있어"));
     same(events.lines, [{ kind: "hot", text: "지호 님 처형", at: 3000 }]);
     same(events.announces, [{ text: "지호 님 처형", at: 3000, ms: 3000 }]);
-    same(events.fx, [{ kind: "ghostRise", seat: 3, at: 3000 }]);
+    same(events.fx, [{ kind: "executionDust", seat: 3, at: 3000 }]);
   });
 
   it("빈 유언이어도 처형 알림 시각표는 같다 — 길이로 구별되지 않는다", () => {
@@ -327,10 +327,10 @@ describe("dayEvents — 마피아 확정 hot 줄 (NIGHT-08, E2 #16)", () => {
 });
 
 describe("알림 시간표 (UI-SPEC 남은 위험 8, 22-12 P22-13)", () => {
-  it("상수 값: 처형 알림 3.0초, 처형 없음 1.4초, 낮 2.0초, 유령 1.4·2.4초", () => {
+  it("상수 값: 처형 알림 3초, 처형 없음 1.4초, 낮 2초, 몸이 걷히는 1.45초·먼지가 끝나는 2.4초", () => {
     same(
-      [ANNOUNCE_EXEC_MS, ANNOUNCE_NOEXEC_MS, ANNOUNCE_DAY_MS, GHOST_RISE_MS, GHOST_FADE_END_MS],
-      [3000, 1400, 2000, 1400, 2400],
+      [ANNOUNCE_EXEC_MS, ANNOUNCE_NOEXEC_MS, ANNOUNCE_DAY_MS, EXECUTION_COLLAPSE_MS, EXECUTION_DUST_MS],
+      [3000, 1400, 2000, 1450, 2400],
     );
   });
 
@@ -340,10 +340,10 @@ describe("알림 시간표 (UI-SPEC 남은 위험 8, 22-12 P22-13)", () => {
     expect(WILL_REVEAL_MS + ANNOUNCE_EXEC_MS + EXEC_TAIL_MS).toBe(EXECUTION_MS);
   });
 
-  it("유령 떠오름·사라짐이 처형 알림 시간 안이다", () => {
-    expect(GHOST_RISE_MS).toBeLessThanOrEqual(ANNOUNCE_EXEC_MS);
-    expect(GHOST_FADE_END_MS).toBeLessThanOrEqual(ANNOUNCE_EXEC_MS);
-    expect(GHOST_RISE_MS).toBeLessThan(GHOST_FADE_END_MS);
+  it("몸과 먼지가 모두 처형 알림 시간 안에 사라진다", () => {
+    expect(EXECUTION_COLLAPSE_MS).toBeLessThanOrEqual(ANNOUNCE_EXEC_MS);
+    expect(EXECUTION_DUST_MS).toBeLessThanOrEqual(ANNOUNCE_EXEC_MS);
+    expect(EXECUTION_COLLAPSE_MS).toBeLessThan(EXECUTION_DUST_MS);
   });
 
   it("처형 단계 이벤트의 알림은 모두 EXECUTION_MS 안에서 끝난다", () => {

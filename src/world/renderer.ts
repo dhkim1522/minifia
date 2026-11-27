@@ -49,6 +49,7 @@ export interface CharacterHandle {
   applyOutfit?(id: string): void;
   applyAnimal?(animal: AnimalId | undefined): void;
   setOpacity?(alpha: number, allowLiving?: boolean): void;
+  setExecutionDust?(elapsedMs: number | null, reduced: boolean): void;
   /** 손가락 유지 자세·발밑 고리 — optional (08-10) */
   holdPose?(id: "point" | null): void;
   setRing?(color: string | null): void;

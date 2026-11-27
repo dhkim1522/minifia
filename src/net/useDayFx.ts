@@ -3,8 +3,7 @@
 // - 결과 알림: 한 번에 하나, 새 알림이 이전 것을 바꾼다. 지연(at) 뒤에 뜨고 ms 뒤에 사라진다. 상태 `announce` 로 돌려준다.
 // - 09.1: 순차 지목 위 알림 대기열은 없다(차례 위 한 줄이 대신, UI-SPEC A-7). 거절 알림(TopToast)은 GameMap 이 따로 띄운다.
 // - 손사래(08-15): 지목 선두가 새 사람으로 바뀌면(leaderShift) `deny` {seat, nonce} 를 갱신한다. WorldStage 가 nonce 가 바뀔 때만 한 번 손사래를 한다.
-// - 처형 떠오름(08-16): dayEvents 의 fx ghostRise 를 `fading`(좌석 → 연출 시작 시각)으로 돌려준다. 처형 단계 view 는 처형된 사람이 이미 탈락으로 오므로 화면이 그 순간부터
-//   연출이 끝날 때(알림 시작 + GHOST_FADE_END_MS)까지 그 좌석을 표에 붙잡아 둔다. 시작 시각은 단계 진입 + at(알림이 처형으로 바뀌는 때)이라 그 전에는 불투명 그대로 서 있다.
+// - 처형 먼지: `fading` 표에 (좌석 → 연출 시작 시각)을 둔다. 이미 탈락한 좌석의 공개 모습을 연출 끝까지 유지한다.
 //   표가 렌더 한가운데에서 바뀌어야 진입 순간 한 프레임도 사라졌다 돌아오지 않으므로 이 상태는 렌더 중에 view 차이로 정하고(React 의 "이전 값 기억" 방식), 타이머는 정리만 맡는다.
 //   서버가 보낸 유령 위치가 아니라 처형 이벤트 하나로 화면이 그리는 일회성 연출이다.
 // 유령이 되는 순간(08-17): 직전 view 의 내가 산 사람이었고 지금 view 의 내가 탈락이면 채팅에 유령 시작 줄('유령 채팅 · 산 사람에게 안 보여요', ghost 아이콘)을 한 번 만들고
@@ -18,7 +17,7 @@ import { useEffect, useRef, useState } from "react";
 import { isAlive } from "../../shared/game/alive";
 import type { RoomView } from "../../shared/protocol";
 import { CHAT_TEXT } from "../game/chatText";
-import { answerStillOf, DAY_COPY, dayEvents, GHOST_FADE_END_MS, POLICE_CARD_AT, policeResultOf } from "../game/dayView";
+import { answerStillOf, DAY_COPY, dayEvents, EXECUTION_DUST_MS, POLICE_CARD_AT, policeResultOf } from "../game/dayView";
 import type { AnnounceIcon } from "../game/dayView";
 import { leaderShift } from "../world/presence";
 import type { ChatStore } from "./chatStore";
@@ -75,11 +74,11 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
     if (!reset && seen.view !== null && view !== null && seen.view.phase === "night" && view.phase === "morning" && meDead(view) && !meDead(seen.view)) {
       setKillFx((k) => ({ nonce: (k?.nonce ?? 0) + 1, at: Date.now() }));
     }
-    const rises = view === null ? [] : dayEvents(reset ? null : seen.view, view, reset ? { reset: true } : {}).fx;
-    if (reset || rises.length > 0) {
+    const effects = view === null ? [] : dayEvents(reset ? null : seen.view, view, reset ? { reset: true } : {}).fx;
+    if (reset || effects.length > 0) {
       const next = new Map(reset ? NO_FADING : fading);
       const now = Date.now();
-      for (const f of rises) if (f.kind === "ghostRise") next.set(f.seat, now + f.at);
+      for (const f of effects) next.set(f.seat, now + f.at);
       setFading(next);
     }
   }
@@ -159,10 +158,9 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
       chat.addSystem(CHAT_TEXT.channelStart.mafia, { scope: "mafia", icon: "roleMafia", at: Date.now() });
     }
 
-    // 처형 떠오름이 끝나면(알림 시작 + 2.4초) 좌석을 놓아준다 — 해제되면 장면 표가 그 좌석을 코트 안개 유령으로 남긴다(18.1 P181-6)
+    // 처형 먼지가 걷히면(알림 시작 + 2.4초) 공개 좌석의 연출을 끝낸다.
     for (const f of ev.fx) {
-      if (f.kind !== "ghostRise") continue;
-      later(f.at + GHOST_FADE_END_MS, () =>
+      later(f.at + EXECUTION_DUST_MS, () =>
         setFading((m) => {
           if (!m.has(f.seat)) return m;
           const next = new Map(m);

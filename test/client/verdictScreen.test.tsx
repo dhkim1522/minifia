@@ -442,11 +442,20 @@ describe("처형 화면 (DAY-06, 22-12)", () => {
     return m;
   };
 
+  it("재즈 바에서는 공개 처형 대상에 시선을 두고 탈락 관전 시점에는 원탁 중앙을 본다", () => {
+    const m = enter({ ...passedView(), map: "bar" });
+    expect(lastScene().table).toMatchObject({ mode: "eye", focus: 4, executionFocus: true });
+    m.show({ ...passedView({ mySeat: 4 }), map: "bar" });
+    expect(lastScene().table).toMatchObject({ mode: "eye", centerTable: true });
+    expect(lastScene().table?.focus).toBeUndefined();
+  });
+
   it("처형 단계 진입(0ms): 유언 카드가 중앙에 보이고 3초 뒤 같은 장면에 처형 결과가 이어진다", () => {
     const m = enter();
     const card = willCard(m.container);
     expect(card?.textContent).toBe("다들 잘 있어");
     const scene = card?.closest('[data-phase-event="execution"]');
+    expect(scene?.classList.contains("mf-execution-result")).toBe(false);
     const status = scene?.querySelector('[role="status"]');
     expect(status?.contains(card)).toBe(true);
     expect(status?.querySelector('[role="status"]')).toBeNull();
@@ -460,6 +469,7 @@ describe("처형 화면 (DAY-06, 22-12)", () => {
     expect(willCard(m.container)).toBeNull();
     expect(m.container.querySelector(".mv-quote--will")).toBeNull();
     expect(m.container.querySelector("[data-announce]")?.closest('[data-phase-event="execution"]')).toBe(scene);
+    expect(scene?.classList.contains("mf-execution-result")).toBe(true);
     expect(announceText(m.container)).toBe("도윤 님 처형");
     expect(hotLines(m.container)).toEqual(["도윤 님 처형"]);
   });

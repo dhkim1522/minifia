@@ -11,6 +11,16 @@
   flex: 0 1 auto;
   min-block-size: 0;
 }
+
+.mf-phase-event.mf-execution-result {
+  justify-content: flex-end;
+  padding-block-end: clamp(20px, 21.5dvh, 180px);
+}
+@media (max-height: 640px) {
+  .mf-phase-event.mf-execution-result { padding-block-end: 8px; }
+  .mf-execution-result .mf-phase-event__card { gap: 4px; padding: 6px 10px; }
+  .mf-execution-result .mf-phase-event__title { font: var(--type-body-strong); }
+}
 .mf-announce.is-embedded {
   position: static;
   padding: 0;

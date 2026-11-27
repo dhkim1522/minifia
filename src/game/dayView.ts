@@ -71,9 +71,9 @@ export const ANNOUNCE_EXEC_MS = EXEC_ANNOUNCE_MS;
 export const ANNOUNCE_NOEXEC_MS = NO_EXECUTION_MS;
 /** 낮 시작 단계(DAY_ANNOUNCE_MS) 2초. 14 U-5 로 36px 알림은 없어졌고 상수만 남는다 */
 export const ANNOUNCE_DAY_MS = 2000;
-/** 처형된 사람이 반투명으로 떠오르는 시간 → 2.4초까지 사라진다(알림 시작 기준) */
-export const GHOST_RISE_MS = 1400;
-export const GHOST_FADE_END_MS = 2400;
+/** 처형 알림과 함께 몸이 위부터 걷히고 남은 먼지가 가라앉는다. */
+export const EXECUTION_COLLAPSE_MS = 1450;
+export const EXECUTION_DUST_MS = 2400;
 // 09-18: 아침 알림(UI-SPEC 아침 시간표, 시작값). 아침 진입 시각 0 기준.
 /** 아침 36px 알림 시작(막이 걷히는 0.4초 뒤)과 길이 */
 export const ANNOUNCE_MORNING_AT = 400;
@@ -113,9 +113,9 @@ export interface DayAnnounce {
 /** 결과 알림 앞 아이콘 이름: target(피해자 있음, 진홍), heal(누군가 살아남), ghost(피해자 본인) */
 export type AnnounceIcon = "target" | "heal" | "ghost";
 
-/** 일회성 연출. ghostRise = 처형된 사람이 반투명으로 떠오르며 사라진다(서버가 유령 위치를 보내는 것이 아니다). */
+/** 공개 처형 좌석의 일회성 먼지 연출. */
 export interface DayFx {
-  kind: "ghostRise";
+  kind: "executionDust";
   seat: number;
   at: number;
 }
@@ -247,7 +247,7 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
       // 유언 단계(22-11 D-14·D-23): 득표 줄·알림이 없다 — 지목·찬반 기록을 남기지 않는다. 장면(처형자 스포트라이트)과 띠가 말한다
       return;
     case "execution": {
-      // 처형자(day.execution)가 있을 때만(22-12 P22-14). 0~3.0초는 유언 카드(willCardOf, 화면이 시계로 그린다)라 알림·줄이 없고, 3.0초에 큰 글·줄·유령이 선다.
+      // 마지막 유언 3초가 끝나면 공개 처형 알림·채팅 줄·먼지 연출을 함께 시작한다.
       const seat = day.execution?.seat;
       if (seat === undefined) return;
       const name = nameOf(cur, seat);
@@ -255,7 +255,7 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
       const text = DAY_COPY.executedText(name);
       out.lines.push({ kind: "hot", text, at: WILL_REVEAL_MS });
       out.announces.push({ text, at: WILL_REVEAL_MS, ms: fitExecution(WILL_REVEAL_MS, ANNOUNCE_EXEC_MS) });
-      out.fx.push({ kind: "ghostRise", seat, at: WILL_REVEAL_MS });
+      out.fx.push({ kind: "executionDust", seat, at: WILL_REVEAL_MS });
       return;
     }
     case "answerReveal": {

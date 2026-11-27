@@ -38,6 +38,8 @@ import { MOVE_SPEED } from "../../shared/game/world";
 import { buildGhost3d, type Ghost3d } from "./ghost3d";
 import { createNoteRig, type NoteRig } from "./postit";
 import { emoteCycles, REDUCED_Y_SCALE } from "./emoteCap";
+import { createExecutionDust } from "./executionDust";
+import { EXECUTION_COLLAPSE_MS, EXECUTION_DUST_MS } from "../game/dayView";
 import { EMOTE_KEYS, EMOTES, EYE, type EmoteId, FACE_IDS, type FaceId, type Fig, FIGS, GHOST_SCALE, type KnownFaceId, MAFIA_FIG_INDEX, MOUTH, type Outfit, OUTFITS, type OutfitId, type PoseKey, SKIN } from "./characterData";
 
 /** 맵 위 크기 — 원래 키 약 2.1 단위를 약 1.7 로 줄여 쓴다 */
@@ -1024,6 +1026,7 @@ export interface WorldCharacter {
   setGaze(yaw: number, pitch: number, pointYaw?: number): void;
   /** 유령일 때만 유령 그림(또는 대체 몸)의 불투명도를 바꾼다(유령이 아니면 무시) */
   setOpacity(alpha: number, allowLiving?: boolean): void;
+  setExecutionDust(elapsedMs: number | null, reduced: boolean): void;
   /**
    * 동작의 마지막 자세를 해제할 때까지 유지한다(DAY-04 손가락). POSE_BLEND_MS 에 걸쳐 섞여 들어가고 null 이면 섞여 나온다.
    * 유지 중 playEmote 는 유지 자세 위에서 한 번 재생되고 끝나면 유지로 돌아온다. 동작 표(characterData)는 바꾸지 않는다
@@ -1092,7 +1095,7 @@ const bodyMaterial = new MeshStandardMaterial({ vertexColors: true, roughness: 0
 const glassMaterial = new MeshStandardMaterial({ color: "#9ec2ff", transparent: true, opacity: 0.6 });
 const shadowMaterial = new MeshBasicMaterial({ color: "#000000", transparent: true, opacity: 0.3, depthWrite: false });
 const shadowGeometry = new CircleGeometry(0.42, 24);
-/** 대체 몸(그림이 없을 때)의 불투명도(UI-SPEC 유령 모양, presence.ts GHOST_OPACITY 와 같은 값) */
+/** 대체 몸(그림이 없을 때)의 불투명도 */
 const GHOST_DEFAULT_OPACITY = 0.6;
 /** 발밑 고리 모양(그림자 원판 반지름 0.42 바깥) */
 const RING_INNER = 0.5;
@@ -1162,6 +1165,8 @@ export function createCharacter(
   let ghostOn = false;
   let animalGhost = false;
   let transitionMat: MeshStandardMaterial | null = null;
+  let executionDust: ReturnType<typeof createExecutionDust> | null = null;
+  let executionHidden = false;
   let ghostAlpha = GHOST_ART_OPACITY;
   let ghostTint = 1;
   let sprite: Ghost3d | null = null;
@@ -1245,7 +1250,7 @@ export function createCharacter(
     const o = OUTFITS[outfitId];
     const { fig, parts } = model();
     const shown = parts.armB.filter((p) => p.glass && isShown(p.tag, o, fig, face));
-    if (shown.length === 0 || spriteShown()) {
+    if (shown.length === 0 || spriteShown() || executionDust || executionHidden) {
       if (glassMesh) glassMesh.visible = false;
       return;
     }
@@ -1270,6 +1275,19 @@ export function createCharacter(
     return ghostOn && ghostArt && !animalGhost;
   }
   refreshGlass();
+
+  const resetExecutionDust = (): void => {
+    if (executionDust === null && !executionHidden) return;
+    executionDust?.dispose();
+    executionDust = null;
+    executionHidden = false;
+    for (const joint of JOINTS) {
+      meshes[joint].material = transitionMat ?? surfaceMaterial();
+      meshes[joint].visible = true;
+    }
+    disc.visible = !firstPerson;
+    refreshGlass();
+  };
 
   function detailExpression(): void {
     const geo = meshes.head.geometry;
@@ -1520,7 +1538,7 @@ export function createCharacter(
       if (firstPerson !== ownEye) {
         firstPerson = ownEye;
         for (const child of body.children) child.visible = !ownEye || child === groups.armA || child === groups.armB;
-        disc.visible = !ownEye && !ghostOn;
+        disc.visible = !ownEye && !ghostOn && !executionDust && !executionHidden;
       }
     },
     setGaze(yaw, pitch, aim = 0) {
@@ -1581,6 +1599,7 @@ export function createCharacter(
         return;
       }
       if (!ghostOn) {
+        resetExecutionDust();
         ghostOn = true;
         transitionMat?.dispose();
         transitionMat = null;
@@ -1681,6 +1700,33 @@ export function createCharacter(
         transitionMat = null;
       }
     },
+    setExecutionDust(elapsedMs, reduced) {
+      if (disposed || ghostOn) return;
+      if (elapsedMs === null || elapsedMs < 0) {
+        resetExecutionDust();
+        return;
+      }
+      if (executionHidden) return;
+      if (reduced || elapsedMs >= EXECUTION_DUST_MS) {
+        executionDust?.dispose();
+        executionDust = null;
+        executionHidden = true;
+        for (const joint of JOINTS) meshes[joint].visible = false;
+        disc.visible = false;
+        refreshGlass();
+        return;
+      }
+      if (!executionDust) {
+        executionDust = createExecutionDust(root, JOINTS.map((joint) => meshes[joint]), surfaceMaterial());
+        for (const joint of JOINTS) meshes[joint].material = executionDust.material;
+        disc.visible = false;
+        refreshGlass();
+      }
+      if (elapsedMs >= EXECUTION_COLLAPSE_MS) {
+        for (const joint of JOINTS) meshes[joint].visible = false;
+      }
+      executionDust.update(elapsedMs);
+    },
     setNotes(fromSeats, opts) {
       if (disposed || ghostOn) return;
       if (!noteRig) {
@@ -1706,6 +1752,7 @@ export function createCharacter(
     dispose() {
       if (disposed) return;
       disposed = true;
+      executionDust?.dispose();
       transitionMat?.dispose();
       transitionMat = null;
       noteRig?.detach();

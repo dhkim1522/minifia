@@ -17,8 +17,9 @@ import type { WorldStageProps } from "../../src/components/WorldStage";
 import { LIGHT_BLEND_SEC, UnsupportedRendererError } from "../../src/world/renderer";
 import type { CharacterHandle, LightingPhase, NightRestSeat, RendererStatusEvent, WorldRenderer } from "../../src/world/renderer";
 import { BAR_FOLLOW_SHARE, gatherView, stageOffsetY, ZOOM_MAJORITY } from "../../src/world/camera";
+import type { TableCamera } from "../../src/world/camera";
 import { predictSegment, SEG_BLEND_MS, YAW_TURN_RATE } from "../../src/world/motion";
-import { GHOST_FADE_END_MS } from "../../src/game/dayView";
+import { EXECUTION_DUST_MS } from "../../src/game/dayView";
 import { createWorldRuntime, ENTER_MS, EXIT_MS, MOVE_ACK_TIMEOUT_MS, RING_COLORS, WALK_CUE_KEY } from "../../src/world/runtime";
 import type { WorldModules } from "../../src/world/runtime";
 import { installWorldTestHooks, WORLD_TEST_KEY, worldTestHooksEnabled } from "../../src/world/testHooks";
@@ -44,6 +45,7 @@ export interface FakeRenderer extends WorldRenderer {
   setChalk: Mock<(at: { x: number; z: number } | null, opacity: number) => void>;
   setSelfLight: Mock<(at: { x: number; z: number } | null) => void>;
   setNightRest: Mock<(seats: readonly NightRestSeat[], hideSeat: number | undefined) => void>;
+  setTableView: Mock<(view: TableCamera | null, offsetY: number) => void>;
   emit(e: RendererStatusEvent): void;
   lost: boolean;
   renders: number;
@@ -75,6 +77,7 @@ export function makeFakeRenderer(): FakeRenderer {
     setChalk: vi.fn(),
     setSelfLight: vi.fn(),
     setNightRest: vi.fn(),
+    setTableView: vi.fn(),
     addCharacter(seat: number, c: CharacterHandle) {
       r.chars.set(seat, c);
     },
@@ -158,6 +161,7 @@ export function makeFakeKit(created: FakeHandle[]): WorldModules["characterKit"]
         setSeated: vi.fn(),
         applyOutfit: vi.fn(),
         setOpacity: vi.fn(),
+        setExecutionDust: vi.fn(),
         holdPose: vi.fn(),
         setRing: vi.fn(),
         setPickMark: vi.fn(),
@@ -2265,7 +2269,7 @@ describe("탈락자 동물 유령", () => {
   it("산 사람 화면: 처형 연출 동안 고른 의상 그대로 사라지고 의상 바꾸기·setGhost 가 없다", async () => {
     const players = FOUR.map((p) => (p.seat === 3 ? { ...p, look: "mafia" as OutfitId } : p));
     const s = await openGhost({ ...ALIVE, 3: { fadeAt: Date.now() } }, {}, players);
-    frames(GHOST_FADE_END_MS - 50);
+    frames(EXECUTION_DUST_MS - 50);
     expect(handleOf(s, 3).outfit).toBe("mafia");
     for (const h of s.world.handles) {
       expect(h.applyOutfit).not.toHaveBeenCalled();
@@ -2275,7 +2279,7 @@ describe("탈락자 동물 유령", () => {
 
   it("관전 화면에서 처형 연출 뒤 같은 자리와 캐릭터로 동물 유령이 이어진다", async () => {
     const s = await openGhost({ ...ALIVE, 3: { fadeAt: Date.now() } });
-    frames(GHOST_FADE_END_MS + 50);
+    frames(EXECUTION_DUST_MS + 50);
     const h3 = handleOf(s, 3);
     s.rerender({ scene: sceneOf({ ...ALIVE, 3: { ghost: true } }) });
     frames(400);
@@ -2339,7 +2343,7 @@ describe("산 사람 화면의 탈락자 유령 — 마지막 구간에 선다 (
   it("snap 에서 빠진 뒤에 처음 ghost 가 된 좌석(연출을 막 마친 처형자)도 마지막 구간에 세운다", async () => {
     const s = await open({ scene: sceneOf({ ...ALIVE, 3: { fadeAt: Date.now() } }) }, { players: FOUR, ents: FOUR_ENTS() });
     snap(s.store, [seg(0, [200, 100]), seg(1, [-300, 50]), seg(2, [-100, 400])]);
-    frames(GHOST_FADE_END_MS + 100);
+    frames(EXECUTION_DUST_MS + 100);
     s.rerender({ scene: sceneOf({ ...ALIVE, 3: { ghost: true } }) });
     frames(100);
     expect(s.world.renderers[0]!.chars.has(3)).toBe(true);
@@ -2963,35 +2967,60 @@ describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연
       expect(yOf(s, 2)).toBe(0);
     });
 
-    it("fadeAt 좌석은 떠오르며 흐려지고 2400ms 뒤에도 지워지지 않고 안개 끝점(0.26·높이 0.35)에 선다. 이름표도 같이 흐려진다", async () => {
+    it("재즈 바 처형은 같은 의자에서 인접한 공개 대상 자리를 바라보고 탈락자 좌표가 빠져도 방향을 유지한다", async () => {
+      const view: RoomView = { ...makeView(FOUR), phase: "execution", map: "bar" };
+      const ready = seg(0, [...BAR_SEATS_FX[0]]);
+      const target = seg(1, [...BAR_SEATS_FX[1]]);
+      const framing = { mode: "eye", focus: 1, executionFocus: true } as const;
+      const s = await open({ view, scene: sceneOf({ 0: {}, 1: {} }, { table: { mode: "eye", centerTable: true } }) }, { players: FOUR, ents: [ready, target] });
+      const renderer = s.world.renderers[0]!;
+      const before = renderer.setTableView.mock.lastCall?.[0];
+      s.rerender({ scene: sceneOf({ 0: {}, 1: { fadeAt: Date.now() } }, { table: framing }) });
+      frames(700);
+      const active = renderer.setTableView.mock.lastCall?.[0];
+      expect(active?.mode).toBe("eye");
+      expect(active?.position).toEqual(before?.position);
+      expect(active?.horizontalFov).toBe(before?.horizontalFov);
+      expect(active!.target.x - active!.position.x).toBeLessThan(-0.8);
+      snap(s.store, [ready]);
+      s.rerender({ scene: sceneOf({ 0: {} }, { table: framing }) });
+      frames(EXECUTION_DUST_MS);
+      const after = renderer.setTableView.mock.lastCall?.[0];
+      expect(after?.position).toEqual(active?.position);
+      expect(after?.target.x).toBeCloseTo(active!.target.x, 3);
+    });
+
+    it("처형 좌석은 크기·높이를 유지하며 그 자리에 먼지를 내리고 이름표를 거둔다", async () => {
       const s = await openGame();
       const r = s.world.renderers[0]!;
       const h3 = r.chars.get(3) as FakeHandle;
+      const size = h3.root.scale.x;
+      const height = yOf(s, 3);
       s.rerender({ scene: sceneOf({ ...ALL, 3: { fadeAt: Date.now() } }) });
       frames(700);
-      const op = (h3.setOpacity as ReturnType<typeof vi.fn>).mock.calls.at(-1)![0] as number;
-      expect(op).toBeGreaterThan(0.77);
-      expect(op).toBeLessThan(0.83);
-      expect(yOf(s, 3)).toBeGreaterThan(0.5);
-      expect(yOf(s, 3)).toBeLessThan(0.7);
+      expect(h3.setExecutionDust).toHaveBeenLastCalledWith(expect.any(Number), false);
+      expect(vi.mocked(h3.setExecutionDust!).mock.lastCall![0]).toBeGreaterThan(660);
+      expect(h3.setOpacity).not.toHaveBeenCalled();
+      expect(h3.root.scale.x).toBe(size);
+      expect(yOf(s, 3)).toBe(height);
       expect(Number(tagOf(s.utils, 3)!.style.opacity)).toBeLessThan(0.85);
-      frames(GHOST_FADE_END_MS - 700 - 16);
-      expect(r.chars.has(3)).toBe(true);
-      frames(300);
-      expect(r.chars.has(3)).toBe(true); // 연출 뒤에도 지워지지 않는다(18.1 C-4)
-      expect(h3.disposed).toBe(0);
-      expect((h3.setOpacity as ReturnType<typeof vi.fn>).mock.calls.at(-1)![0] as number).toBeCloseTo(0.26, 6);
-      expect(yOf(s, 3)).toBeCloseTo(0.35, 6);
+      frames(EXECUTION_DUST_MS - 700);
+      expect(Number(tagOf(s.utils, 3)!.style.opacity)).toBe(0);
+      s.rerender({ scene: sceneOf({ 0: {}, 1: {}, 2: {} }) });
+      frames(EXIT_MS + 32);
+      expect(r.chars.has(3)).toBe(false);
+      expect(h3.disposed).toBe(1);
     });
 
-    it("모션 줄이기면 fadeAt 좌석이 처음부터 불투명도 0.26·높이 0.35 로 선다", async () => {
+    it("모션 줄이기면 높이 변화 없이 빈 자리를 바로 보여 준다", async () => {
       stubReducedMotion(true);
       const s = await openGame();
       const h3 = s.world.renderers[0]!.chars.get(3) as FakeHandle;
       s.rerender({ scene: sceneOf({ ...ALL, 3: { fadeAt: Date.now() } }) });
       frames(100);
-      expect((h3.setOpacity as ReturnType<typeof vi.fn>).mock.calls.at(-1)![0] as number).toBeCloseTo(0.26, 6);
-      expect(yOf(s, 3)).toBeCloseTo(0.35, 6);
+      expect(h3.setExecutionDust).toHaveBeenLastCalledWith(expect.any(Number), true);
+      expect(yOf(s, 3)).toBe(0);
+      expect(Number(tagOf(s.utils, 3)!.style.opacity)).toBe(0);
     });
 
     it("연출 뒤 장면 표가 fadeAt 없는 ghost 로 바뀌어도 좌석이 지워졌다 다시 생기지 않는다(깜빡임 없음, C-4)", async () => {
@@ -2999,7 +3028,7 @@ describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연
       const r = s.world.renderers[0]!;
       const h3 = r.chars.get(3) as FakeHandle;
       s.rerender({ scene: sceneOf({ ...ALL, 3: { fadeAt: Date.now() } }) });
-      frames(GHOST_FADE_END_MS + 50);
+      frames(EXECUTION_DUST_MS + 50);
       s.rerender({ scene: sceneOf({ ...ALL, 3: { ghost: true } }) });
       frames(100);
       expect(r.chars.get(3)).toBe(h3);
@@ -3011,7 +3040,7 @@ describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연
       const s = await openGame();
       const r = s.world.renderers[0]!;
       s.rerender({ scene: sceneOf({ ...ALL, 3: { ghost: true, fadeAt: Date.now() } }) });
-      frames(GHOST_FADE_END_MS + 200);
+      frames(EXECUTION_DUST_MS + 200);
       expect(r.chars.has(3)).toBe(true);
     });
   });

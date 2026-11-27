@@ -4,14 +4,11 @@
 import { describe, expect, it } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
 import type { DayView, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
-import { GHOST_FADE_END_MS, GHOST_RISE_MS } from "../../src/game/dayView";
+import { EXECUTION_DUST_MS } from "../../src/game/dayView";
 import { GATHER_CENTER, ZOOM_MAJORITY, ZOOM_MIN_STAGE_H } from "../../src/world/camera";
 import { jobOutfit } from "../../src/world/jobOutfit";
 import {
   cameraModeOf,
-  EXEC_END_OPACITY,
-  executionFade,
-  GHOST_BASE_Y,
   GHOST_SPRITE,
   ghostFloatY,
   ghostTintOf,
@@ -116,8 +113,8 @@ describe("visibleSeats (GHOST-01, T-08-25)", () => {
     const view = viewOf("execution", { dead: [3], mySeat: 0 });
     const fading = new Map([[3, 1000]]);
     same(visibleSeats(view, fading, 1000)[3], { show: true, ghost: false, fadeAt: 1000 });
-    same(visibleSeats(view, fading, 1000 + GHOST_FADE_END_MS - 1)[3], { show: true, ghost: false, fadeAt: 1000 });
-    const after = visibleSeats(view, fading, 1000 + GHOST_FADE_END_MS)[3];
+    same(visibleSeats(view, fading, 1000 + EXECUTION_DUST_MS - 1)[3], { show: true, ghost: false, fadeAt: 1000 });
+    const after = visibleSeats(view, fading, 1000 + EXECUTION_DUST_MS)[3];
     expect(after).toBeUndefined();
   });
 
@@ -276,50 +273,6 @@ describe("sceneLook (위를 묶는다)", () => {
     const look = sceneLook(view, { stageH: 300 });
     same(Object.keys(look.seats).map(Number), [0, 1, 2, 3, 4]);
     same(look.seats[3]?.ghost, true);
-  });
-});
-
-describe("executionFade (DAY-05: 1.4초 떠오름 → 2.4초 끝점에 선 뒤 유령 그림으로 바뀐다)", () => {
-  const at = (ms: number, reduced = false) => executionFade(ms, reduced);
-  const REST = { opacity: EXEC_END_OPACITY, rise: GHOST_BASE_Y };
-  it("시간 상수는 dayView 와 같은 출처다", () => {
-    same([GHOST_RISE_MS, GHOST_FADE_END_MS], [1400, 2400]);
-  });
-  it("0ms: 불투명도 1·높이 0", () => {
-    same(at(0), { opacity: 1, rise: 0 });
-  });
-  it("700ms: 불투명도 0.8·높이 0.6", () => {
-    const f = at(700);
-    expect(f.opacity).toBeCloseTo(0.8, 9);
-    expect(f.rise).toBeCloseTo(0.6, 9);
-  });
-  it("1399ms 는 아직 떠오르는 중, 1400ms: 불투명도 0.6·높이 1.2", () => {
-    expect(at(1399).opacity).toBeGreaterThan(0.6);
-    expect(at(1399).rise).toBeLessThan(1.2);
-    expect(at(1400).opacity).toBeCloseTo(0.6, 9);
-    expect(at(1400).rise).toBeCloseTo(1.2, 9);
-  });
-  it("1900ms: 불투명도는 0.6 과 0.26 사이, 높이는 1.2 와 유령 기본 높이 사이", () => {
-    const f = at(1900);
-    expect(f.opacity).toBeGreaterThan(EXEC_END_OPACITY);
-    expect(f.opacity).toBeLessThan(0.6);
-    expect(f.rise).toBeGreaterThan(GHOST_BASE_Y);
-    expect(f.rise).toBeLessThan(1.2);
-  });
-  it("2400ms 부터는 끝점(불투명도 0.26·높이 0.35)에 선다 — 사라지지 않는다", () => {
-    expect(at(2399).opacity).toBeGreaterThan(EXEC_END_OPACITY);
-    same(at(2400), REST);
-    same(at(9999), REST);
-  });
-  it("음수 경과는 0 과 같다", () => {
-    same(at(-50), at(0));
-  });
-  it("모션 줄이기: 모든 시각에 처음부터 유령 끝점이다", () => {
-    for (const ms of [0, 700, 2399, 2400, 9999]) same(at(ms, true), REST);
-  });
-  it("반환에 hidden 키가 없다", () => {
-    expect("hidden" in at(0)).toBe(false);
-    expect("hidden" in at(5000)).toBe(false);
   });
 });
 
