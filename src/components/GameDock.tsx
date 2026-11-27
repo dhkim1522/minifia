@@ -62,10 +62,9 @@ interface GameDockProps {
   chat: ReactNode;
   people?: TableControlsProps | undefined;
   tools: ReactNode;
-  peopleOnly?: boolean;
 }
 
-export function GameDock({ scope, initialPane, peopleAction, preserveWriting, keepLooking, keepToolsOpen, paused, inputRef, chatStore, channel, mySeat, latest, chat, people, tools, peopleOnly = false }: GameDockProps) {
+export function GameDock({ scope, initialPane, peopleAction, preserveWriting, keepLooking, keepToolsOpen, paused, inputRef, chatStore, channel, mySeat, latest, chat, people, tools }: GameDockProps) {
   const id = useId();
   const [selection, setSelection] = useState({ scope, pane: initialPane, waiting: false, action: peopleAction?.kind });
   const voting = peopleAction?.kind === "vote";
@@ -233,7 +232,7 @@ export function GameDock({ scope, initialPane, peopleAction, preserveWriting, ke
   }
 
   return (
-    <div className="mf-game-dock" data-table-dock="" data-dock-open={pane} data-dock-people-only={peopleOnly ? "" : undefined} onKeyDown={(event) => {
+    <div className="mf-game-dock" data-table-dock="" data-dock-open={pane} onKeyDown={(event) => {
       if (event.key !== "Escape" || event.defaultPrevented || event.nativeEvent.isComposing || pane === "closed") return;
       event.stopPropagation();
       close();
@@ -297,7 +296,7 @@ export function GameDock({ scope, initialPane, peopleAction, preserveWriting, ke
         </div>
       ) : null}
       <nav className="mf-game-dock__tabs" aria-label="게임 하단 조작">
-        {TABS.filter(({ id: tab }) => !peopleOnly || tab === "people").map(({ id: tab, label, icon }) => {
+        {TABS.map(({ id: tab, label, icon }) => {
           const vote = tab === "people" && voting;
           const pending = tab === "people" && actionNeedsConfirmation && !armed;
           const count = tab === "chat" ? unread : 0;
@@ -314,7 +313,7 @@ export function GameDock({ scope, initialPane, peopleAction, preserveWriting, ke
               onClick={(event) => afterSwipe(event, () => open(pane === tab && !pending ? "closed" : tab))}
               {...(tab === "people" ? { onPointerUp: (event: PointerEvent<HTMLButtonElement>) => endSwipe(event, -1, () => open(tab)), onPointerCancel: () => { gesture.current = undefined; } } : {})}>
               <V2Icon name={icon} size={21} />
-              {vote ? <span>지목</span> : pending ? <span>밤 선택</span> : tab === "people" && (peopleOnly || pane === "people") ? <span>참가자</span> : null}
+              {vote ? <span>지목</span> : pending ? <span>밤 선택</span> : null}
               {count > 0 ? <span data-dock-unread="" className="mf-game-dock__unread" aria-hidden="true">{count}</span> : null}
             </button>
           );

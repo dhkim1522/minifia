@@ -316,7 +316,6 @@ export function GamePanel({ view, introActive = false, send, canSend, binding, k
             chat={showChat ? roomChat("chat") : null}
             people={dock.roster}
             tools={dockTools}
-            peopleOnly={presenting}
           />
         ) : showChat ? roomChat() : roleTool ? <div className="mf-room-toolbar">{roleTool}</div> : null}
         {showNoteRow && !noteReady ? (

@@ -26,7 +26,7 @@
 
 .mf-room :is(
   .mf-lobby__header, .mf-lobby__panel,
-  .mf-assign__bar, .mf-assign__panel, .mf-reveal__header,
+  .mf-assign__bar, .mf-assign__panel, .mf-reveal__header, .mf-pregame__participants,
   .mf-game__header, .mf-game__panel,
   .mf-result__header, .mf-result__panel, .mf-bench__panel, .mv-host
 ) {
@@ -35,6 +35,7 @@
 }
 
 .mf-room :is(.mf-assign__bar, .mf-assign__panel) { width: 100%; }
+.mf-room .mf-pregame__participants { box-sizing: border-box; width: 100%; }
 .mf-room .mf-will-layer { max-width: 450px; margin-inline: auto; }
 
 .mf-phase {

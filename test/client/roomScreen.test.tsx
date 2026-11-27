@@ -835,6 +835,25 @@ describe("RoomScreen: 첫날 답안 발표", () => {
     stage.props = null;
   });
 
+  it.each(["roleReveal", "keyword", "dayAnnounce"] as const)("%s에서는 하단 아이콘 세 개 중 참가자만 사용할 수 있다", phase => {
+    connectionMock.current = conn({ view: play(phase, phase === "dayAnnounce" ? first : undefined) });
+    render(ui());
+    const dock = within(screen.getByRole("navigation", { name: "게임 하단 조작" }));
+    const chat = dock.getByRole<HTMLButtonElement>("button", { name: "채팅" });
+    const people = dock.getByRole<HTMLButtonElement>("button", { name: "참가자" });
+    const tools = dock.getByRole<HTMLButtonElement>("button", { name: "더 보기" });
+
+    expect(dock.getAllByRole("button")).toEqual([chat, people, tools]);
+    expect(chat.disabled).toBe(true);
+    expect(people.disabled).toBe(false);
+    expect(tools.disabled).toBe(true);
+    expect(people.textContent).toBe("");
+    fireEvent.click(people);
+    expect(people.getAttribute("aria-expanded")).toBe("true");
+    expect(people.textContent).toBe("");
+    expect(screen.getByRole("region", { name: "참가자" })).not.toBeNull();
+  });
+
   it.each([false, true])("현재 참가자의 한 답만 공개하고 같은 눈높이 장면으로 다음 참가자를 본다(playtest=%s)", playtest => {
     const extra = playtest ? { playtest: true as const } : {};
     connectionMock.current = conn({ view: play("dayAnnounce", first, extra) });

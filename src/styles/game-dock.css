@@ -225,11 +225,6 @@
   padding: 3px;
 }
 
-.mf-game-dock[data-dock-people-only] .mf-game-dock__tabs {
-  justify-self: center;
-  grid-template-columns: minmax(100px, 1fr);
-}
-
 .mf-game-dock__tabs button {
   display: flex;
   align-items: center;

@@ -946,7 +946,7 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
         <div className="mf-pregame__phase">{opening}</div>
         {tableCameraOn && suspect.visible ? <div className="mf-pregame__participants">
           <GameDock scope={tableKey} initialPane="closed" preserveWriting={false} keepLooking={false} keepToolsOpen={false}
-            paused={false} chatStore={chat} channel={null} mySeat={view.me.seat} chat={null} tools={null} people={tableRoster} peopleOnly />
+            paused={false} chatStore={chat} channel={null} mySeat={view.me.seat} chat={null} tools={null} people={tableRoster} />
           <div className="mf-sr-only" role="status" data-suspect-said="">{suspect.said}</div>
         </div> : null}
       </div> : <>
