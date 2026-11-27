@@ -295,7 +295,7 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-will__title { display: inline-flex; align-items: center; gap: 6px; min-height: var(--tap-min); padding-left: 4px; font: var(--type-section); color: var(--noir-paper); }
 .mv-will__close { color: var(--gray-300); }
 .mv-will__text { width: 100%; box-sizing: border-box; padding: 12px; border-radius: var(--noir-control-radius); border: 1px solid var(--night-600); background: var(--stationery-paper, none) center / cover no-repeat, var(--noir-paper); color: var(--noir-ink); font: var(--type-hand-note); resize: none; user-select: text; border-color: var(--noir-line); }
-[data-will-sheet="will"] .mv-will__text { font: 400 22px/1.25 var(--font-hand); }
+[data-will-sheet="will"] .mv-will__text { font: var(--type-body); }
 .mv-will--mafia .mv-will__text { background-image: var(--stationery-note, none); }
 .mv-will__text::placeholder { font: var(--type-body); color: var(--noir-ink); opacity: 0.74; }
 .mv-will__foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
