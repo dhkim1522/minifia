@@ -4,6 +4,7 @@
 // 이전 판의 비공개 정보(역할·밤 선택·수사/치료/암살 기록·유언·주장·귓속말·통계 등)가 새 판에 남지 않는 이유는 규칙이 아니라 구조다:
 // 새 방·새 사람 행을 "허용 목록 키 배열"에서 키 하나씩 복사해 만든다 — 펼쳐 복사(...state, ...player)를 하지 않으므로 앞으로 늘어나는 게임 필드도 자동으로 빠진다(L39, T-11-26).
 import { MIN_PLAYERS } from "../protocol";
+import { hostSuccessor } from "./continuity";
 import { ROOM_TTL_MS, beginGame, roundOf, type KeywordPicker } from "./room";
 import type { Player, RoomState } from "./room";
 
@@ -44,7 +45,7 @@ export type ReadyResult = { ok: true; state: RoomState } | { ok: false };
  * 같은 값이면 입력 상태 그대로(저장·전송을 건너뛰는 근거), off 는 ready 키째 지운다. 거절 사유는 돌려주지 않는다 — 어떤 거절이든 같은 응답이 나가야 한다(L40).
  */
 export function setReady(state: RoomState, actorId: string, on: boolean, round: number): ReadyResult {
-  if (state.phase !== "ended" || round !== roundOf(state)) return { ok: false };
+  if (state.phase !== "ended" || state.phaseEndsAt !== null || round !== roundOf(state)) return { ok: false };
   const actor = state.players.find((p) => p.id === actorId);
   if (actor === undefined || actor.left === true || actor.isBot === true || actor.id === state.hostId) return { ok: false };
   if ((actor.ready === true) === on) return { ok: true, state };
@@ -71,7 +72,7 @@ export type RematchResult = { ok: true; state: RoomState; removedIds: string[] }
  * 이어서 startGame 과 같은 본체 beginGame 으로 역할 배정 → 맵 결정 → assigning 으로 간다(쉬는 사람은 역할 배정에 들지 않는다).
  */
 export function rematch(state: RoomState, actorId: string, round: number, now: number, randInt: (n: number) => number, pickKeyword?: KeywordPicker): RematchResult {
-  if (state.phase !== "ended" || actorId !== state.hostId || round !== roundOf(state)) return { ok: false };
+  if (state.phase !== "ended" || state.phaseEndsAt !== null || actorId !== state.hostId || round !== roundOf(state)) return { ok: false };
   const host = state.players.find((p) => p.id === state.hostId);
   if (host === undefined || host.left === true) return { ok: false };
   const takes = (p: Player): boolean => p.left !== true && (p.id === state.hostId || p.connected) && isReady(p, state.hostId);
@@ -148,7 +149,27 @@ export function seatBench(state: RoomState): RoomState {
   return { ...rest, players: [...state.players, ...bench.map((p) => ({ ...benchRow(p), sat: true as const }))] };
 }
 
-/** 대기실 복귀(테스트 되돌리기)용: bench 를 sat 표시 없이 그대로 참가자로 합류시킨 사람 행들. */
+/** 대기실 복귀용: bench 를 sat 표시 없이 그대로 참가자로 합류시킨 사람 행들. */
 export function benchAsPlayers(state: RoomState): Player[] {
   return (state.bench ?? []).map(benchRow);
+}
+
+/** 토큰과 방 설정을 보존하면서 판 전용 키를 허용 목록으로 걷는다. */
+export function resetRoomForLobby(state: RoomState, nextRound = false): RoomState {
+  const players = [...state.players, ...benchAsPlayers(state)].filter((p) => p.left !== true).map(benchRow);
+  const fallback = players
+    .filter((p) => !p.isBot)
+    .sort((a, b) => a.joinSeq - b.joinSeq)[0];
+  const hostId = players.some((p) => p.id === state.hostId)
+    ? state.hostId
+    : (hostSuccessor(players) ?? fallback)?.id ?? state.hostId;
+  return {
+    ...copyKeys(state, REMATCH_ROOM_KEYS),
+    expiresAt: state.expiresAt,
+    ...(nextRound ? { round: roundOf(state) + 1 } : {}),
+    phase: "lobby",
+    phaseEndsAt: null,
+    hostId,
+    players,
+  };
 }

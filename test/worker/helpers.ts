@@ -985,6 +985,20 @@ export async function endedGame4(): Promise<{ code: string; socks: TestSocket[];
   return { code: g.code, socks: g.socks, actors: g.actors, dead: mafia, living: g.actors.filter((a) => a !== mafia) };
 }
 
+/** 배포 전 마감 없는 결과 방의 다시 하기 호환성 시험에만 사용한다. */
+export async function useLegacyResultDeadline(code: string): Promise<void> {
+  await editRoom(code, (room) => {
+    if (room.phase !== "ended") throw new Error("기존 결과 방 fixture 는 ended 에서만 준비한다");
+    return { ...room, phaseEndsAt: null };
+  });
+}
+
+export async function legacyEndedGame4() {
+  const game = await endedGame4();
+  await useLegacyResultDeadline(game.code);
+  return game;
+}
+
 /** richEndedGame6 가 만드는 줄의 본문(시험이 기대값을 이 상수로 만든다). */
 export const RICH_TEXT = {
   mafia1: "밤 마피아 첫째 줄",

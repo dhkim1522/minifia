@@ -1,7 +1,7 @@
 // 10-02: 로비 의상(dress) 처리 — 서버가 고른 값을 저장하고 모든 소켓의 players[].look 으로 보낸다 (D-6, L25·L26).
 import { describe, expect, it } from "vitest";
 import type { RoleId, ServerMessage } from "../../shared/protocol";
-import { advanceTo, connect, editRoom, endedGame4, ghostsOf, hello, lastViewOf, mapPlayers, mark, nextFrame, pause, seat, send, settle, stable, startedGame, storedRoom, summary, until, withRole } from "./helpers";
+import { advanceTo, closePhase, connect, editRoom, endedGame4, ghostsOf, hello, lastViewOf, mapPlayers, mark, nextFrame, pause, seat, send, settle, stable, startedGame, storedRoom, summary, until, withRole } from "./helpers";
 import type { Seated } from "./helpers";
 
 type State = Extract<ServerMessage, { t: "state" }>;
@@ -339,10 +339,9 @@ describe("결과 단계 의상 (D-16)", () => {
     send(g.dead.sock, { t: "dress", look: "noir" });
     const lookOf = (viewer: Seated["host"], seatNo: number): string | undefined => lastViewOf(viewer).players.find((p) => p.seat === seatNo)?.look;
     await until("의상 반영", async () => g.socks.every((s) => lookOf(s, g.living[0]!.seat) === "hood" && lookOf(s, g.dead.seat) === "noir"));
-    // 다시 하기: 손님 셋이 준비하고 방장이 시작한다
-    for (const s of g.socks.slice(1)) send(s, { t: "ready", on: true, round: 1 });
-    await until("모두 준비", async () => g.socks.every((s) => lastViewOf(s).players.filter((p) => p.ready === true).length === 4));
-    send(g.socks[0]!, { t: "rematch", round: 1 });
+    await closePhase(g.code);
+    await until("같은 방 대기실", async () => g.socks.every((s) => lastViewOf(s).phase === "lobby"));
+    send(g.socks[0]!, { t: "start" });
     await until("새 판", async () => g.socks.every((s) => lastViewOf(s).phase === "assigning"));
     for (const s of g.socks) {
       expect(lookOf(s, g.living[0]!.seat)).toBe("hood");

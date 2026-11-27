@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { isAlive } from "../../shared/game/alive";
 import { buildSummary } from "../../shared/game/endgame";
+import { RESULT_DISPLAY_MS } from "../../shared/game/phases";
 import type { RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { buildView } from "../../shared/game/view";
@@ -81,10 +82,11 @@ describe("여러 날에 걸친 처형 흐름 (6명, 마피아 2)", () => {
       s = castPoints(s, electing(s, second));
       s = advanceTo(s, "defense", seed + 800);
       s = advanceTo(s, "execution", seed + 900);
-      s = tick(s, s.phaseEndsAt!, seededRandInt(seed + 1000));
+      const resultAt = s.phaseEndsAt!;
+      s = tick(s, resultAt, seededRandInt(seed + 1000));
       expect(s.phase).toBe("ended");
       expect(s.winner).toBe("citizenWin");
-      expect(s.phaseEndsAt).toBeNull();
+      expect(s.phaseEndsAt).toBe(resultAt + RESULT_DISPLAY_MS);
 
       // 판 요약: 날짜 오름차순, 1일차 후보 없음(찬반 통과·지목 동률), 2·3일차 후보가 처형자(산 사람 전원 찬성)
       const summary = buildSummary(s);

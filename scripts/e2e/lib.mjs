@@ -3053,7 +3053,8 @@ const isResultOneShot = (id) => RESULT_ONE_SHOTS.includes(id);
 
 /**
  * 결과 소리 판정 (sound-result, D-15·D-21·T-12-41·T-12-44). 순수 함수 — 문턱은 여기에만 있고 흐름은 낮추지 않는다.
- * input = { log, participants, expectWin?, reloadLog } — log 는 ended 도착 직전에 비운 뒤 최종 상태 뒤까지 받은 훅 로그, reloadLog 는 같은 페이지를 새로고침한 직후 로그.
+ * input = { log, participants, expectWin?, reloadLog, timed? } — log는 결과 진입부터 역할 공개까지 받은 훅 로그이며, reloadLog는 결과 중 새로고침 직후 로그다.
+ * 시간제 결과(timed)는 승패 뒤에 전원 역할을 한 번에 공개하므로 뒤집기 한 번을 기대한다.
  * 결정 0089-20(D-19): 시상이 없어 시상 판정(옛 R4)은 지웠다 — 남은 판정 번호는 다시 매기지 않는다.
  *   R1 결과 구간 로그의 첫 침대 요청이 bed.result
  *   R2 role.flip 개수 == min(참가자 수, 8)
@@ -3062,11 +3063,12 @@ const isResultOneShot = (id) => RESULT_ONE_SHOTS.includes(id);
  *   R6 새로고침 로그: bed.result 가 있고 role.flip·result.*·game.start 가 없다
  */
 export function soundResultChecks(input) {
+  const timed = input?.timed === true;
   const labels = {
     R1: "결과 구간의 첫 침대 요청이 bed.result",
-    R2: "role.flip 이 참가자 수(최대 8)만큼",
+    R2: timed ? "전원 역할 공개 때 role.flip 한 번" : "role.flip 이 참가자 수(최대 8)만큼",
     R3: "result.win/lose 가 정확히 한 번(내 팀에 맞는 쪽)",
-    R5: "순서: 뒤집기 < 승패",
+    R5: timed ? "순서: 승패 < 역할 공개" : "순서: 뒤집기 < 승패",
     R6: "새로고침 로그는 bed.result 만(일회성 소리 없음)",
   };
   const log = validLog(input?.log) ? input.log : null;
@@ -3083,7 +3085,7 @@ export function soundResultChecks(input) {
     out.push(result("R1", labels.R1, firstBed?.id === "bed.result" ? [] : [`첫 침대 요청 ${firstBed?.id ?? "(없음)"}`]));
 
     const flips = idsOf(log, (id) => id === "role.flip");
-    const want = Math.min(n, 8);
+    const want = timed ? 1 : Math.min(n, 8);
     out.push(result("R2", labels.R2, flips.length === want ? [] : [`role.flip ${flips.length}개 ≠ ${want}`]));
 
     const wl = idsOf(log, (id) => id === "result.win" || id === "result.lose");
@@ -3100,7 +3102,8 @@ export function soundResultChecks(input) {
     const light = at(wl[0]);
     if (firstFlip === null || light === null) bad5.push("role.flip 또는 result.win/lose 가 없어 순서를 못 잼");
     else {
-      if (!(firstFlip < light)) bad5.push(`첫 role.flip(${Math.round(firstFlip)}) ≥ 승패(${Math.round(light)})`);
+      if (timed && !(light < firstFlip)) bad5.push(`승패(${Math.round(light)}) ≥ 역할 공개(${Math.round(firstFlip)})`);
+      if (!timed && !(firstFlip < light)) bad5.push(`첫 role.flip(${Math.round(firstFlip)}) ≥ 승패(${Math.round(light)})`);
     }
     out.push(result("R5", labels.R5, bad5));
   }

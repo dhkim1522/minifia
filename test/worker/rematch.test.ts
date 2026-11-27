@@ -10,7 +10,7 @@ import {
   chatSend,
   chatsOf,
   connect,
-  endedGame4,
+  legacyEndedGame4 as endedGame4,
   framesOf,
   helloForLog,
   lastViewOf,
@@ -26,6 +26,7 @@ import {
   toEndedByMafia,
   typingSend,
   until,
+  useLegacyResultDeadline,
 } from "./helpers";
 import type { TestSocket } from "./helpers";
 
@@ -233,6 +234,7 @@ describe("이전 판 round 의 메시지는 폐기된다 (L41, T-11-28)", () => 
     expect((await settle(host, m1)).map((m) => m.t)).toEqual(["state"]);
 
     await toEndedByMafia(g.code, g.socks);
+    await useLegacyResultDeadline(g.code);
     expect(lastViewOf(host).round).toBe(2);
     await readyUp(guests, g.socks, 4, 2);
     for (const [name, from, msg] of [

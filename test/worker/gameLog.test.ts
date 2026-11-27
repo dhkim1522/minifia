@@ -9,6 +9,7 @@ import { insertGame } from "../../worker/gameLog";
 import { openKeyword } from "../helpers/keyword";
 import {
   advanceTo,
+  closePhase,
   driveToEnded,
   editRoom,
   lastViewOf,
@@ -162,10 +163,9 @@ describe("판이 끝나면 D1 에 한 줄 (SC6)", () => {
       await until("실패 로그", async () => logged.mock.calls.some((c) => c[0] === "game log failed"));
       // 로그는 고정 문구 한 줄뿐이다 — 행·오류 내용을 싣지 않는다(T-23-39).
       expect(logged.mock.calls.filter((c) => c[0] === "game log failed").every((c) => c.length === 1)).toBe(true);
-      const round = (lastViewOf(room.host) as { round?: number }).round ?? 1;
-      for (const g of room.guests) send(g.sock, { t: "ready", on: true, round });
-      for (const s of socks) await settle(s, mark(s));
-      send(room.host, { t: "rematch", round });
+      await closePhase(room.code);
+      for (const s of socks) await nextFrame(s, (m) => m.t === "state" && m.view.phase === "lobby");
+      send(room.host, { t: "start" });
       for (const s of socks) await nextFrame(s, (m) => m.t === "state" && m.view.phase === "assigning");
       expect((await storedRoom(room.code)).phase).toBe("assigning");
     } finally {
@@ -198,9 +198,10 @@ describe("판이 끝나면 D1 에 한 줄 (SC6)", () => {
     await driveHumansToEnded(room);
     const first = ((await storedRoom(room.code)) as unknown as KeywordRoom).gameId!;
     await until("첫 판 행", async () => (await rowOf(first)) !== null);
-    for (const g of room.guests) send(g.sock, { t: "ready", on: true, round: 1 });
-    for (const s of socks) await settle(s, mark(s));
-    send(room.host, { t: "rematch", round: 1 });
+    await closePhase(room.code);
+    for (const s of socks) await nextFrame(s, (m) => m.t === "state" && m.view.phase === "lobby");
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM games WHERE id = ?").bind(first).first<number>("n"))).toBe(1);
+    send(room.host, { t: "start" });
     for (const s of socks) await nextFrame(s, (m) => m.t === "state" && m.view.phase === "assigning");
     const next = (await storedRoom(room.code)) as unknown as KeywordRoom;
     expect(next.gameId).toBeDefined();

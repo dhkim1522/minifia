@@ -3,7 +3,7 @@
 // 역할 확인(roleReveal) 뒤에는 낮 단계(dayAnnounce → discussion)가 돈다. 순차 주장 단계는 7페이즈에서 없어졌다(CHAT-06).
 // 낮 시작 발표 다음은 곧바로 토론이다(22페이즈 D-04 — 심부름 단계가 없어졌다). 기본 다음 단계는 nextPhaseOf 가 표에서 읽는다.
 // 낮 흐름(결정 0089-18, D-10): discussion → verdict(찬반, 후보 없음) → nomination(순차 지목) → defense(유언 자리) → execution → night → morning → dayAnnounce.
-// 단계 id 는 새로 만들지 않고 순서와 의미만 바꿨다(21페이즈와 같은 방식). 승패가 나면 execution·morning 의 마감에서 ended(마감 없음)로 간다.
+// 승패가 나면 execution·morning 의 마감에서 결과 공개(ended)로 간다.
 // 찬반 부결·지목 동점·0표는 결선 없이 night 다(첫날 키워드가 있는 판은 night 앞에 정답 공개 answerReveal 이 끼고, 승패가 나면 건너뛴다 — D-02). 동점 결선 runoff(0066-4)·마지막 3인 결전 showdown(0066-5)은
 // 판 규칙(ruleset.ts 의 RULES)이 켜졌을 때만 돈다(둘 다 꺼짐). 분기(찬반 부결·지목 동률·0표 → night 등)는 tick.ts 의 ON_DEADLINE 이
 // next 로 정한다 — 이 표의 next 는 "기본 다음 단계" 데이터일 뿐이다.
@@ -35,6 +35,9 @@ export interface PhaseDef {
 }
 
 export const ASSIGNING_MS = 3_000;
+export const RESULT_WINNER_MS = 1_300;
+export const RESULT_ROLES_MS = 8_000;
+export const RESULT_DISPLAY_MS = RESULT_WINNER_MS + RESULT_ROLES_MS;
 export const ROLE_REVEAL_MS = 15_000;
 // 제시어가 보이는 순간부터 단서를 입력할 수 있다.
 export const KEYWORD_MS = 35_000;
@@ -100,7 +103,7 @@ export const PHASE_DEFS: Readonly<Record<PhaseId, PhaseDef>> = Object.freeze({
   answerReveal: Object.freeze({ durationMs: ANSWER_REVEAL_MS, next: "night", revealsOwnRole: true }),
   night: Object.freeze({ durationMs: NIGHT_MS, next: "morning", revealsOwnRole: true }),
   morning: Object.freeze({ durationMs: MORNING_MS, next: "dayAnnounce", revealsOwnRole: true }),
-  ended: Object.freeze({ durationMs: null, next: null, revealsOwnRole: true }), // 마감이 없다 — 방 만료가 끝낸다
+  ended: Object.freeze({ durationMs: RESULT_DISPLAY_MS, next: "lobby", revealsOwnRole: true }),
   // 8페이즈 단계(결정 0060): discussion.next 가 nomination 이다. 옛 처형 여부·후보 선택·후보 공개 행은 08-22 에 지웠다.
   // 지목(순차, 22-09 D-12). durationMs 는 자리 값이다 — 진입 훅 enterNomination 이 state.pickTurn 을 만들고 tick 이 진입 훅 뒤 phaseDurationOf 로 길이를 다시 구한다(nominationStepMs 의 모이기 길이, 그 뒤는 차례 사슬). 동률·0표면 훅이 night 로
   nomination: Object.freeze({ durationMs: NOMINATION_MS, next: "defense", revealsOwnRole: true }),

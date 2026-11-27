@@ -16,7 +16,7 @@ import { testRoleOptions } from "./roles";
 import type { RoleId } from "./roles";
 import { pickTarget } from "./night";
 import { castFirstBallot, firstPlaytestDay } from "./playtest";
-import { benchAsPlayers } from "./rematch";
+import { resetRoomForLobby } from "./rematch";
 import { lowestFreeSeat } from "./room";
 import type { Player, RoomState } from "./room";
 import { stepRunoff } from "./runoff";
@@ -46,7 +46,7 @@ function checkTestHost(state: RoomState, actorId: string): TestToolError | null 
 export function skipPhase(state: RoomState, actorId: string, now: number, randInt: RandInt): TestToolResult {
   const denied = checkTestHost(state, actorId);
   if (denied !== null) return { ok: false, error: denied };
-  if (state.phase === "lobby" || state.phaseEndsAt === null) return { ok: false, error: "WRONG_PHASE" };
+  if (state.phase === "lobby" || state.phase === "ended" || state.phaseEndsAt === null) return { ok: false, error: "WRONG_PHASE" };
   // 차례가 있는 지목(09.1, 결정 0063-1): 남은 차례를 한 번에 마무리한 뒤 끝 알림 마감을 당겨 집계 → 다음 단계로.
   if (state.phase === "nomination" && state.pickTurn !== undefined) {
     return { ok: true, state: tick({ ...finishNomination(state, randInt), phaseEndsAt: now }, now, randInt) };
@@ -171,41 +171,7 @@ export function resetToLobby(state: RoomState, actorId: string): TestToolResult 
   const denied = checkTestHost(state, actorId);
   if (denied !== null) return { ok: false, error: denied };
   if (state.phase === "lobby") return { ok: false, error: "WRONG_PHASE" };
-  // 쉬는 사람(bench)이 있으면 참가자로 합류시켜 아무도 잃지 않는다(11-08) — 행은 아래 허용 목록으로 다시 만든다.
-  const players: Player[] = [...state.players, ...benchAsPlayers(state)].map((p) => ({
-    id: p.id,
-    token: p.token,
-    seat: p.seat,
-    nickname: p.nickname,
-    nicknameKey: p.nicknameKey,
-    joinSeq: p.joinSeq,
-    connected: p.connected,
-    connId: p.connId,
-    // 서버 봇은 대기실로 되돌려도 남는다(결정 0024).
-    ...(p.isBot === true ? { isBot: true as const } : {}),
-    // 고른 의상은 대기실로 돌아와도 남는다(결정 D-6) — 다시 하기(11페이즈)가 이어받는다.
-    ...(p.look !== undefined ? { look: p.look } : {}),
-    ...(p.animal !== undefined ? { animal: p.animal } : {}),
-  }));
-  const next: RoomState = {
-    code: state.code,
-    createdAt: state.createdAt,
-    expiresAt: state.expiresAt,
-    ...(state.everConnected !== undefined ? { everConnected: state.everConnected } : {}),
-    phase: "lobby",
-    phaseEndsAt: null,
-    hostId: state.hostId,
-    nextJoinSeq: state.nextJoinSeq,
-    players,
-    testMode: true,
-    ...(state.playtest === true ? { playtest: true as const } : {}),
-    // 고른 맵은 대기실로 돌아와도 남고(결정 D-20), 이번 판의 결정값 map 은 버린다 — 다음 시작이 다시 정한다.
-    ...(state.mapChoice !== undefined ? { mapChoice: state.mapChoice } : {}),
-    ...(state.testRole !== undefined ? { testRole: state.testRole } : {}),
-    // 봇 투표 설정도 testRole 처럼 남는다(P-13) — 같은 방의 다음 판에서도 봇이 같은 규칙으로 던진다.
-    ...(state.testBotVote !== undefined ? { testBotVote: state.testBotVote } : {}),
-  };
-  return { ok: true, state: next };
+  return { ok: true, state: resetRoomForLobby(state) };
 }
 
 /**

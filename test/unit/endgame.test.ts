@@ -4,8 +4,8 @@ import { describe, expect, it } from "vitest";
 import { isAlive } from "../../shared/game/alive";
 import { ENDED_ROOM_TTL_MS, buildSummary, enterEnded, routeAfterExecution, routeAfterMorning } from "../../shared/game/endgame";
 import { pickTarget } from "../../shared/game/night";
-import { MORNING_MS, NIGHT_MS } from "../../shared/game/phases";
-import type { Player, RoomState } from "../../shared/game/room";
+import { MORNING_MS, NIGHT_MS, RESULT_DISPLAY_MS } from "../../shared/game/phases";
+import { startGame, type Player, type RoomState } from "../../shared/game/room";
 import { nextWakeAt, tick } from "../../shared/game/tick";
 import { seededRandInt } from "../helpers/seededRandom";
 import { buildView } from "../../shared/game/view";
@@ -91,15 +91,16 @@ describe("enterEnded (END-02, D-28)", () => {
 
 describe("tick 연쇄 — 처형으로 끝 (END-01, END-02, D-28)", () => {
   for (const seed of SEEDS) {
-    it(`시드 ${seed}: 4명 판 마피아 처형 → execution 마감에 ended, 마감 없음, winner citizenWin, 만료 = E + 30분`, () => {
+    it(`시드 ${seed}: 마피아 처형 뒤 시민 승리 결과를 표시하고 마감에 대기실로 돌아간다`, () => {
       const s = executionOf(4, seed, "mafia");
       const e = s.phaseEndsAt!;
       const ended = tick(s, e, seededRandInt(seed + 9));
       expect(`${ended.phase}:${String(ended.phaseEndsAt)}:${String(ended.winner)}:${ended.expiresAt === e + ENDED_ROOM_TTL_MS}`).toBe(
-        "ended:null:citizenWin:true",
+        `ended:${e + RESULT_DISPLAY_MS}:citizenWin:true`,
       );
-      expect(tick(ended, e + 10 * 60 * 60 * 1000, seededRandInt(1)) === ended).toBe(true);
-      expect(nextWakeAt(ended)).toBe(ended.expiresAt);
+      expect(tick(ended, e + RESULT_DISPLAY_MS - 1, THROWING_RAND)).toBe(ended);
+      expect(nextWakeAt(ended)).toBe(e + RESULT_DISPLAY_MS);
+      expect(tick(ended, e + RESULT_DISPLAY_MS, THROWING_RAND)).toMatchObject({ phase: "lobby", phaseEndsAt: null, round: 2 });
     });
   }
 });
@@ -115,7 +116,7 @@ describe("tick 연쇄 — 아침으로 끝 (END-01, D-10)", () => {
       const morning = tick(picked.state, night.phaseEndsAt!, seededRandInt(seed + 5));
       expect(`${morning.phase}:${String(morning.morning?.eliminated)}:${String(morning.winner)}`).toBe(`morning:${victim.seat}:undefined`);
       const ended = tick(morning, morning.phaseEndsAt!, seededRandInt(seed + 6));
-      expect(`${ended.phase}:${String(ended.phaseEndsAt)}:${String(ended.winner)}`).toBe("ended:null:mafiaWin");
+      expect(`${ended.phase}:${String(ended.phaseEndsAt)}:${String(ended.winner)}`).toBe(`ended:${morning.phaseEndsAt! + RESULT_DISPLAY_MS}:mafiaWin`);
       expect(ended.expiresAt).toBe(morning.phaseEndsAt! + ENDED_ROOM_TTL_MS);
     });
   }
@@ -143,7 +144,50 @@ describe("CONN-02 — 연결과 무관", () => {
     const e = cut.phaseEndsAt!;
     const ended = tick(cut, e, seededRandInt(3));
     expect(`${ended.phase}:${String(ended.winner)}:${ended.expiresAt === e + ENDED_ROOM_TTL_MS}`).toBe("ended:citizenWin:true");
-    expect(nextWakeAt(ended)).toBe(ended.expiresAt);
+    expect(nextWakeAt(ended)).toBe(ended.phaseEndsAt);
+  });
+});
+
+describe("결과 공개 뒤 같은 방 대기실", () => {
+  it("늦은 알람에서도 결과를 공개하고 마감에 역할·토큰을 분리한다", () => {
+    const execution = executionOf(4, 1, "mafia");
+    const now = execution.phaseEndsAt! + RESULT_DISPLAY_MS + 20_000;
+    const ended = tick(execution, now, THROWING_RAND);
+    expect(ended).toMatchObject({ phase: "ended", phaseEndsAt: now + RESULT_DISPLAY_MS, winner: "citizenWin" });
+    expect(buildView(ended, ended.hostId, now).result?.seats).toHaveLength(4);
+
+    const lobby = tick(ended, now + RESULT_DISPLAY_MS, THROWING_RAND);
+    expect(lobby).toMatchObject({ code: execution.code, phase: "lobby", phaseEndsAt: null, round: 2 });
+    expect(lobby.players.map(({ id, token, connected }) => ({ id, token, connected }))).toEqual(
+      ended.players.map(({ id, token, connected }) => ({ id, token, connected })),
+    );
+    expect(lobby.winner).toBeUndefined();
+    expect(lobby.voteLog).toBeUndefined();
+    expect(lobby.players.every((p) => p.role === undefined && p.alive === undefined && p.ready === undefined)).toBe(true);
+    expect(buildView(lobby, lobby.hostId, now).result).toBeUndefined();
+    const next = startGame(lobby, lobby.hostId, now + RESULT_DISPLAY_MS, seededRandInt(1));
+    expect(next).toMatchObject({ ok: true, state: { phase: "assigning", round: 2 } });
+  });
+
+  it("기존 방장이 나간 채 모두 끊겨도 남은 가장 이른 참가자의 토큰을 방장으로 이어받는다", () => {
+    const execution = executionOf(4, 1, "mafia");
+    const at = execution.phaseEndsAt!;
+    const ended = tick(execution, at, THROWING_RAND);
+    const oldest = ended.players.filter((p) => p.id !== ended.hostId).sort((a, b) => a.joinSeq - b.joinSeq)[0]!;
+    const vacant = {
+      ...ended,
+      players: ended.players.map((p) => ({
+        ...p,
+        connected: false,
+        connId: null,
+        disconnectedAt: at,
+        ...(p.id === ended.hostId ? { left: true as const } : {}),
+      })),
+    };
+    const lobby = tick(vacant, at + RESULT_DISPLAY_MS, THROWING_RAND);
+    expect(lobby.hostId).toBe(oldest.id);
+    expect(lobby.players.some((p) => p.id === ended.hostId)).toBe(false);
+    expect(lobby.players.find((p) => p.id === oldest.id)).toMatchObject({ token: oldest.token, disconnectedAt: at });
   });
 });
 
@@ -262,10 +306,10 @@ describe("ended 전용 result view (END-02, D-17)", () => {
     expect(viewOf(ended, ended.hostId).result?.winner).toBe("citizenWin");
   });
 
-  it("ended view 에는 day 가 있고 phaseEndsAt·phaseDurationMs 가 null 이다", () => {
+  it("ended view 에는 day 와 공유 결과 마감·전체 공개 시간이 있다", () => {
     const { ended } = endedByMorning(1);
     const view = viewOf(ended, ended.hostId);
-    expect(`${view.phase}:${String(view.phaseEndsAt)}:${String(view.phaseDurationMs)}:${view.day !== undefined}`).toBe("ended:null:null:true");
+    expect(`${view.phase}:${String(view.phaseEndsAt)}:${String(view.phaseDurationMs)}:${view.day !== undefined}`).toBe(`ended:${ended.phaseEndsAt}:${RESULT_DISPLAY_MS}:true`);
   });
 
   it("ended 의 어떤 view 에도 nightLog·verdict·lastExecPhrase 키가 없고 winner 키는 result 아래에만 있다", () => {

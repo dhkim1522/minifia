@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import type { ReactNode, RefObject } from "react";
+import type { CSSProperties, ReactNode, RefObject } from "react";
 import { isAlive } from "../../shared/game/alive";
 import { lockedOutfits } from "../../shared/game/look";
+import { RESULT_ROLES_MS } from "../../shared/game/phases";
 import type { ClientMessage, EmoteId, MapId, PhaseId, RoomView } from "../../shared/protocol";
 import { emitSignal } from "../audio/signals";
 import { Button } from "../components/Button";
@@ -9,6 +10,8 @@ import { ConfirmSheet } from "../components/ConfirmSheet";
 import { Sheet } from "../components/Sheet";
 import { ToolButton } from "../components/ToolButton";
 import { Icon } from "../components/Icon";
+import { PlayerName } from "../components/PlayerName";
+import { PlayerPortrait } from "../components/PlayerPortrait";
 import { RoomChatDock } from "../components/v2/RoomChatDock";
 import { DressSheet } from "../components/v2/DressSheet";
 import { ReadyPill } from "../components/v2/ReadyPill";
@@ -20,12 +23,14 @@ import { WorldStage } from "../components/WorldStage";
 import type { WorldStageProps } from "../components/WorldStage";
 import { DRESS_TEXT } from "../game/dressText";
 import { ownAnimalOf } from "../game/playerIdentity";
-import { castOf, holdSnap, markTimes, RESULT_TIMELINE, resultPanelHeight, satSlots, slotsFor, stateAt, walkSnap, winningTeam } from "../game/resultDirector";
-import type { ResultState } from "../game/resultDirector";
+import { castOf, CLAP_MAX, holdSnap, markTimes, RESULT_TIMELINE, resultPanelHeight, satSlots, slotsFor, stateAt, timedResultState, walkSnap, winningTeam } from "../game/resultDirector";
+import type { CastMember, ResultState } from "../game/resultDirector";
 import { READY_TEXT } from "../game/resultText";
+import { ROLE_TEXT } from "../game/roleText";
 import { RESULT_TEXT } from "../game/verdict";
 import { faceSrc } from "../net/assets";
 import type { ChatStore } from "../net/chatStore";
+import { remainingMs } from "../net/clock";
 import type { ResultLogStore } from "../net/resultLogStore";
 import { useChat } from "../net/useChat";
 import { useDress } from "../net/useDress";
@@ -136,6 +141,76 @@ const REST_FACES_MAX = 7;
 /** 박수 큐 한 묶음(WorldStage emoteCues). nonce 가 새로 보일 때마다 한 번 재생한다 */
 type ClapCues = readonly { seat: number; id: EmoteId; nonce: number }[];
 
+function useResultRemaining(deadline: number | null, offset: number) {
+  const read = useCallback(() => deadline === null ? null : remainingMs(deadline, offset, Date.now()), [deadline, offset]);
+  const [remaining, setRemaining] = useState(read);
+  useLayoutEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const update = () => {
+      clearTimeout(timer);
+      const next = read();
+      setRemaining(next);
+      if (next === null || next === 0) return;
+      const wait = next > RESULT_ROLES_MS ? next - RESULT_ROLES_MS : next % 1000 || 1000;
+      timer = setTimeout(update, wait);
+    };
+    update();
+    if (deadline === null) return;
+    document.addEventListener("visibilitychange", update);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", update);
+    };
+  }, [deadline, read]);
+  return remaining;
+}
+
+function TimedResultSummary({ cast, players, winner, rolesVisible, remaining }: {
+  cast: readonly CastMember[];
+  players: RoomView["players"];
+  winner: NonNullable<RoomView["result"]>["winner"];
+  rolesVisible: boolean;
+  remaining: number;
+}) {
+  const icon = winner === "mafiaWin" ? "roleMafia" : "roleCitizen";
+  const title = RESULT_TEXT.title[winner];
+  const seconds = Math.ceil(remaining / 1000);
+  const style = { "--mf-result-rows": Math.ceil(cast.length / 2) } as CSSProperties;
+  return (
+    <section className="mf-result__summary" data-result-summary="" data-winner={winner}
+      data-result-summary-step={rolesVisible ? "roles" : "winner"} style={style} aria-label="게임 결과">
+      {rolesVisible ? <>
+        <div className="mf-result__summary-head">
+          <h2>{title}</h2>
+          <span data-result-countdown="">{seconds > 0 ? `대기실로 ${seconds}초` : "대기실로 이동 중"}</span>
+        </div>
+        <div className="mf-result__summary-time" aria-hidden="true">
+          <span style={{ width: `${Math.min(100, remaining / RESULT_ROLES_MS * 100)}%` }} />
+        </div>
+        <ol className="mf-result__roles" aria-label="전원 역할">
+          {cast.map(({ seat, job }) => {
+            const player = players.find((entry) => entry.seat === seat);
+            return (
+              <li key={seat} className="mf-result__role" data-result-role-row={seat}>
+                <PlayerPortrait className="mf-result__role-face" seat={seat} animal={player?.animal} />
+                <div className="mf-result__role-identity">
+                  <PlayerName seat={seat}>{player?.nickname ?? `${seat + 1}번 자리`}</PlayerName>
+                  <span className={job === "mafia" ? "is-mafia" : undefined}>{ROLE_TEXT[job].name}</span>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      </> : (
+        <div className="mf-result__winner-card" data-result-announce="">
+          <V2Icon name={icon} size={48} />
+          <h2>{title}</h2>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function ResultScreen({ view, store, chat, resultLog, send, canSend, offset, epoch, onExit, arrivedFrom, menuButton, stageHost }: ResultScreenProps) {
   const { result } = view;
   const toast = useTopToast();
@@ -184,21 +259,31 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
     return () => window.removeEventListener("resize", measure);
   }, [rootRef]);
 
-  // 아래 패널 높이(--mf-panel-h)는 DOM 에서 재서 루트에 정한다(패널이 자라도 따라간다). 떠 있는 [넘기기] 묶음(아래 끝 = 키보드 올림 + 패널 높이 + 8)이 CSS 상속으로 읽는다
   useLayoutEffect(() => {
-    rootRef.current?.style.setProperty("--mf-panel-h", `${panelRef.current?.offsetHeight ?? 0}px`);
-  });
+    const root = rootRef.current;
+    const panel = panelRef.current;
+    if (root === null || panel === null) return;
+    const measure = () => root.style.setProperty("--mf-panel-h", `${panel.offsetHeight}px`);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, [panelRef, rootRef]);
 
   // 출연자 표는 내용이 바뀔 때만 다시 만든다 — 같은 결과가 다시 와도(닉네임·연결 상태만 바뀐 view) 시계·자리 snap 을 다시 시작하지 않는다
   const castKey = `${result.seats.map((s) => `${s.seat}:${s.job}`).join(",")}|${view.players.map((p) => `${p.seat}:${isAlive(p) ? 1 : 0}`).join(",")}`;
   const cast = useMemo(() => castOf(view), [castKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const winner = result.winner;
   const tl = RESULT_TIMELINE;
+  const timed = view.phaseEndsAt !== null;
+  const remaining = useResultRemaining(view.phaseEndsAt, offset);
+  const rolesVisible = remaining !== null && remaining <= RESULT_ROLES_MS;
 
   // 연출 시계(각자 폰 안): 마운트 때 한 번 정한 연출 여부. 직전 단계가 처형·아침인 마운트에서만 시간표를 돈다. 재접속·처음 마운트·모션 줄이기는 곧바로 최종 상태다(이후 view 가 다시 와도 되돌아가지 않는다)
   const reduced = useReducedMotion();
   const arrival = arrivedFrom === "execution" || arrivedFrom === "morning";
-  const [reveal] = useState<boolean>(() => !reduced && arrival);
+  const [reveal] = useState<boolean>(() => !timed && !reduced && arrival);
   // 서버가 view.result 에 싣는 칭호 목록은 읽지도 그리지도 않는다(결정 0083-7). 연출은 시간표가 5600ms 최종 상태에서 끝난다
   // mark = 마지막으로 닿은 시간표 시각. 상태는 mark 의 순수 함수(stateAt)라 프레임마다 다시 그리지 않고 표시각마다 한 번 바꾼다
   const [mark, setMark] = useState<number>(reveal ? 0 : tl.finalAtMs);
@@ -216,7 +301,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   const satSeats = useMemo<number[]>(() => (satKey === "" ? [] : satKey.split(",").map(Number)), [satKey]);
   const mapId: MapId = view.map ?? "bar";
 
-  const state = useMemo(() => stateAt(mark, cast, winner), [mark, cast, winner]);
+  const state = useMemo(() => timed ? timedResultState(rolesVisible, cast, winner) : stateAt(mark, cast, winner), [timed, rolesVisible, mark, cast, winner]);
   const scene = useMemo(() => sceneOf(cast, state, satSeats, view.map), [cast, state, satSeats, view.map]);
 
   // 위치: 모두 자기 둘레 자리로. 연출이면 스토어의 마지막 위치에서 걷는 구간(1200ms), 아니면 한 점 구간이다. 런타임이 만들어지기 전(레이아웃 효과)에 먹여 첫 프레임부터 맞다.
@@ -267,13 +352,22 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   // 모션 줄이기로 곧바로 최종 상태가 열린 도착: 승패 소리 한 번만(뒤집기·조명 시계가 없다). 부모의 소리 훅 효과가 같은 커밋에서 새 단계를 먼저 받도록 한 틱 미룬다
   const lightSent = useRef(false);
   useEffect(() => {
-    if (!arrival || reveal || lightSent.current) return;
+    if (!arrival || reveal || lightSent.current || (timed && rolesVisible)) return;
     const t = setTimeout(() => {
       lightSent.current = true;
       emitSignal({ kind: "result", step: "light", win: iWinRef.current });
     }, 0);
     return () => clearTimeout(t);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const timedRolesSent = useRef(rolesVisible);
+  useEffect(() => {
+    if (!timed || !arrival || !rolesVisible || timedRolesSent.current) return;
+    timedRolesSent.current = true;
+    if (reduced) return;
+    emitSignal({ kind: "result", step: "flip", i: 0 });
+    setCues(cast.filter((member) => member.team === winningTeam(winner)).slice(0, CLAP_MAX)
+      .map(({ seat }) => ({ seat, id: "clap", nonce: ++nonce.current })));
+  }, [timed, arrival, rolesVisible, reduced, cast, winner]);
   const schedule = useCallback(
     (from: number) => {
       clock.current = { base: from, since: Date.now() };
@@ -371,7 +465,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   const chatOpen = view.me.chat === "all";
 
   // 다시 하기 알약(11-12, D-11·D-12): 승리 조명(4600) 때 활성이 된다. 상태·잠금·시작 확인은 훅이 쥐고 이 화면은 그린다. 거절은 알리지 않는다(서버가 다시 보낸 state 대로 그린다, L40)
-  const pillActive = mark >= tl.lightAtMs;
+  const pillActive = !timed && mark >= tl.lightAtMs;
   const rematch = useReady({ view, send, canSend, stageActive: pillActive });
   const rematchToast = rematch.toast;
   useEffect(() => {
@@ -446,8 +540,10 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
         <div className="mf-room-header__actions">{menuButton}</div>
       </header>
       <TopToast {...toast.props} />
-      {/* 4600~5200 중앙 승리 알림: 36px 한 줄 + 아이콘, 배경 어둡게 80%, 터치 통과. 읽기용 안내는 RoomScreen 이 이미 하므로 live 영역이 아니다(role img) */}
-      {state.announce && !skipped ? (
+      {/* 새 결과는 같은 하단 면에서 승리와 역할을 각각 보여 준다. */}
+      {timed ? (
+        <TimedResultSummary cast={cast} players={view.players} winner={winner} rolesVisible={rolesVisible} remaining={remaining ?? 0} />
+      ) : state.announce && !skipped ? (
         <div className="mf-result__announce" data-result-announce="" data-winner={winner} role="img" aria-label={RESULT_TEXT.title[winner]}>
           <V2Icon name={winner === "mafiaWin" ? "roleMafia" : "roleCitizen"} size={56} className={winner === "mafiaWin" ? "mf-result__announce-icon is-mafia" : "mf-result__announce-icon"} />
           <span className="mf-result__announce-text">{RESULT_TEXT.title[winner]}</span>
@@ -472,17 +568,17 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
             binding={{ ...binding, channel: "all", sendDisabled: binding.sendDisabled === true || !chatOpen, emotes: [] }}
             kbOpen={kbOpen}
             inputRef={inputRef}
-            advance={resultActions}
-            actions={finished ? (
+            advance={timed ? undefined : resultActions}
+            actions={!timed && finished ? (
               <button ref={dressBtnRef} type="button" className="mf-room-tool" data-float="dress" data-room-tool="dress" aria-label={DRESS_TEXT.open} hidden={kbOpen} inert={dressOpen} disabled={!canSend} onClick={() => openDress()}>
                 <V2Icon name="hanger" size={22} />
               </button>
             ) : null}
           />
         }
-        pill={readyPill}
+        pill={timed ? undefined : readyPill}
       />
-      {dressOpen ? (
+      {!timed && dressOpen ? (
         <DressSheet
           value={dress.look}
           onPick={dress.pick}
@@ -492,7 +588,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
           wearer={ownAnimalOf(view)}
         />
       ) : null}
-      {rematch.confirm !== null ? <RestSheet faces={rematch.confirm.resting} onStart={rematch.confirmStart} onCancel={rematch.cancelConfirm} /> : null}
+      {!timed && rematch.confirm !== null ? <RestSheet faces={rematch.confirm.resting} onStart={rematch.confirmStart} onCancel={rematch.cancelConfirm} /> : null}
       {leaveOpen ? (
         <ConfirmSheet
           title="방에서 나갈까요?"

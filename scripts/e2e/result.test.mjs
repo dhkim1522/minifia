@@ -2,7 +2,25 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as resultMod from "./result.mjs";
-import { READY_PILL, SHORT_PHONE_H, rematchChecks, RESULT_JOB_OUTFIT, RESULT_MARKERS, RESULT_PANEL_H, RESULT_WIN_TITLE, resultHiddenChecks, resultSkipChecks, resultStageChecks } from "./result.mjs";
+import { READY_PILL, SHORT_PHONE_H, rematchChecks, RESULT_JOB_OUTFIT, RESULT_MARKERS, RESULT_PANEL_H, RESULT_WIN_TITLE, resultHiddenChecks, resultSkipChecks, resultStageChecks, timedResultChecks } from "./result.mjs";
+
+test("시간제 결과는 승리 발표와 전원 역할의 같은 카드, 닫히기 직전 유지, 결과 채팅을 확인한다", () => {
+  const shared = { title: "시민 승리", anchor: { left: 16, width: 358, bottom: 600 }, panelTop: 612, chat: 1, forbidden: [] };
+  const victory = { ...shared, roles: [] };
+  const roles = { ...shared, roles: [{ seat: "0", text: "정호 마피아" }, { seat: "1", text: "단아 경찰" }], countdown: "대기실로 8초" };
+  const input = {
+    winner: "citizenWin", victory, roles, duration: 9300, beforeLobby: true, chatEcho: true,
+    seats: [{ seat: 0, nickname: "정호", job: "mafia" }, { seat: 1, nickname: "단아", job: "police" }],
+  };
+  const fails = (overrides = {}) => timedResultChecks({ ...input, ...overrides }).filter((line) => !line.ok).map((line) => line.id);
+  assert.deepEqual(fails(), []);
+  assert.deepEqual(fails({ victory: { ...victory, roles: roles.roles } }), ["RS1"]);
+  assert.deepEqual(fails({ roles: { ...roles, roles: [{ seat: "0", text: "정호 경찰" }, roles.roles[1]] } }), ["RS2"]);
+  assert.deepEqual(fails({ roles: { ...roles, anchor: { ...roles.anchor, bottom: 613 } } }), ["RS3"]);
+  assert.deepEqual(fails({ beforeLobby: false }), ["RS4"]);
+  assert.deepEqual(fails({ roles: { ...roles, forbidden: ["다음 판"] } }), ["RS7"]);
+  assert.deepEqual(fails({ chatEcho: false }), ["RS8"]);
+});
 
 // 4명판 시민 승: 좌석 0 마피아(진 팀) · 1 시민 · 2 경찰 · 3 의사
 const good = () => ({

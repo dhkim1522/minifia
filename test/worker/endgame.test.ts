@@ -5,12 +5,14 @@
 import { env, exports } from "cloudflare:workers";
 import { runDurableObjectAlarm } from "cloudflare:test";
 import { describe, expect, it, vi } from "vitest";
+import { RESULT_DISPLAY_MS } from "../../shared/game/phases";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
 import {
   actorsOf,
   advanceTo,
   alarmOf,
   chatMsg,
+  chatKeysOf,
   closePhase,
   closed,
   connect,
@@ -111,12 +113,12 @@ async function endedByMorning(): Promise<{ g: Game4; E: number; morning: RoomVie
 }
 
 describe("처형으로 끝나는 판 (END-01, END-02, D-10, D-28)", () => {
-  it("처형 마감 알람 뒤 네 소켓 모두 같은 ended result(citizenWin·직업 4개·1일차 요약)를 받고 알람·만료가 E + 30분이다", async () => {
+  it("처형 마감 알람 뒤 네 소켓이 같은 결과·같은 공개 마감을 받는다", async () => {
     const { g, E } = await endedByExecution();
     const views = g.actors.map((a) => lastViewOf(a.sock));
     const first = JSON.stringify(views[0]!.result);
     for (const v of views) {
-      expect(`${v.phase} ${v.phaseEndsAt} ${v.phaseDurationMs}`).toBe("ended null null");
+      expect(v).toMatchObject({ phase: "ended", phaseEndsAt: views[0]!.phaseEndsAt, phaseDurationMs: RESULT_DISPLAY_MS });
       expect(JSON.stringify(v.result)).toBe(first);
     }
     const result = views[0]!.result!;
@@ -127,8 +129,42 @@ describe("처형으로 끝나는 판 (END-01, END-02, D-10, D-28)", () => {
       JSON.stringify([{ n: 1, exec: { yes: 4, no: 0, passed: true, candidate: g.mafia.seat } }]), // 산 사람 4명이 모두 찬성(22-09 D-11 후보 없는 찬반)
     );
     const stored = await storedRoom(g.r.code);
-    expect(`${stored.phase} ${stored.winner} ${stored.phaseEndsAt}`).toBe("ended citizenWin null");
-    expect(`${stored.expiresAt} ${await alarmOf(g.r.code)}`).toBe(`${E + ENDED_TTL_MS} ${E + ENDED_TTL_MS}`);
+    expect(stored).toMatchObject({ phase: "ended", winner: "citizenWin", phaseEndsAt: views[0]!.phaseEndsAt });
+    expect(stored.phaseEndsAt!).toBeGreaterThanOrEqual(E + RESULT_DISPLAY_MS);
+    expect(stored.expiresAt).toBe(stored.phaseEndsAt! - RESULT_DISPLAY_MS + ENDED_TTL_MS);
+    expect(await alarmOf(g.r.code)).toBe(stored.phaseEndsAt);
+  });
+
+  it("결과 중 옛 다시 하기 입력은 막고 마감에 같은 소켓과 토큰으로 대기실·새 판에 간다", async () => {
+    const { g } = await endedByExecution();
+    const host = g.r.host;
+    const guest = g.r.guests[0]!;
+    const sockets = allSockets(g.r);
+    send(host, chatMsg(host, "이번 결과 채팅"));
+    await nextFrame(host, (m) => m.t === "chat" && m.text === "이번 결과 채팅");
+    send(guest.sock, { t: "ready", on: true, round: 1 });
+    send(host, { t: "rematch", round: 1 });
+    await Promise.all(sockets.map((sock) => settle(sock, mark(sock))));
+    expect(lastViewOf(host).phase).toBe("ended");
+    expect(lastViewOf(guest.sock).players.find((p) => p.seat === guest.seat)?.ready).toBeUndefined();
+
+    const lobbyFrames = sockets.map((sock) => nextFrame(sock, isPhase("lobby")));
+    await closePhase(g.r.code);
+    await Promise.all(lobbyFrames);
+    for (const sock of sockets) {
+      const lobby = lastViewOf(sock);
+      expect(lobby).toMatchObject({ phase: "lobby", code: g.r.code, round: 2, phaseEndsAt: null });
+      expect(lobby.result).toBeUndefined();
+      expect(lobby.me.role).toBeUndefined();
+      expect(lobby.players.map((p) => p.seat)).toEqual([0, 1, 2, 3]);
+    }
+    expect(await chatKeysOf(g.r.code)).toEqual([]);
+    const rejoined = await connect(g.r.code);
+    await hello(rejoined, guest.token);
+    expect(lastViewOf(rejoined)).toMatchObject({ phase: "lobby", round: 2, me: { seat: guest.seat } });
+    send(host, { t: "start" });
+    await nextFrame(rejoined, isPhase("assigning"));
+    expect(lastViewOf(rejoined).round).toBe(2);
   });
 });
 
@@ -148,7 +184,10 @@ describe("아침으로 끝나는 판 (END-01, D-10)", () => {
         { n: 1, exec: { yes: 4, no: 0, passed: true, candidate: g.c0.seat }, night: { target: g.c1.seat, died: true } },
       ]),
     );
-    expect(`${(await storedRoom(g.r.code)).expiresAt} ${await alarmOf(g.r.code)}`).toBe(`${E + ENDED_TTL_MS} ${E + ENDED_TTL_MS}`);
+    const stored = await storedRoom(g.r.code);
+    expect(stored.phaseEndsAt!).toBeGreaterThanOrEqual(E + RESULT_DISPLAY_MS);
+    expect(stored.expiresAt).toBe(stored.phaseEndsAt! - RESULT_DISPLAY_MS + ENDED_TTL_MS);
+    expect(await alarmOf(g.r.code)).toBe(stored.phaseEndsAt);
   });
 });
 

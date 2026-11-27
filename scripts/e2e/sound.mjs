@@ -3,7 +3,8 @@
 // helpers: { recorder, attempt, startHost, openGame, closeGame, nightScenario } (sound-script 는 startHost, sound-night-parity·sound-result 는 openGame·closeGame 을 쓴다)
 // 판정 문턱은 lib.mjs 의 순수 검사 함수(soundRenderChecks, SOUND_RENDER_LIMITS)에만 있고 여기서는 낮추지 않는다 (T-12-22).
 import { chooseRole, chooseVerdict, dropSockets, leaveLobby, openTableDockPane, openTestSheet, reconnectInit, SetupError, setBotVote, setBots, settle, showPeopleTarget, skipTo, sleep, startGame } from "./browser.mjs";
-import { SOUND_RENDER_LIMITS, SOUND_SCRIPT_STEPS, soundButtonChecks, soundEmoteLeakChecks, soundNightParityChecks, soundRenderChecks, soundResultChecks, soundResultSkipChecks, soundSequenceChecks, soundVerdictTimingChecks } from "./lib.mjs";
+import { SOUND_RENDER_LIMITS, SOUND_SCRIPT_STEPS, soundButtonChecks, soundEmoteLeakChecks, soundNightParityChecks, soundRenderChecks, soundResultChecks, soundSequenceChecks, soundVerdictTimingChecks } from "./lib.mjs";
+import { readTimedResult } from "./result.mjs";
 
 /** [전부 계산] 모든 렌더가 끝나기를 기다리는 상한(ms) */
 const CALC_LIMIT_MS = 60000;
@@ -33,13 +34,6 @@ const EXECUTION_WATCH_MS = 4000;
 const VERDICT_PIN_SETTLE_MS = 1200;
 /** 낮 동작 소리·밤 동작 소리가 로그에 도착하기를 기다리는 상한(ms) */
 const EMOTE_ARRIVE_MS = 6000;
-/** 결과 연출이 최종 상태(final, 5.6초)에 닿기를 기다리는 상한(ms) */
-const RESULT_FINAL_WAIT_MS = 12000;
-/** 최종 상태에 닿은 뒤 늦게 오는 소리까지 로그에 쌓이도록 기다리는 시간(ms) */
-const RESULT_TAIL_MS = 3000;
-/** 건너뛰기 변형: 탭 뒤 원래 조명 시각(4600ms)을 넘겨 늦게 오는 소리가 없는지 볼 때까지 기다리는 시간(ms) */
-const RESULT_SKIP_WATCH_MS = 5200;
-
 /** 동작 칸이 풀리기를 기다리며 판을 여닫는 횟수(등장 걷기가 끝나야 칸이 눌린다) */
 const EMOTE_OPEN_TRIES = 12;
 
@@ -587,12 +581,10 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
     await skipTo(hp, ht, "defense"); // 토론 → 찬반(봇 찬성) → 지목(봇이 방장) 은 openGame 이 지나왔다(22페이즈 D-10)
   }
 
-  /**
-   * sound-result 본판 (D-21): ended 도착 순간부터 연출 시계를 건너뛰지 않고 최종 상태(final)까지 본다. 최종 상태 뒤 3초까지 로그를 받는다.
-   * 로그는 ended 도착 직전에 비운다. 판정은 lib.mjs soundResultChecks(R1~R3·R5), 새로고침 직후 로그는 R6.
-   */
-  async function soundResultMain(ctx, rec) {
-    const sc = "sound-result/main";
+  /** 결과 진입 시 승패, 전원 역할 공개 시 뒤집기, 새로고침 시 나머지 역할 화면과 BGM을 확인한다. */
+  async function soundResultFlow(ctx) {
+    const rec = recorder(ctx);
+    const sc = "sound-result/sequence";
     const game = await openResultGame(ctx);
     try {
       const { hp, ht } = game;
@@ -605,81 +597,35 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
       await toEndedLogged(hp, ht);
       const view = ht.last();
       const seats = view.result?.seats ?? [];
-      const mine = seats.find((x) => x.seat === view.me.seat);
+      const mine = seats.find((seat) => seat.seat === view.me.seat);
       const expectWin = mine ? (mine.job === "mafia") === (view.result?.winner === "mafiaWin") : undefined;
-      // 연출이 끝(final)까지 도는지 본다 — 이어서 3초를 더 받아 늦게 오는 소리까지 로그에 쌓는다
-      const finals = await attempt(async () => {
-        await hp.waitForFunction(() => window.__mfResult?.stage === "final", null, { timeout: RESULT_FINAL_WAIT_MS });
-        await sleep(RESULT_TAIL_MS);
+      const roles = await attempt(async () => {
+        await readTimedResult(hp, "roles");
+        await hp.waitForFunction(() => window.__mfSound?.log.some((e) => e.id === "role.flip"), null, { timeout: 2000 });
+        await sleep(350);
       });
-      rec(sc, "SR1", "결과 연출이 최종 상태(final)에 닿고 그 뒤 3초를 기다린다", finals.ok, finals.detail);
-      if (!finals.ok) return;
+      rec(sc, "SR1", "전원 역할 단계가 열리고 공개 효과음이 로그에 남는다", roles.ok, roles.detail);
       const log = await readLog(hp);
 
-      // 같은 페이지 새로고침: 연출 없는 마운트라 침대만
-      await hp.reload({ waitUntil: "domcontentloaded" });
+      // 8초 역할 공개가 끝나기 전에 새로고침하여 일회성 소리 재생 여부를 관찰한다.
       const back = await attempt(async () => {
-        await hp.waitForFunction(() => !!window.__mfSound && window.__mfSound.log.some((e) => e.id === "bed.result"), null, { timeout: 10000 });
-        await sleep(2500);
+        await hp.reload({ waitUntil: "domcontentloaded" });
+        await readTimedResult(hp, "roles");
+        await hp.waitForFunction(() => window.__mfSound?.log.some((e) => e.id === "bed.result"), null, { timeout: 4000 });
+        await sleep(750);
       });
-      rec(sc, "SR3", "새로고침 뒤 결과 화면이 다시 열려 훅 로그에 bed.result 가 찬다", back.ok, back.detail);
+      rec(sc, "SR3", "새로고침 뒤 역할 화면이 다시 열려 bed.result가 이어진다", back.ok, back.detail);
       const reloadLog = back.ok ? await readLog(hp) : null;
-      if (log === null) {
-        rec(sc, "SR4", "결과 구간 훅 로그를 읽었다", false, "window.__mfSound 훅이 없음");
-        return;
-      }
-      for (const line of soundResultChecks({ log, participants: seats.length, expectWin, reloadLog })) recOne(rec, sc, line);
-      const counts = (l, p) => l.filter((e) => p(e.id)).length;
-      infoRow(
-        rec,
-        `${sc}-info`,
-        "SRi-1",
-        `참고: role.flip ${counts(log, (id) => id === "role.flip")}개 · result.win/lose ${counts(log, (id) => id.startsWith("result."))}회 · 박수 ${counts(log, (id) => id === "emote.clap")}개 · 참가자 ${seats.length}`,
-      );
-    } finally {
-      await closeGame(game);
-    }
-  }
+      for (const row of soundResultChecks({ log, participants: seats.length, expectWin, reloadLog, timed: true })) recOne(rec, sc, row);
 
-  /** sound-result 건너뛰기 변형: 연출 구간(모임·뒤집기)에서 무대를 한 번 탭하면 건너뛴 뒤집기 소리가 없고 승패 소리만 한 번 난다 */
-  async function soundResultSkip(ctx, rec) {
-    const sc = "sound-result/skip";
-    const game = await openResultGame(ctx);
-    try {
-      const { hp, ht } = game;
-      await toExecution(game);
-      await toEndedLogged(hp, ht);
-      const seats = ht.last().result?.seats ?? [];
-      const windowed = await attempt(async () => {
-        await hp.waitForFunction(() => ["gather", "flip"].includes(window.__mfResult?.stage ?? ""), null, { timeout: 4000 });
-        const mid = await hp.evaluate(() => {
-          const root = document.querySelector(".mf-result");
-          const head = root?.querySelector("header")?.getBoundingClientRect();
-          const panel = root?.querySelector("[data-result-panel]")?.getBoundingClientRect();
-          if (!root || !head || !panel) return null;
-          return { x: window.innerWidth / 2, y: (head.bottom + panel.top) / 2 };
-        });
-        if (!mid) return { ok: false, detail: "결과 화면 무대 가운데를 못 잼" };
-        await hp.mouse.click(mid.x, mid.y);
+      const lobby = await ht.waitFor((v) => v.phase === "lobby", 14000, "결과 후 자동 대기실");
+      const lobbyBed = await attempt(async () => {
+        await hp.waitForFunction(() => window.__mfSound?.log.some((e) => e.id === "bed.lobby"), null, { timeout: 4000 });
       });
-      rec(sc, "SK0", "연출 구간(모임·뒤집기)에서 무대를 한 번 탭한다", windowed.ok, windowed.detail);
-      if (!windowed.ok) return;
-      await sleep(RESULT_SKIP_WATCH_MS);
-      const log = await readLog(hp);
-      if (log === null) {
-        rec(sc, "SK1", "훅 로그를 읽었다", false, "window.__mfSound 훅이 없음");
-        return;
-      }
-      for (const line of soundResultSkipChecks({ log, participants: seats.length })) recOne(rec, sc, line);
+      rec(sc, "SR7", "같은 방 대기실로 돌아가며 bed.lobby로 전환된다", lobby.code === view.code && lobbyBed.ok, lobbyBed.detail);
     } finally {
       await closeGame(game);
     }
-  }
-
-  async function soundResultFlow(ctx) {
-    const rec = recorder(ctx);
-    await soundResultMain(ctx, rec);
-    await soundResultSkip(ctx, rec);
   }
 
   return { soundRenderFlow, soundUnlockFlow, soundScriptFlow, soundNightParityFlow, soundResultFlow };

@@ -101,7 +101,7 @@ describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", 
     expect(row("answerReveal")).toBe("12000/night/true"); // 23-05: 첫날 정답 공개 12초
     expect(row("night")).toBe("30000/morning/true");
     expect(row("morning")).toBe("5000/dayAnnounce/true");
-    expect(row("ended")).toBe("null/null/true"); // 종단 행: 마감 없음
+    expect(row("ended")).toBe("9300/lobby/true");
     expect(ASSIGNING_MS).toBe(3000);
     expect(ROLE_REVEAL_MS).toBe(15000);
     expect(DAY_ANNOUNCE_MS).toBe(2000);

@@ -1253,18 +1253,29 @@ export class Room extends DurableObject<Env> {
       this.rejectTestTool(ws, att.playerId, result.error);
       return;
     }
-    this.room = result.state;
-    // 보관 줄도 모두 지운다(결정 0058-7): 저장소 키 → 메모리 사본·도배 기록·입력 중 기록. 다음 hello 의 chatLog 는 비고 첫 줄은 seq 1 이다.
-    await this.deleteChatKeys([...(await this.ctx.storage.list({ prefix: CHAT_KEY_PREFIX })).keys()]);
+    await this.returnToLobby(result.state, Date.now());
+  }
+
+  /** 대기실 상태·입장 위치·채팅 정리를 함께 저장해 재연결에서도 이전 판이 이어지지 않는다. */
+  private async returnToLobby(next: RoomState, now: number): Promise<void> {
+    const world = respawnAll(this.world, next.players, now, this.mapDef());
+    await this.ctx.storage.transaction(async (txn) => {
+      const keys = [...(await txn.list({ prefix: CHAT_KEY_PREFIX })).keys()];
+      for (let start = 0; start < keys.length; start += CHAT_DELETE_MAX) {
+        await txn.delete(keys.slice(start, start + CHAT_DELETE_MAX));
+      }
+      await txn.put({ room: next, world: compactWorld(world, now) });
+      await txn.setAlarm(nextWakeAt(next));
+    });
+    this.dropWorld();
+    this.room = next;
+    this.world = world;
     this.dropChat();
     this.ghostSnapped.clear();
-    // 대기실로 돌아오면 모두 자기 입장 지점으로 되돌린다(가정 A1, 11페이즈 다시 하기가 같은 길). state 다음에 모든 소켓이 snap 을 받는다.
-    const now = Date.now();
-    this.world = respawnAll(this.world, this.room.players, now, this.mapDef());
-    await this.persistAndBroadcast();
-    this.emitWorld(snapFrame(this.world, this.room.players, now));
+    this.writeAt.clear();
+    this.broadcast();
+    this.emitWorld(snapFrame(world, next.players, now));
     await this.reschedule();
-    await this.flushWorld();
   }
 
   // 내 직업 고르기: 성공하면 방장 소켓에만 state 를 보낸다(대기실의 다른 사람 view 는 바뀌지 않는다). 같은 값이면 저장·전송하지 않는다.
@@ -1364,6 +1375,10 @@ export class Room extends DurableObject<Env> {
     // 쉬는 사람 정리(11-08)는 단계와 무관하다. 쉬는 사람은 월드에 없고 다른 소켓의 view 에도 없으므로 정리만으로는 방송하지 않는다.
     const benchPruned = pruneBench(lobbyPruned.state, now);
     if (next !== room) {
+      if (room.phase === "ended" && next.phase === "lobby") {
+        await this.returnToLobby(benchPruned.state, now);
+        return;
+      }
       this.room = benchPruned.state;
       await this.vacateSeats(room.players, benchPruned.state.players);
       this.despawnRemoved(lobbyPruned.removedIds);

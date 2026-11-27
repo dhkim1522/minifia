@@ -649,7 +649,7 @@ const verdictAllAgree = (state: RoomState): RoomState => {
 const executionOf = (candidate: "citizen" | "mafia"): RoomState => stateWithVerdict(5, 6, "execution", { lobby: botLobby(), candidate });
 
 describe("skipPhase: 분기 단계를 따라 끝까지 넘어간다", () => {
-  it("defense → execution(now + EXECUTION_MS, 처형자 탈락), execution → 승패가 안 났으면 밤, 났으면 ended(마감 없음)", () => {
+  it("defense → execution(now + EXECUTION_MS, 처형자 탈락), execution → 승패가 안 났으면 밤, 났으면 결과 공개", () => {
     const defense = stateWithVerdict(5, 6, "defense", { lobby: botLobby(), candidate: "citizen" });
     const now = defense.phaseEndsAt! - 500;
     const execution = skipOk(defense, now, seededRandInt(9));
@@ -661,7 +661,7 @@ describe("skipPhase: 분기 단계를 따라 끝까지 넘어간다", () => {
     const mafiaDefense = stateWithVerdict(5, 6, "defense", { lobby: botLobby(), candidate: "mafia" });
     const mafiaExecution = skipOk(mafiaDefense, now, seededRandInt(9));
     const ended = skipOk(mafiaExecution, now, seededRandInt(9));
-    expect(`${ended.phase}/${ended.winner}/${ended.phaseEndsAt}`).toBe("ended/citizenWin/null");
+    expect(`${ended.phase}/${ended.winner}/${ended.phaseEndsAt}`).toBe(`ended/citizenWin/${now + 9300}`);
   });
 
   it("verdict(봇 찬성) → nomination(now + 모이기 3000), 부결(봇 반대)이면 처형·지목 없이 night 이고 아무도 탈락하지 않는다 (D-10·D-11)", () => {

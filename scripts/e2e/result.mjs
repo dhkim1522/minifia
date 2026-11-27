@@ -3,7 +3,7 @@
 // 18.1(P181-7): 결과 화면 탭은 그리지 않는다 — 탭 판정은 숨김 판정(resultHiddenChecks)으로 바뀌었다.
 // 18.1-16(결정 0083-7): 시상식이 없다 — 시상 판정·읽기·기하 상수는 지웠고 단계 판정(RS10)이 "연출이 끝난 뒤 제목이 승패로 남고 시상 표식이 0" 을 잰다.
 // 판정 문턱은 여기에만 있고 흐름은 낮추지 않는다. 직업 의상 대응표는 src/world/jobOutfit.ts 의 JOB_OUTFIT 과 같아야 하고 test/unit/e2eContract.test.ts 가 대조한다.
-import { DISCUSSION_LOG_H, GAME_PANEL_EXTRA, gamePanelHeight } from "./lib.mjs";
+import { DISCUSSION_LOG_H, GAME_PANEL_EXTRA, discussionLogHeight, gamePanelHeight } from "./lib.mjs";
 
 /** 결과 화면이 더한 DOM 표식·훅 이름. test/unit/e2eContract.test.ts 가 각각이 git 추적 src/ 파일에 실제로 있는지 확인한다(이름 오타 방지). */
 export const RESULT_MARKERS = Object.freeze([
@@ -41,6 +41,62 @@ const isNum = (x) => typeof x === "number" && Number.isFinite(x);
 const result = (id, label, bad) => ({ id, label, ok: bad.length === 0, detail: bad.length === 0 ? "" : bad.join("; ") });
 const noMeasure = (id, label, what) => result(id, label, [`측정값 없음(${what})`]);
 const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x));
+
+export const RESULT_WINNER_MS = 1300;
+export const RESULT_ROLES_MS = 8000;
+const RESULT_READ_TIMEOUT = 6000;
+// 시간제 결과는 채팅 기록 아래 입력줄(60px)과 하단 여백(4px)만 둔다.
+const TIMED_CHAT_FOOTER = 64;
+const TIMED_CHAT_SHORT_VIEWPORT = 640;
+const TIMED_CHAT_SHORT_LOG = 88;
+
+/** 정해진 시간 동안만 열리는 결과 단계의 카드와 하단 조작을 한 번에 읽는다. */
+export async function readTimedResult(page, stage) {
+  const selector = `[data-result-stage="${stage}"] [data-result-summary-step="${stage}"]`;
+  await page.locator(selector).waitFor({ state: "visible", timeout: RESULT_READ_TIMEOUT });
+  return page.locator(selector).evaluate((summary) => {
+    const root = summary.closest(".mf-result");
+    const bounds = summary.getBoundingClientRect();
+    const panel = root.querySelector("[data-result-panel]");
+    const clean = (value) => value?.replace(/\s+/g, " ").trim() ?? "";
+    const rows = [...summary.querySelectorAll("[data-result-role-row]")];
+    const forbidden = [...root.querySelectorAll("button")].filter((button) => {
+      const label = clean(button.getAttribute("aria-label") ?? button.textContent);
+      return /메인으로|처음으로|다음 판|다시 하기|꾸미기|옷장/.test(label) || button.matches('[data-ready-pill], [data-float="dress"]');
+    });
+    return {
+      title: clean(summary.querySelector("h2")?.textContent),
+      anchor: { left: bounds.left, width: bounds.width, bottom: bounds.bottom },
+      panelTop: panel?.getBoundingClientRect().top ?? null,
+      roles: rows.map((row) => ({ seat: row.getAttribute("data-result-role-row"), text: clean(row.textContent) })),
+      countdown: clean(summary.querySelector("[data-result-countdown]")?.textContent),
+      chat: root.querySelectorAll("[data-chat-input]").length,
+      forbidden: forbidden.map((button) => clean(button.getAttribute("aria-label") ?? button.textContent)),
+    };
+  });
+}
+
+export function timedResultChecks({ winner, seats, victory, roles, duration, beforeLobby, chatEcho } = {}) {
+  const anchor = victory?.anchor;
+  const later = roles?.anchor;
+  const stable = (a, b) => isNum(a) && isNum(b) && Math.abs(a - b) <= 1;
+  const outcome = RESULT_WIN_TITLE[winner];
+  const roleNames = { citizen: "시민", mafia: "마피아", police: "경찰", doctor: "의사" };
+  const rowsMatch = Array.isArray(seats) && seats.length > 0 && roles?.roles?.length === seats.length && seats.every(({ seat, nickname, job }) =>
+    nickname && Object.hasOwn(roleNames, job) && roles.roles.some((row) =>
+      row.seat === String(seat) && row.text.includes(nickname) && row.text.includes(roleNames[job])));
+  const aligned = anchor && later && ["left", "width", "bottom"].every((key) => stable(anchor[key], later[key]));
+  const aboveChat = [victory, roles].every((frame) => isNum(frame?.panelTop) && frame.anchor?.bottom <= frame.panelTop + 1);
+  const resultOnly = [victory, roles].every((frame) => frame?.chat === 1 && frame.forbidden?.length === 0);
+  return [
+    result("RS1", "승리 카드가 역할 공개보다 먼저 나타난다", outcome && victory?.title === outcome && victory.roles?.length === 0 ? [] : [`승리 문구 '${victory?.title ?? ""}', 먼저 나온 역할 ${victory?.roles?.length ?? "없음"}`]),
+    result("RS2", "같은 승리 진영 아래 실제 참가자 전원의 이름과 역할이 보인다", outcome && roles?.title === outcome && rowsMatch ? [] : [`승리 문구 '${roles?.title ?? ""}', 역할 ${roles?.roles?.length ?? 0}개 / 참가자 ${seats?.length ?? 0}명 또는 역할 불일치`]),
+    result("RS3", "두 결과 카드의 위치와 폭이 같고 채팅을 가리지 않는다", aligned && aboveChat ? [] : [`승리 ${JSON.stringify(anchor)}, 역할 ${JSON.stringify(later)}, 채팅 위 ${aboveChat}`]),
+    result("RS4", "결과에서 승리 1.3초와 역할 8초의 서버 시간을 사용한다", duration === RESULT_WINNER_MS + RESULT_ROLES_MS && roles?.countdown && beforeLobby ? [] : [`서버 ${duration}ms, 카운트다운 '${roles?.countdown ?? ""}', 로비 직전 역할 ${beforeLobby}`]),
+    result("RS7", "결과에 채팅은 있고 메인·옷장·다음 판 버튼은 없다", resultOnly ? [] : [`채팅 ${victory?.chat}/${roles?.chat}, 남은 버튼 ${[...victory?.forbidden ?? [], ...roles?.forbidden ?? []].join(", ")}`]),
+    result("RS8", "결과 중 보낸 전체 채팅 한 줄이 보인다", chatEcho ? [] : ["채팅 수신 줄 없음"]),
+  ];
+}
 
 /**
  * RS1~RS8 결과 화면 최종 상태 판정. 입력 { winner, header, chips, seats, dimmed, loserSeats, costumes, jobBySeat, panel, panelWant, stageBottom, roomH, hasLegacy, chatEcho }:
@@ -198,7 +254,9 @@ export function readResultStage(page) {
  * 측정값이 없으면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다. 반환: 항목별 { id, label, ok, detail }.
  */
 export function resultHiddenChecks(m, { sent = [] } = {}) {
-  const wantedHeight = isNum(m?.roomH) ? gamePanelHeight(m.roomH, "talk") : RESULT_PANEL_H;
+  const wantedHeight = m?.timed
+    ? TIMED_CHAT_FOOTER + Math.min(discussionLogHeight(m.roomH), m.viewportH <= TIMED_CHAT_SHORT_VIEWPORT ? TIMED_CHAT_SHORT_LOG : DISCUSSION_LOG_H)
+    : isNum(m?.roomH) ? gamePanelHeight(m.roomH, "talk") : RESULT_PANEL_H;
   const L = {
     RH1: "결과 화면에 탭 행·탭 단추가 없다",
     RH2: "결과 화면에 기록 본문이 없다",
@@ -218,7 +276,9 @@ export function resultHiddenChecks(m, { sent = [] } = {}) {
     if (leaked > 0) bad.push(`보낸 문장 ${leaked}개가 화면 글자에 있음`);
     out.push(result("RH3", L.RH3, bad));
   }
-  if (typeof m.expanded !== "string" || !isNum(m.panelH)) out.push(noMeasure("RH4", L.RH4, "확장 상태·패널 높이"));
+  if (typeof m.expanded !== "string" || !isNum(m.panelH) || !isNum(wantedHeight) || (m.timed && !isNum(m.viewportH))) {
+    out.push(noMeasure("RH4", L.RH4, "확장 상태·패널 높이"));
+  }
   else {
     const bad = [];
     if (m.expanded !== "false") bad.push(`data-expanded ${m.expanded} (기대 false)`);
@@ -243,6 +303,8 @@ export function readResultHidden(page) {
       expanded: panel ? panel.getAttribute("data-expanded") : null,
       panelH: panel ? panel.getBoundingClientRect().height : Number.NaN,
       roomH: root.getBoundingClientRect().height,
+      timed: root.querySelector("[data-result-summary]") !== null,
+      viewportH: window.innerHeight,
     };
   });
 }

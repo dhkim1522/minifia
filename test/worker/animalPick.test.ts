@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { ANIMAL_IDS } from "../../shared/game/animals";
-import { connect, endedGame4, hello, lastViewOf, mark, nextFrame, seat, send, settle, until } from "./helpers";
+import { closePhase, connect, endedGame4, hello, lastViewOf, mark, nextFrame, seat, send, settle, until } from "./helpers";
 
 it("두 참가자가 같은 동물을 동시에 고를 때 한 명만 받고 재접속에도 유지한다", async () => {
   const { code, host, guests } = await seat(2, 0);
@@ -35,11 +35,11 @@ it("두 참가자가 같은 동물을 동시에 고를 때 한 명만 받고 재
 it("결과와 다시 하기에서 같은 동물을 보존하고 경기 중 동물 변경을 거절한다", { timeout: 30_000 }, async () => {
   const game = await endedGame4();
   const roster = lastViewOf(game.socks[0]!).players.map((p) => ({ seat: p.seat, animal: p.animal }));
-  for (const sock of game.socks.slice(1)) send(sock, { t: "ready", on: true, round: 1 });
-  await until("모두 준비", async () => lastViewOf(game.socks[0]!).players.filter((p) => p.ready).length === game.socks.length);
-  send(game.socks[0]!, { t: "rematch", round: 1 });
+  await closePhase(game.code);
+  await until("같은 방 대기실", async () => lastViewOf(game.socks[0]!).phase === "lobby");
+  send(game.socks[0]!, { t: "start" });
   for (const sock of game.socks) {
-    const frame = await nextFrame(sock, (msg) => msg.t === "state" && msg.view.round === 2);
+    const frame = await nextFrame(sock, (msg) => msg.t === "state" && msg.view.round === 2 && msg.view.phase === "assigning");
     if (frame.t !== "state") throw new Error("다시 하기 state 가 없다");
     expect(frame.view.players.map((p) => ({ seat: p.seat, animal: p.animal }))).toEqual(roster);
   }

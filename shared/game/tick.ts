@@ -8,7 +8,7 @@
 // night: 선택·지난 아침 비움, morning: 판정(난수 사용),
 // discussion: 낮 시작 청소(지난 낮의 verdict·execution 과 개인 키), execution: 변론자 탈락(찬반 통과일 때만), ended: winner 기록·방 만료를 진입 + 30분으로 앞당김(endgame.ts).
 // 마감 훅(ON_DEADLINE = HOOKS.deadline): 단계 마감 때의 집계·분기 처리. 진입 훅과 같이 tick 루프 안에서만 부른다(결정 0016-2).
-// 마감 훅 행: verdict(찬반 집계 → 통과면 nomination, 부결이면 night), nomination(지목 집계 → 최다 한 명이면 defense, 동률·0표면 night). execution·morning(승패면 next ended, 아니면 기본 단계 — 판정은 마감 훅에서만, D-10). ended 는 마감이 없는 종단 단계다.
+// 마감 훅 행: verdict(찬반 집계 → 통과면 nomination, 부결이면 night), nomination(지목 집계 → 최다 한 명이면 defense, 동률·0표면 night). execution·morning(승패면 next ended, 아니면 기본 단계 — 판정은 마감 훅에서만, D-10). ended 공개 마감 뒤에는 같은 방의 대기실로 돌아간다.
 // 새 마감 = 이전 마감 + phaseDurationOf(진입 훅 뒤 상태) — 단계 표(PHASE_DEFS) 길이 그대로다.
 // 훅이 stay 를 돌려주면 다음 단계로 가지 않고 같은 단계에서 마감만 "이전 마감 + 그 상태의 단계 길이(phaseDurationOf)" 로 옮긴다.
 // dayAnnounce: 첫날 답안 공개는 차례마다 같은 단계에 머문다. 공개가 끝나면 기존 낮 시작 분기를 따른다.
@@ -31,6 +31,7 @@ import { stepRunoff } from "./runoff";
 import { routeAfterDayAnnounce, stepShowdown } from "./showdown";
 import { enterMorning, enterNight } from "./night";
 import { PHASE_DEFS, PHASE_INTRO_MS, PHASE_INTRO_SWITCH, nextPhaseOf, phaseHasIntro } from "./phases";
+import { resetRoomForLobby } from "./rematch";
 import { RULES } from "./ruleset";
 import { firstPlaytestDay, stepFirstBallot } from "./playtest";
 import type { RoomState } from "./room";
@@ -100,6 +101,7 @@ const HOOKS: PhaseHooks = {
     verdict: (s) => firstPlaytestDay(s) ? stepFirstBallot(s) : resolveVerdict(s),
     execution: routeAfterExecution,
     morning: routeAfterMorning,
+    ended: (s) => ({ state: resetRoomForLobby(s, true), stay: false, next: "lobby" }),
   },
 };
 
@@ -137,11 +139,12 @@ export function tick(state: RoomState, now: number, randInt: RandInt = NO_RANDOM
       phaseEndsAt: duration === null ? null : deadline + duration,
     };
     const hook = HOOKS.enter[next];
-    const hooked = hook ? hook(entered, randInt, deadline) : entered;
+    const hooked = hook ? hook(entered, randInt, next === "ended" ? now : deadline) : entered;
     // 진입 훅이 만든 상태(공개 단계의 표)로 길이를 구해 마감을 다시 정한다. 훅 입력의 임시 마감은 표 값이다.
     const length = phaseDurationOf(hooked);
     const intro = PHASE_INTRO_SWITCH.on && length !== null && phaseHasIntro(next, keywordPresentationOf(hooked) !== undefined);
-    const startsAt = intro ? deadline + PHASE_INTRO_MS : deadline;
+    // 늦은 알람에서도 결과가 저장·방송되기 전에 공개 시간을 건너뛰지 않는다.
+    const startsAt = next === "ended" ? now : intro ? deadline + PHASE_INTRO_MS : deadline;
     current = {
       ...hooked,
       ...(intro ? { phaseStartsAt: startsAt } : {}),

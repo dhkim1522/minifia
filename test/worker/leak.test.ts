@@ -41,7 +41,7 @@ import {
   withRole,
 } from "./helpers";
 import type { Actor as SeatedActor, Game, TestSocket } from "./helpers";
-import { RICH_EXTRA, RICH_TEXT, chatKeysOf, endedGame4, helloForLog, readyUp, richEndedGame6, toEndedByMafia, until } from "./helpers";
+import { RICH_EXTRA, RICH_TEXT, chatKeysOf, endedGame4, helloForLog, readyUp, richEndedGame6, toEndedByMafia, until, useLegacyResultDeadline } from "./helpers";
 
 const GAME_RULES = RULES;
 
@@ -1856,6 +1856,7 @@ describe("다시 하기 · 쉬는 사람 프레임 전수 (D-12~D-16, L38·L39·
     async () => {
       const g = await richEndedGame6({ extras: true });
       const code = g.code;
+      await useLegacyResultDeadline(code);
       const host = g.socks[0]!;
       const sitterSock = g.socks[5]!;
       const sitterToken = g.actors[5]!.token;
@@ -1906,6 +1907,7 @@ describe("다시 하기 · 쉬는 사람 프레임 전수 (D-12~D-16, L38·L39·
 
       // 2판 끝 → 쉬던 사람이 sat 로 합류
       await toEndedByMafia(code, players);
+      await useLegacyResultDeadline(code);
       await nextFrame(sitterSock, (m) => m.t === "state" && m.view.phase === "ended");
       const satView = lastViewOf(sitterSock);
       expect(satView.me.role).toBeUndefined();

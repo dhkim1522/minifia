@@ -59,7 +59,7 @@ export interface CastMember {
 export type ResultTitleKey = "result" | "citizenWin" | "mafiaWin";
 
 /** 연출 단계: 4개 구간(gather·flip·light·announce) + final */
-export type ResultStage = "gather" | "flip" | "light" | "announce" | "final";
+export type ResultStage = "gather" | "flip" | "light" | "announce" | "final" | "winner" | "roles";
 
 export interface ResultState {
   stage: ResultStage;
@@ -145,6 +145,13 @@ export function finalState(cast: readonly CastMember[], winner: GameWinner): Res
     tabsVisible: true,
     title: winner,
   };
+}
+
+/** 서버가 마감 시각을 주는 결과는 승리 발표 후 역할을 한꺼번에 공개한다. */
+export function timedResultState(rolesVisible: boolean, cast: readonly CastMember[], winner: GameWinner): ResultState {
+  return rolesVisible
+    ? { ...finalState(cast, winner), stage: "roles" }
+    : { stage: "winner", flipped: [], costumes: {}, dimmed: [], lit: true, clap: [], announce: true, tabsVisible: false, title: "result" };
 }
 
 /** 한 점 구간 snap 의 구간들: 자리마다 p = [x, z] 한 점, 모두 같은 t0. 최종 상태·건너뛰기가 쓴다 */

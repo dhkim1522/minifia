@@ -35,6 +35,8 @@ export function morningMsOf(state: RoomState): number {
  * 지금 단계의 전체 길이(ms). 단계 표 길이 그대로이고(아침은 morningMsOf), 길이가 없는 단계는 null. buildView 가 이 함수로 phaseDurationMs 를 만든다.
  */
 export function phaseDurationOf(state: RoomState): number | null {
+  // 배포 전에 이미 결과에서 기다리던 방은 기존 다시 하기 경로를 쓴다.
+  if (state.phase === "ended" && state.phaseEndsAt === null) return null;
   if (firstPlaytestDay(state)) {
     if (state.phase === "roleReveal") return PLAYTEST_ROLE_MS;
     if (state.phase === "discussion") return PLAYTEST_DISCUSSION_MS;

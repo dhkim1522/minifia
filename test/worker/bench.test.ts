@@ -25,6 +25,7 @@ import {
   settle,
   storedRoom,
   until,
+  useLegacyResultDeadline,
 } from "./helpers";
 import type { RichGame6, TestSocket } from "./helpers";
 
@@ -50,6 +51,7 @@ interface Rested {
 /** 6명 판을 ended 까지 모은 뒤 4명만 준비해 다시 하기를 시작한다. 쉬는 두 소켓은 쉬는 사람 state 한 개를 받은 상태다. */
 async function restedGame(): Promise<Rested> {
   const g = await richEndedGame6();
+  await useLegacyResultDeadline(g.code);
   const players = g.socks.slice(0, 4);
   const resting = g.socks.slice(4) as [TestSocket, TestSocket];
   for (const s of players.slice(1)) send(s, { t: "ready", on: true, round: 1 });

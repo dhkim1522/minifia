@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { phaseKey } from "../../shared/game/audience";
 import { BAR_SEATS_FX, barChairAssignment } from "../../shared/game/map";
+import { RESULT_DISPLAY_MS, RESULT_ROLES_MS, RESULT_WINNER_MS } from "../../shared/game/phases";
 import type { RoleId } from "../../shared/game/roles";
 import type { GameWinner, RoomView, SummaryRow } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
@@ -203,6 +204,49 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+});
+
+describe("서버 마감이 있는 승리 발표", () => {
+  const timedView = (options: Opts = {}, remaining = RESULT_DISPLAY_MS): RoomView => ({
+    ...makeView(options), phaseEndsAt: NOW + remaining, phaseDurationMs: RESULT_DISPLAY_MS,
+  });
+
+  it("같은 결과 카드에서 승리를 먼저 읽고 8명의 이름과 역할을 공개한다", () => {
+    const { container, send } = renderRoom(timedView({ count: 8 }));
+    const summary = screen.getByRole("region", { name: "게임 결과" });
+    expect(summary.getAttribute("data-result-summary-step")).toBe("winner");
+    expect(within(summary).getByRole("heading", { name: "시민 승리" })).not.toBeNull();
+    expect(within(summary).queryByRole("list")).toBeNull();
+    expect(chips(container)).toHaveLength(0);
+    expect(Object.values(scene().seats).every((entry) => entry.costume === undefined && entry.dim !== true)).toBe(true);
+    expect(container.querySelector("[data-ready-pill], [data-room-tool='dress'], .mf-result__home")).toBeNull();
+    expect(container.querySelector("[data-chat-input]")).not.toBeNull();
+
+    act(() => void vi.advanceTimersByTime(RESULT_WINNER_MS - 1));
+    expect(within(summary).queryByRole("list")).toBeNull();
+    act(() => void vi.advanceTimersByTime(1));
+    expect(screen.getByRole("region", { name: "게임 결과" })).toBe(summary);
+    const rows = within(within(summary).getByRole("list", { name: "전원 역할" })).getAllByRole("listitem");
+    expect(rows).toHaveLength(8);
+    expect(rows.map((row) => row.getAttribute("data-result-role-row"))).toEqual(NAMES.map((_, i) => String(i)));
+    expect(rows.map((row) => row.querySelector("[data-player-name]")?.textContent)).toEqual(NAMES);
+    expect(summary.querySelector("[data-result-countdown]")?.textContent).toBe("대기실로 8초");
+    expect(chips(container)).toHaveLength(8);
+    act(() => void vi.advanceTimersByTime(RESULT_ROLES_MS));
+    expect(summary.querySelector("[data-result-countdown]")?.textContent).toBe("대기실로 이동 중");
+    expect(send).not.toHaveBeenCalledWith(expect.objectContaining({ t: "rematch" }));
+  });
+
+  it("늦게 연결하면 승리 발표를 반복하지 않고 서버 기준으로 남은 역할 공개 시간을 보여 준다", () => {
+    const { container } = renderRoom(timedView({ winner: "mafiaWin" }, 5000), { offset: 1000 });
+    const summary = screen.getByRole("region", { name: "게임 결과" });
+    expect(container.querySelector("[data-result-announce]")).toBeNull();
+    expect(within(summary).getByRole("heading", { name: "마피아 승리" })).not.toBeNull();
+    expect(summary.querySelector("[data-result-countdown]")?.textContent).toBe("대기실로 4초");
+    act(() => void vi.advanceTimersByTime(1000));
+    expect(summary.querySelector("[data-result-countdown]")?.textContent).toBe("대기실로 3초");
+    expect(sigs.got.filter((signal) => signal.kind === "result")).toEqual([]);
+  });
 });
 
 describe("결과 화면: 3D 무대 위 한 장면의 최종 상태 (D-1, A-5)", () => {

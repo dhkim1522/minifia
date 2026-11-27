@@ -144,7 +144,7 @@ import {
 import { makeAvatarFlows } from "./avatar.mjs";
 import { makeDayFlows } from "./day.mjs";
 import { makeKeywordFlows } from "./keyword.mjs";
-import { readBenchView, readRematchState, readResultHidden, readRestSheet, readResultStage, rematchChecks, resultHiddenChecks, resultSkipChecks, resultStageChecks } from "./result.mjs";
+import { readResultHidden, readTimedResult, resultHiddenChecks, timedResultChecks } from "./result.mjs";
 import { makePoliticsFlows } from "./politics.mjs";
 import { makeSoundFlows } from "./sound.mjs";
 import { makeFirstBallotDockFlow, makeNightDockFlow, makeTableDockFlow } from "./tableDock.mjs";
@@ -3223,98 +3223,38 @@ async function toEnded(game) {
   }
 }
 
-/** 한 값씩 읽는 짧은 폴링: 조건이 참이 될 때까지 50ms 간격으로 본다. 참이면 true, 시간 안에 안 되면 false */
-async function pollPage(page, fn, ms) {
-  const t0 = Date.now();
-  while (Date.now() - t0 <= ms) {
-    if (await page.evaluate(fn)) return true;
-    await sleep(50);
-  }
-  return false;
-}
-
-/** 결과 화면(11-05): ended 도착 뒤 연출 시계가 final 에 닿을 때까지 기다린 뒤 RS1~RS8·RS10 으로 판정한다(18.1-16: 시상식이 없어 final 이 보이면 바로 잰다, RS10 은 final 뒤 3초 동안 제목·시상 표식을 본다). skipProbe 면 먼저 연출 구간에서 무대를 한 번 탭해 건너뛰기(RS9)를 본다. */
-/** RS10: 최종 상태에 닿은 뒤 제목이 그대로인지 보는 대기(ms) */
-const RESULT_HOLD_MS = 3000;
-
-async function resultState(ctx, id, game, { winner, n, skipProbe = false }) {
+/** 종료 직전부터 기다려 첫 1.3초 승리 카드를 놓치지 않는다. */
+async function resultState(ctx, id, game, winner) {
   const rec = recorder(ctx);
-  const sc = `${id}/ended`;
+  const sc = `${id}/${winner}`;
   const { hp, ht } = game;
-  await ht.waitFor((v) => v.phase === "ended", 8000, "종료 도달");
-  const view = ht.last();
-  rec(sc, "P8", "서버가 정한 승자가 view 에 있음", view.result?.winner === winner, `view.result.winner ${view.result?.winner} ≠ ${winner}`);
-  const seats = view.result?.seats ?? [];
-  const jobBySeat = Object.fromEntries(seats.map((x) => [x.seat, x.job]));
-  const loserSeats = seats.filter((x) => (x.job === "mafia") === (winner === "citizenWin")).map((x) => x.seat);
-  const deadSeats = view.players.filter((p) => p.alive === false).map((p) => p.seat); // 판이 끝났을 때 탈락한 좌석 — 유령 그림(0083-2)
-
-  if (skipProbe) {
-    // 연출 구간(모임·뒤집기)에서 무대 빈 곳을 실제 마우스로 한 번 탭한다(D-25). 구간을 놓쳤으면 RS9 는 측정값 없음으로 실패하지 않고 정보 행으로 남긴다.
-    const inWindow = await pollPage(hp, () => ["gather", "flip"].includes(window.__mfResult?.stage ?? ""), 4000);
-    const before = await readResultStage(hp);
-    if (inWindow && before) {
-      const mid = await hp.evaluate(() => {
-        const root = document.querySelector(".mf-result");
-        const head = root?.querySelector("header")?.getBoundingClientRect();
-        const panel = root?.querySelector("[data-result-panel]")?.getBoundingClientRect();
-        if (!root || !head || !panel) return null;
-        return { x: window.innerWidth / 2, y: (head.bottom + panel.top) / 2 };
-      });
-      if (!mid) throw new SetupError("결과 화면 스테이지 가운데를 못 잼");
-      await hp.mouse.click(mid.x, mid.y);
-      await sleep(150);
-      const after = await readResultStage(hp);
-      recOne(rec, sc, resultSkipChecks({ before: { stage: before.hook?.stage ?? before.stage, chips: before.chips }, after: { stage: after?.hook?.stage ?? after?.stage, chips: after?.chips }, seats: seats.length }));
-    } else {
-      infoRow(ctx, sc, "RS9", "결과 화면: 무대 탭 건너뛰기(연출 구간을 놓쳐 건너뜀)", `단계 ${before?.stage ?? "없음"}`);
-    }
-  }
-
-  try {
-    await hp.waitForFunction(() => window.__mfResult?.stage === "final", null, { timeout: 12000 });
-  } catch {
-    throw new SetupError("결과 화면 연출이 final 에 닿지 않음 (window.__mfResult.stage)");
-  }
-  // RS10(18.1-16): 최종 상태에 닿은 때의 제목·시상 표식을 읽고 3초 뒤 다시 읽는다 — 헤더가 승패로 남고 패·[넘기기]가 한 번도 없어야 한다
-  const holdFirst = await readResultStage(hp);
-  await sleep(RESULT_HOLD_MS);
-  const holdLater = await readResultStage(hp);
-  await checkState(ctx, id, `ended-${winner}`, game.host);
-
-  // 채팅 한 줄: 결과 단계에서도 전체 채팅이 오간다(D-11). 보낸 줄이 기록 칸에 보여야 한다.
+  const [victory, view] = await Promise.all([
+    readTimedResult(hp, "winner"),
+    toEnded(game).then(() => ht.waitFor((v) => v.phase === "ended", 8000, "종료 도달")),
+  ]);
+  const lobbyAt = Date.now() + (view.phaseEndsAt - view.serverNow);
+  const round = view.round ?? 1;
+  const seats = (view.result?.seats ?? []).map((entry) => ({
+    ...entry, nickname: view.players.find((player) => player.seat === entry.seat)?.nickname ?? "",
+  }));
+  rec(sc, "P8", "서버가 정한 승자가 view에 있음", view.result?.winner === winner, `view.result.winner ${view.result?.winner}`);
+  const roles = await readTimedResult(hp, "roles");
   const text = `수고했어요 ${winner === "citizenWin" ? "시민" : "마피아"}`;
   const echo = await attempt(async () => {
     await typeAndSendChat(hp, text);
-    await waitChatLine(hp, text);
+    await waitChatLine(hp, text, 2000);
+    await collapseChatLog(hp);
   });
-
-  await collapseChatLog(hp); // 18.1-14: 줄을 보내는 동안 포커스가 있어 기록 칸이 늘어나 있다 — 쉬는 높이(160)를 재려고 접는다
-  const read = await readResultStage(hp);
-  if (read === null) {
-    rec(sc, "RS1", "결과 화면이 그려짐", false, "측정값 없음(.mf-result)");
-    return;
-  }
-  for (const row of resultStageChecks({
-    winner,
-    header: read.header,
-    chips: read.chips,
-    seats: seats.length || n,
-    dimmed: read.hook?.dimmed,
-    loserSeats,
-    costumes: read.hook?.costumes,
-    jobBySeat,
-    deadSeats,
-    ghosts: read.ghosts,
-    panel: read.panel,
-    stageBottom: read.panelTop,
-    roomH: read.roomH,
-    hasLegacy: read.legacy,
-    chatEcho: echo.ok,
-    hold: holdFirst && holdLater ? { title: holdFirst.header, later: holdLater.header, marks: Math.max(holdFirst.marks, holdLater.marks, read.marks) } : undefined,
-  })) {
+  await checkState(ctx, id, `ended-${winner}`, game.host);
+  await sleep(Math.max(0, lobbyAt - Date.now() - 900));
+  const beforeLobby = (await hp.locator('[data-result-stage="roles"] [data-result-role-row]').count()) === seats.length;
+  for (const row of timedResultChecks({ winner, seats, victory, roles, duration: view.phaseDurationMs, beforeLobby, chatEcho: echo.ok })) {
     recOne(rec, sc, row);
   }
+  const lobby = await ht.waitFor((v) => v.phase === "lobby", 5000, "결과 후 자동 대기실");
+  await hp.locator(".mf-lobby").waitFor({ timeout: 4000 });
+  rec(sc, "RS9", "카운트다운 뒤 같은 방의 대기실에 자동으로 돌아온다",
+    lobby.code === view.code && (lobby.round ?? 1) === round + 1 && lobby.result === undefined);
 }
 
 async function resultFlow(ctx) {
@@ -3325,8 +3265,7 @@ async function resultFlow(ctx) {
     try {
       await step("시민 승 defense", () => skipTo(game.hp, game.ht, "defense"));
       await step("시민 승 execution", () => skipTo(game.hp, game.ht, "execution"));
-      await step("시민 승 ended", () => toEnded(game));
-      await resultState(ctx, id, game, { winner: "citizenWin", n: 4, skipProbe: true });
+      await resultState(ctx, id, game, "citizenWin");
     } finally {
       await closeGame(game);
     }
@@ -3344,8 +3283,7 @@ async function resultFlow(ctx) {
       if (alive.length !== 3 || !alive.includes(hostSeat)) throw new SetupError(`처형 뒤 생존자가 방장 포함 3명이 아님 (${alive.join(",")})`);
       await tapFace(hp, (await readNightFaces(hp)).faceSeats.find((x) => x !== hostSeat)); // 4명판에는 의사가 없어 반드시 죽는다(15-08: 밤 고르기는 얼굴 목록 칸)
       await skipTo(hp, ht, "morning");
-      await toEnded(game);
-      await resultState(ctx, id, game, { winner: "mafiaWin", n: 4 });
+      await resultState(ctx, id, game, "mafiaWin");
     } finally {
       await closeGame(game);
     }
@@ -3354,8 +3292,7 @@ async function resultFlow(ctx) {
 
 // ---- result-reveal (11-07, D-2·D-3·D-25 → 18.1 P181-7 로 바뀜): 결과 화면 기록 숨김 ----
 // 방장(마피아) + 손님 1(시민) + 봇 2. 낮 1: 봇들이 손님을 지목해 처형(손님이 유령) → 밤 1: 손님이 유령 채팅을 보내고, 방장이 봇 한 명을 죽여 마피아 승.
-// 18.1 부터 결과 화면은 탭 없이 전체 대화 하나만 그린다. 방장·손님 페이지가 연출 구간(모임·뒤집기·조명·알림)마다와 끝난 뒤에 탭·기록 본문·마피아/유령 줄·보낸 문장이 없고
-// 패널이 확장 없이 160 임을 resultHiddenChecks(RH1~RH4)로 잰다. 서버가 보낸 기록을 앱이 그리지 않는 것은 test/worker 의 프레임 검사(E3)와 짝이다.
+// 승리 카드와 역할 카드 동안 방장·손님 결과 채팅에 마피아·유령 채널이 나타나지 않는지 읽는다.
 
 const REVEAL_TEXTS = { mafia: "오늘 밤은 조용히 정해요", ghost: "나는 유령이에요 억울해요" };
 
@@ -3392,225 +3329,99 @@ async function resultRevealFlow(ctx) {
     await tapFace(hp, (await readNightFaces(hp)).faceSeats.find((x) => x !== hostSeat)); // 15-08: 밤 고르기는 얼굴 목록 칸
     await step("아침", () => skipTo(hp, ht, "morning"));
 
-    // 결과 화면: 방장 페이지가 연출 구간(final 전)을 지나는 동안 단계가 바뀔 때마다 한 번씩 읽는다
-    await toEnded(game);
     const sc = `${id}/ended`;
     const sent = [REVEAL_TEXTS.mafia, REVEAL_TEXTS.ghost];
-    const recHidden = async (page, scenario) => {
-      for (const row of resultHiddenChecks(await readResultHidden(page), { sent })) recOne(rec, scenario, row);
+    const recHidden = async (page, stage, who) => {
+      await readTimedResult(page, stage);
+      for (const row of resultHiddenChecks(await readResultHidden(page), { sent })) recOne(rec, `${sc}/${stage}-${who}`, row);
     };
-    const seen = new Set();
-    for (const t0 = Date.now(); Date.now() - t0 < 12000; ) {
-      const stage = await hp.evaluate(() => window.__mfResult?.stage ?? "").catch(() => "");
-      if (stage !== "" && !seen.has(stage)) {
-        seen.add(stage);
-        await recHidden(hp, `${sc}/${stage}`);
-      }
-      if (stage === "final") break;
-      await sleep(80);
-    }
-    const pre = [...seen].filter((x) => x !== "final");
-    rec(sc, "RH0", "연출 구간(final 전)에서 한 번 이상 읽었다", pre.length > 0, `읽은 구간 ${[...seen].join(",") || "없음"}`);
-
-    // 두 페이지가 최종 상태에 닿은 뒤 끝난 모습을 방장·손님 페이지에서 읽는다
-    for (const page of [hp, g.page]) {
-      try {
-        await page.waitForFunction(() => window.__mfResult?.stage === "final", null, { timeout: 12000 });
-      } catch {
-        throw new SetupError("결과 화면 연출이 final 에 닿지 않음 (window.__mfResult.stage)");
-      }
-    }
+    await Promise.all([
+      recHidden(hp, "winner", "host"),
+      recHidden(g.page, "winner", "guest"),
+      toEnded(game),
+    ]);
+    await Promise.all([recHidden(hp, "roles", "host"), recHidden(g.page, "roles", "guest")]);
     await checkState(ctx, id, "ended", game.host);
-    await recHidden(hp, `${sc}/after-host`);
-    await recHidden(g.page, `${sc}/after-guest`);
   } finally {
     await closeGame(game);
   }
 }
 
-// ---- result-rematch · host-handoff (11-12, 결정 D-11~D-13·D-16·D-17·D-26): 다시 하기와 방장 이양 ----
-// result-rematch: 방장 360×560 + 손님 셋 430×932(실제 페이지 4개) + 테스트 방 봇 1 = 5명. 1판은 방장(마피아)이 처형되어 시민 승으로 끝낸다 → 손님 A 가 결과 단계에서 꾸미기로 noir →
-// A·B 준비(n/m) → 인원 부족 토스트 → 쉬게 될 사람(손님 C) 시트 확인·취소·시작 → 새 판 참가자 assigning(round 2)·C 는 BenchView → 2판을 끝까지 → 쉬었던 C 가 결과에 sat 로 합류.
-// host-handoff(390×844): 대기실에서 방장 연결이 끊기면(유예 3초) 손님에게 '방장 · 이름' 알림과 [시작]이 가고, 옛 방장이 돌아오면 일반 참가자다. 짧게 끊겼다 돌아오면 변화 없음. 결과 단계 [나가기]도 같다.
+// ---- result-rematch · host-handoff: 자동 로비 복귀 이후 다음 판, 결과 중 방장 위임 ----
 
 const REMATCH_HOST_SIZE = { w: 360, h: 560, label: "360x560" };
 const REMATCH_GUEST_SIZE = { w: 430, h: 932, label: "430x932" };
 const REMATCH_OLD_LINE = "지난 판 인사예요";
 const HANDOFF_SIZE = { w: 390, h: 844, label: "390x844" };
 
-/** nomination 에서 시작해 ended 까지: 방장(마피아)이 지목되어 처형된다(봇은 방장을 가리키고 찬성 — 찬반은 nomination 에 닿기 전에 봇이 던졌다, 22페이즈 D-10). 두 번째 인자(찬성을 누를 손님)는 이제 쓰지 않는다 */
-async function playRematchGame(game, _voters) {
+/** 방장(마피아)이 지목되어 처형되는 판을 끝낸다. */
+async function playRematchGame(game) {
   const { hp, ht } = game;
   await step("defense", () => skipTo(hp, ht, "defense"));
   await step("execution", () => skipTo(hp, ht, "execution"));
   await step("ended", () => toEnded(game));
 }
 
-/** final 에 닿은 뒤(시상식이 없다, 18.1-16)의 알약 상태를 읽을 수 있을 때까지 기다린다 */
 async function settledResult(page) {
-  await page.waitForFunction(() => window.__mfResult?.stage === "final", null, { timeout: 15000 });
-  await sleep(250);
+  return readTimedResult(page, "roles");
 }
-
-const pillBy = (page) => page.locator("[data-ready-pill]");
 
 async function resultRematchFlow(ctx) {
   const id = "result-rematch";
   const rec = recorder(ctx);
-  const sc = `${id}/ended`;
+  const sc = `${id}/return`;
   const game = await openGame(ctx, id, { guests: 3, bots: 1, role: "mafia", vote: { exec: "yes", pick: "host" }, to: "nomination", guestSize: REMATCH_GUEST_SIZE });
   try {
     const { hp, ht, guests } = game;
     const [A, B, C] = guests;
-    await playRematchGame(game, [A, B]);
-    await Promise.all([ht, A.tracker, B.tracker, C.tracker].map((t) => t.waitFor((v) => v.phase === "ended" && v.result !== undefined, 10000, "종료 도달")));
-    const round1 = ht.last().round ?? 1;
+    await playRematchGame(game);
+    const trackers = [ht, A.tracker, B.tracker, C.tracker];
+    const results = await Promise.all(trackers.map((t) => t.waitFor((v) => v.phase === "ended" && v.result !== undefined, 5000, "종료 도달")));
+    const [before] = results;
+    const round = before.round ?? 1;
 
-    // 승리 조명(4600) 전: 알약은 비활성 (RM12). 이어서 무대를 탭해 4600 으로 건너뛴다 — 알약이 활성이고 시상 표식(패·[넘기기])이 없어야 한다 (RM11, 18.1-16: 시상식이 없다)
-    const inWindow = await pollPage(hp, () => ["gather", "flip"].includes(window.__mfResult?.stage ?? ""), 4000);
-    if (!inWindow) throw new SetupError("연출 구간(모임·뒤집기)을 놓침");
-    const early = await readRematchState(hp);
-    const mid = await hp.evaluate(() => {
-      const root = document.querySelector(".mf-result");
-      const head = root?.querySelector("header")?.getBoundingClientRect();
-      const panel = root?.querySelector("[data-result-panel]")?.getBoundingClientRect();
-      if (!root || !head || !panel) return null;
-      return { x: window.innerWidth / 2, y: (head.bottom + panel.top) / 2 };
-    });
-    if (!mid) throw new SetupError("결과 화면 스테이지 가운데를 못 잼");
-    await hp.mouse.click(mid.x, mid.y);
-    try {
-      await hp.waitForFunction(() => ["light", "announce", "final"].includes(window.__mfResult?.stage ?? ""), null, { timeout: 4000 });
-    } catch {
-      throw new SetupError("무대 탭 뒤 승리 조명 단계(light)에 닿지 않음 (window.__mfResult.stage)");
-    }
-    await sleep(300);
-    const during = await readRematchState(hp);
-    const afterLight = {
-      pillActive: !!during?.pill && during.inactive === false,
-      marks: during?.marks,
-    };
+    const snapshots = await Promise.all([hp, A.page, B.page, C.page].map(settledResult));
+    rec(sc, "RM1", "방장과 세 손님 결과 화면에서 채팅만 사용하고 다음 판·메인·옷장 버튼이 없다",
+      snapshots.every((frame) => frame.chat === 1 && frame.forbidden.length === 0));
 
-    // 모두 최종 상태로
-    await Promise.all([settledResult(hp), settledResult(A.page), settledResult(B.page), settledResult(C.page)]);
-
-    // 이전 판 채팅 한 줄(A) — 나중에 새 판 기록 칸에 남지 않아야 한다 (RM9)
     await typeAndSendChat(A.page, REMATCH_OLD_LINE);
-    await waitChatLine(hp, REMATCH_OLD_LINE);
-    const oldCount = async (page) => ((await readChatLines(page)) ?? []).filter((l) => l.text === REMATCH_OLD_LINE).length;
-    const chatBefore = await oldCount(hp);
+    await Promise.all([hp, B.page, C.page].map((page) => waitChatLine(page, REMATCH_OLD_LINE, 2500)));
+    rec(sc, "RM2", "결과 중 채팅을 다른 참가자 모두 받는다", true);
 
-    // 결과 단계 꾸미기(D-16): A 가 아래 칸 [꾸미기] → noir
-    await step("A 꾸미기 버튼", () => A.page.locator('[data-float="dress"]').click({ timeout: 4000 }));
-    await step("A noir 카드", () => A.page.locator('button[data-outfit="noir"]').click({ timeout: 4000 }));
-    await A.tracker.waitFor((v) => v.players.find((p) => p.seat === A.seat)?.look === "noir", 4000, "A 의상 noir 확인");
-    await A.page.keyboard.press("Escape");
-    await sleep(350);
+    // 결과를 보는 도중 같은 탭을 새로고침하면 남은 시간의 역할 화면에서 이어 본다.
+    const beforeReload = C.tracker.seq;
+    await C.page.reload({ waitUntil: "domcontentloaded" });
+    const rejoined = await C.tracker.waitFor((v) => C.tracker.seq > beforeReload && v.phase === "ended", 3000, "결과 중 원래 자리로 다시 연결");
+    const rejoinedFrame = await settledResult(C.page);
+    rec(sc, "RM3", "결과 중 재입장해도 원래 자리·마감·전원 역할이 이어진다",
+      rejoined.me.seat === C.seat && rejoined.phaseEndsAt === before.phaseEndsAt && rejoined.code === before.code && rejoinedFrame.roles.length === before.result.seats.length);
 
-    // 알약: 준비 전 방장 n/m = 방장·봇 2 / 연결된 5 (흐림), 인원 부족 탭 → 토스트 (RM3·RM4)
-    const hostBefore = await readRematchState(hp);
-    // 흐린 알약은 aria-disabled 라 Playwright 가 비활성으로 보고 기다린다 — 실제 탭처럼 좌표에 눌러야 한다(흐려도 탭은 토스트를 부른다)
-    await step("방장 알약(토스트)", () => pillBy(hp).click({ timeout: 4000, force: true }));
-    await sleep(350);
-    const hostToast = await readRematchState(hp);
-    await sleep(500);
-    const roundUnchanged = ht.last().phase === "ended" && (ht.last().round ?? 1) === round1;
+    const lobbies = await Promise.all(trackers.map((t) => t.waitFor((v) => v.phase === "lobby", 14000, "같은 방 대기실로 자동 복귀")));
+    await Promise.all([hp, A.page, B.page, C.page].map((page) => page.locator(".mf-lobby").waitFor({ timeout: 5000 })));
+    rec(sc, "RM4", "같은 방 코드·좌석·연결로 모두 대기실에 돌아오고 판 번호가 한 번만 오른다",
+      lobbies.every((lobby, i) => lobby.code === before.code && lobby.me.seat === results[i].me.seat &&
+        (lobby.round ?? 1) === round + 1 && lobby.result === undefined && lobby.me.role === undefined));
+    const previousLineCount = async (page) => ((await readChatLines(page)) ?? []).filter((line) => line.text === REMATCH_OLD_LINE).length;
+    const lobbyLineCounts = await Promise.all([hp, A.page, B.page, C.page].map(previousLineCount));
+    rec(sc, "RM5", "대기실에 돌아오면 끝난 판의 채팅 기록이 남지 않는다", lobbyLineCounts.every((count) => count === 0));
 
-    // 손님 토글 (RM2): B 가 준비 → 준비됨 → 취소 → 다시 준비 대신 A 가 준비
-    const guestBefore = await readRematchState(A.page);
-    await step("A 알약", () => pillBy(A.page).click({ timeout: 4000 }));
-    await A.page.waitForSelector('[data-ready-pill][data-ready="true"]', { timeout: 4000 });
-    const guestAfter = await readRematchState(A.page);
-    await step("B 알약", () => pillBy(B.page).click({ timeout: 4000 }));
-    await ht.waitFor((v) => v.players.filter((p) => p.ready === true && p.connected).length === 4, 5000, "준비 4명(방장·봇·A·B)");
-    await sleep(350);
-    const hostFull = await readRematchState(hp);
-    const doneTags = await hp.evaluate(() => document.querySelectorAll('.mv-head[data-done="true"]').length);
-    rec(sc, "RM-TAG", "다시 하기: 준비한 사람 수(4)만큼 이름표에 체크", doneTags === 4, `이름표 체크 ${doneTags}개`);
-
-    // 쉬게 될 사람 시트 (RM5): C 한 명. [취소] 로 닫고 다시 열어 [시작]
-    await step("방장 알약(시트)", () => pillBy(hp).click({ timeout: 4000 }));
-    await hp.waitForSelector("dialog[open] [data-rest-faces]", { timeout: 4000 });
-    const sheet = await readRestSheet(hp);
-    await step("시트 취소", () => hp.locator("dialog[open]").getByRole("button", { name: "취소", exact: true }).click({ timeout: 3000 }));
-    await hp.waitForFunction(() => !document.querySelector("dialog[open]"), null, { timeout: 3000 });
-    const stillEnded = ht.last().phase === "ended" && (ht.last().round ?? 1) === round1;
-    await sleep(2100); // 알약 잠금 없음(취소는 보내지 않는다) — 안전 여유
-    await step("방장 알약(시트 2)", () => pillBy(hp).click({ timeout: 4000 }));
-    await hp.waitForSelector("dialog[open] [data-rest-faces]", { timeout: 4000 });
-    await step("시트 시작", () => hp.locator("dialog[open]").getByRole("button", { name: "시작", exact: true }).click({ timeout: 3000 }));
-
-    // 새 판: 참가자는 round + 1 의 assigning, C 는 BenchView (RM6·RM7)
-    await Promise.all([ht, A.tracker, B.tracker].map((t) => t.waitFor((v) => (v.round ?? 1) === round1 + 1 && v.phase !== "ended", 10000, "새 판 도착")));
-    await C.tracker.waitFor((v) => v.resting === true && (v.round ?? 1) === round1 + 1, 10000, "쉬는 사람 state");
-    const phases = [ht, A.tracker, B.tracker].map((t) => t.last().phase);
-    const round = { before: round1, after: Math.min(...[ht, A.tracker, B.tracker].map((t) => t.last().round ?? 1)), phases };
-    await C.page.waitForSelector("[data-bench-view] .mf-bench__text", { timeout: 6000 });
-    const bench = await readBenchView(C.page);
-    if (C.tracker.last()?.players?.length !== 1) rec(`${id}/bench`, "RM-LEAK", "쉬는 사람이 받은 players 는 자기 한 줄뿐", false, `players ${C.tracker.last()?.players?.length}`);
-    else rec(`${id}/bench`, "RM-LEAK", "쉬는 사람이 받은 players 는 자기 한 줄뿐", true);
-
-    // 2판: 의상 유지 (RM8), 이전 판 채팅 0줄 (RM9) — 낮 토론의 기록 칸에서 센다
-    await step("2판 낮", () => skipTo(hp, ht, "discussion"));
-    await untilGame(A.page, (x) => x.phase === "discussion", 10000, "토론 도착(손님)");
-    const looks = Object.fromEntries(ht.last().players.map((p) => [p.seat, p.look ?? "coat"]).filter(([seat]) => seat === A.seat));
-    const chatOld = (await oldCount(hp)) + (await oldCount(A.page)) + (await oldCount(B.page));
-    if (ht.last().me.role !== "mafia") throw new SetupError("2판 방장 직업이 마피아가 아님(테스트 직업이 유지되지 않음)");
-    await step("2판 지목", () => skipTo(hp, ht, "nomination"));
-    await playRematchGame(game, [A, B]);
-    await Promise.all([ht, A.tracker, B.tracker, C.tracker].map((t) => t.waitFor((v) => v.phase === "ended" && v.result !== undefined && v.resting !== true, 10000, "2판 종료 도달")));
-
-    // 쉬었던 C 가 결과에 합류 (RM10): sat, 칩 없음, 칩 수 = 참가자 4
-    await Promise.all([settledResult(hp), settledResult(C.page)]);
-    const cState = await readRematchState(C.page);
-    const chipsOnSat = await C.page.evaluate((seat) => document.querySelectorAll(`.mf-world__tags [data-seat="${seat}"] [data-role-chip]`).length, C.seat);
-    const sat = { seats: cState?.sat ?? [], want: [C.seat], chipsOnSat, chips: cState?.chips ?? Number.NaN, participants: ht.last().result?.seats?.length ?? Number.NaN };
-    const cPill = await readRematchState(C.page);
-    rec(sc, "RM-SAT", "다시 하기: 쉬었던 사람의 알약은 손님과 같다(data-ready, 방장 표식 없음)", cPill?.ready !== null && cPill?.count === null, `ready ${cPill?.ready}, count ${cPill?.count}`);
-    await checkState(ctx, id, "ended-2", game.host);
-
-    const accept = {
-      dockWidth: hostBefore?.dockWidth,
-      pillBox: hostBefore?.pill,
-      pillAboveLog: hostBefore?.pillAboveLog,
-      inputWidth: hostBefore?.inputWidth,
-      guestPill: guestBefore && guestAfter ? { before: { ready: guestBefore.ready, pressed: guestBefore.pressed }, after: { ready: guestAfter.ready, pressed: guestAfter.pressed } } : undefined,
-      count: hostBefore ? { text: hostBefore.count ?? "", dim: hostBefore.dim, disabled: hostBefore.disabled } : undefined,
-      countWant: { n: 2, m: 5, minPlayers: 4 },
-      countFull: hostFull ? { text: hostFull.count ?? "", dim: hostFull.dim, disabled: hostFull.disabled } : undefined,
-      countFullWant: { n: 4, m: 5, minPlayers: 4 },
-      toast: hostToast?.toast,
-      minPlayers: 4,
-      roundUnchanged: roundUnchanged && stillEnded,
-      sheet,
-      restingWant: 1,
-      round,
-      benchView: bench !== null,
-      bench: bench ?? undefined,
-      looks,
-      looksWant: { [A.seat]: "noir" },
-      chat: { before: chatBefore, old: chatOld },
-      sat,
-      afterLight,
-      early: early?.pill ? { disabled: early.inactive } : undefined,
-    };
-    for (const row of rematchChecks(accept)) recOne(rec, sc, row);
-    // 손님 크기(430×932)에서도 공용 도구 줄과 입력 영역을 잰다.
-    const guestState = await readRematchState(B.page);
-    const guestLayout = {
-      dockWidth: guestState?.dockWidth,
-      pillBox: guestState?.pill,
-      pillAboveLog: guestState?.pillAboveLog,
-      inputWidth: guestState?.inputWidth,
-    };
-    const only = rematchChecks(guestLayout).find((row) => row.id === "RM1");
-    rec(sc, "RM1b", `${only.label} (손님 ${REMATCH_GUEST_SIZE.label})`, only.ok, only.detail);
+    await step("대기실 꾸미기 열기", () => A.page.locator('[data-room-tool="dress"]').click({ timeout: 4000 }));
+    await step("옷장 탭", () => A.page.locator('[data-customize-tab="dress"]').click({ timeout: 4000 }));
+    await step("의상 선택", () => A.page.locator('button[data-outfit="noir"]').click({ timeout: 4000 }));
+    await A.tracker.waitFor((v) => v.players.find((p) => p.seat === A.seat)?.look === "noir", 4000, "대기실에서 A가 옷장 사용");
+    await A.page.locator('[data-dress-sheet]').getByRole("button", { name: "닫기", exact: true }).click({ timeout: 4000 });
+    await startGame(hp, ht);
+    const next = await Promise.all(trackers.map((t) => t.waitFor((v) => v.phase === "roleReveal", 8000, "모두 두 번째 판 역할 확인")));
+    rec(sc, "RM6", "대기실의 일반 시작 버튼으로 전원 다음 판에 입장한다",
+      next.every((v, i) => v.code === before.code && v.me.seat === results[i].me.seat && (v.round ?? 1) === round + 1));
+    rec(sc, "RM8", "대기실에서 선택한 의상은 다음 판에 이어진다",
+      next.every((v) => v.players.find((p) => p.seat === A.seat)?.look === "noir"));
   } finally {
     await closeGame(game);
   }
 }
 
-/** 대기실 → 결과 단계에서 방장이 사라졌을 때의 화면: 알림·알약·이름표 */
+/** 대기실과 결과에서 방장이 나가면 같은 방의 다음 방장이 정해진다. */
 async function hostHandoffFlow(ctx) {
   const id = "host-handoff";
   const rec = recorder(ctx);
@@ -3682,31 +3493,27 @@ async function hostHandoffFlow(ctx) {
     }
   }
 
-  // 2) 결과 단계: 방장이 [나가기] 를 확인하면 즉시 이양 — 손님의 알약이 [시작] 이 되고 나간 이름표가 흐려진다
+  // 2) 결과에서 방장이 나가도 손님은 정해진 마감에 같은 방의 방장으로 돌아온다.
   {
     const game = await openGame(ctx, id, { guests: 1, bots: 2, role: "mafia", vote: { exec: "yes", pick: "host" }, to: "nomination", guestInitScripts: [reconnectInit] });
     const sc = `${id}/ended`;
     try {
-      const { hp, ht, hostSeat, guests } = game;
+      const { hp, hostSeat, guests } = game;
       const [G] = guests;
-      await playRematchGame(game, [G]);
-      await G.tracker.waitFor((v) => v.phase === "ended" && v.result !== undefined, 10000, "종료 도달(손님)");
-      await Promise.all([settledResult(hp), settledResult(G.page)]);
-      const before = await readRematchState(G.page);
+      await playRematchGame(game);
+      const before = await G.tracker.waitFor((v) => v.phase === "ended" && v.result !== undefined, 5000, "종료 도달(손님)");
       await clearToasts(G.page);
-      await hp.locator('[aria-label="나가기"]').first().click({ timeout: 4000 });
-      await hp.locator("dialog[open]").getByRole("button", { name: "나가기", exact: true }).click({ timeout: 4000 });
-      let handed = true;
-      try {
-        await G.tracker.waitFor((v) => v.me.isHost === true, 8000, "손님이 새 방장(결과 단계)");
-      } catch {
-        handed = false;
-      }
-      await sleep(500);
-      const after = await readRematchState(G.page);
-      const away = await G.page.evaluate((seat) => document.querySelectorAll(`.mf-world__tags [data-seat="${seat}"] .mv-tag.is-away`).length, hostSeat);
+      await hp.locator('.mf-result [aria-label="나가기"]').first().click({ timeout: 2500 });
+      await hp.locator("dialog[open]").getByRole("button", { name: "나가기", exact: true }).click({ timeout: 2500 });
+      const handed = await G.tracker.waitFor((v) => v.phase === "ended" && v.me.isHost === true, 5000, "결과에서 손님이 새 방장");
       const toasts = hostToasts(await toastsOf(G.page));
-      rec(sc, "HH4", "방장: 결과 단계 [나가기] → 손님 알약 [준비] → [시작], 알림 '방장 · 이름', 나간 이름표 흐림", handed && before?.count === null && after?.count !== null && toasts.includes(`방장 · ${GAME_GUESTS[0]}`) && away === 1, `이양 ${handed}, 전 count ${before?.count}, 후 count ${after?.count}, 알림 [${toasts}], 흐린 이름표 ${away}개`);
+      rec(sc, "HH4", "결과 도중 나가기를 확인한 즉시 방장을 위임하고 마감은 유지한다",
+        handed.phaseEndsAt === before.phaseEndsAt && !handed.players.some((p) => p.seat === hostSeat && p.connected) && toasts.includes(`방장 · ${GAME_GUESTS[0]}`),
+        `알림 [${toasts}]`);
+      const lobby = await G.tracker.waitFor((v) => v.phase === "lobby", 14000, "새 방장으로 자동 대기실 복귀");
+      await G.page.locator("[data-lobby-start]").waitFor({ timeout: 4000 });
+      rec(sc, "HH5", "같은 방의 대기실에 새 방장으로 돌아와 시작 단추를 볼 수 있다",
+        lobby.code === before.code && lobby.me.isHost && lobby.me.seat === G.seat);
     } finally {
       await closeGame(game);
     }

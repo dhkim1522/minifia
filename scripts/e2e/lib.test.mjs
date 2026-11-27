@@ -3522,6 +3522,15 @@ test("R6: 새로고침 로그에 role.flip·result.*·game.start 가 있으면 �
   assert.deepEqual(rFails({ reloadLog: [rl("bed.result", 10), rl("ui.tap", 20)] }), []);
 });
 
+test("시간제 결과 소리는 승패 한 번 뒤에 전원 역할 공개 소리가 한 번 난다", () => {
+  const win = rl("result.win", 20);
+  const reveal = rl("role.flip", 1300);
+  const timed = { timed: true, expectWin: true, log: [rl("bed.result", 0), win, reveal] };
+  assert.deepEqual(rFails(timed), []);
+  assert.deepEqual(rFails({ ...timed, log: [...timed.log, rl("role.flip", 1500)] }), ["R2"]);
+  assert.deepEqual(rFails({ ...timed, log: [timed.log[0], reveal, { ...win, at: 1400 }] }), ["R5"]);
+});
+
 test("soundResultChecks: 입력 모양이 틀리면 측정값 없음으로 실패", () => {
   assert.ok(soundResultChecks(null).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
   assert.ok(soundResultChecks({ ...rOk(), reloadLog: undefined }).some((l) => l.id === "R6" && !l.ok && /측정값 없음/.test(l.detail)));
