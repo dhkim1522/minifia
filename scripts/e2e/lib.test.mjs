@@ -812,9 +812,12 @@ test("announceChecks: 화면 너비에 맞는 32~36px 발표 크기를 확인한
   }
 });
 
-test("announceChecks: 처형 카드에서는 제목이 결과 문장보다 커야 한다", () => {
+test("announceChecks: 처형 카드의 일반 제목은 20px, 축약 제목은 16px이다", () => {
   const announcement = { viewportWidth: 390, titlePx: 20, fontPx: 16, lineCount: 1, wordBreak: "keep-all" };
   assert.equal(idsOk(announceChecks(announcement, { titled: true })).AN1, true);
+  assert.equal(idsOk(announceChecks({ ...announcement, titlePx: 16 }, { titled: true })).AN1, false);
+  assert.equal(idsOk(announceChecks({ ...announcement, compactExecution: true }, { titled: true })).AN1, false);
+  assert.equal(idsOk(announceChecks({ ...announcement, compactExecution: true, titlePx: 16 }, { titled: true })).AN1, true);
   assert.equal(idsOk(announceChecks({ ...announcement, fontPx: 36 }, { titled: true })).AN1, false);
   assert.equal(idsOk(announceChecks({ ...announcement, titlePx: null }, { titled: true })).AN1, false);
 });

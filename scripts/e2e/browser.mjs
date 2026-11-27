@@ -1693,8 +1693,10 @@ export function armAnnounceWatch(page, { nightSummary = false } = {}) {
       last = text;
       if (el) {
         const cs = getComputedStyle(el);
-        const title = el.closest(".mf-phase-event__card")?.querySelector(".mf-phase-event__title");
-        log.push({ text, at: performance.now(), viewportWidth: window.innerWidth, fontPx: parseFloat(cs.fontSize), titlePx: title ? parseFloat(getComputedStyle(title).fontSize) : null, lineCount: lineCountOf(el), wordBreak: cs.wordBreak, ...(summary ? { nightSummary: true } : {}), ...(el.closest(".mf-announce.is-with-letter-compact") ? { compactLetter: true } : {}) });
+        const card = el.closest(".mf-phase-event__card");
+        const title = card?.querySelector(".mf-phase-event__title");
+        const compactExecution = card?.closest(".mf-execution-result") && window.matchMedia("(max-height: 640px)").matches;
+        log.push({ text, at: performance.now(), viewportWidth: window.innerWidth, fontPx: parseFloat(cs.fontSize), titlePx: title ? parseFloat(getComputedStyle(title).fontSize) : null, lineCount: lineCountOf(el), wordBreak: cs.wordBreak, ...(summary ? { nightSummary: true } : {}), ...(el.closest(".mf-announce.is-with-letter-compact") ? { compactLetter: true } : {}), ...(compactExecution ? { compactExecution: true } : {}) });
       } else log.push({ text: null, at: performance.now() });
     }, 40);
     window.__annWatch = { log, stop: () => clearInterval(timer) };
