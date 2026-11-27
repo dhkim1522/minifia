@@ -1255,6 +1255,7 @@ describe("GameMap — 순차 지목 이름표 (22-10, D-12)", () => {
     expect(mode()).toBe("people");
     expect(document.activeElement).not.toBe(input);
     expect(container.querySelectorAll("[data-dock-pane]")).toHaveLength(1);
+    expect(container.querySelector("[data-table-self]")).toBeNull();
     const candidates = () => Array.from(container.querySelectorAll("[data-table-seat][data-pick]"), (card) => card.getAttribute("data-table-seat"));
     const page = () => container.querySelector("[data-people-page]")?.textContent;
     expect(candidates()).toEqual(["1", "2", "3", "4"]);
@@ -1304,6 +1305,26 @@ describe("GameMap — 순차 지목 이름표 (22-10, D-12)", () => {
     fireEvent.click(container.querySelector("[data-dock-handle]")!);
     expect(mode()).toBe("closed");
     expect(document.activeElement).toBe(tab("people"));
+  });
+
+  it("일반 참가자 목록의 첫 카드는 나를 표시하고 입력을 받지 않는다", () => {
+    const view = makeView({ mySeat: 2, nicknames: ["하나", "둘", "서윤", "넷"] });
+    const room: RoomView = { ...view, map: "bar", day: { ...view.day!, suspects: [{ to: 2, from: 0 }] } };
+    const send = vi.fn();
+    const { container } = render(<GameMap view={room} store={new WorldStore()} chat={new ChatStore()} send={send} />);
+    fireEvent.click(container.querySelector('[data-dock-tab="people"]')!);
+    const cards = Array.from(container.querySelectorAll("[data-table-seat]"));
+    const own = cards[0]!;
+    expect(cards.map(card => card.getAttribute("data-table-seat"))).toEqual(["2", "0", "1", "3"]);
+    expect(own.getAttribute("role")).toBe("group");
+    expect(own.getAttribute("aria-label")).toBe("서윤, 나, 의심 표시 1개");
+    expect(own.querySelector(".mf-table-controls__self-badge")?.textContent).toBe("나");
+    expect(own.querySelector(".mf-table-controls__count")?.textContent).toBe("1");
+    expect(own.matches("button, [tabindex], [data-pick], [data-suspect-holdable]")).toBe(false);
+    expect(own.querySelector("[data-player-name]")?.getAttribute("data-player-name")).toBe("2");
+    fireEvent.click(own);
+    expect(send).not.toHaveBeenCalled();
+    expect(container.querySelector("[data-table-seat][aria-pressed=true]")).toBeNull();
   });
 
   it("딱지를 붙인 직후 시작한 새 홀드도 손을 뗄 때 해제한다", () => {

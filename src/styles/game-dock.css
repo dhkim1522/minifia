@@ -156,6 +156,23 @@
   aspect-ratio: 1;
   overflow: hidden;
 }
+
+.mf-table-controls__self-badge {
+  position: absolute;
+  right: 3px;
+  bottom: 4px;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 3px;
+  border: 1px solid #bdcee5;
+  border-radius: 5px;
+  background: #24334b;
+  color: #edf5ff;
+  font: 800 12px/1 var(--font-ui);
+}
 .mf-game-dock .mf-table-controls__portrait .mf-player-portrait {
   display: block;
   width: 72%;
@@ -191,7 +208,7 @@
 .mf-game-dock__hint { margin: 5px 2px 0; color: var(--noir-silver); }
 
 @media (hover: hover) {
-  .mf-game-dock .mf-table-controls--cards .mf-table-controls__seat:not(:disabled, [aria-pressed="true"]):hover,
+  .mf-game-dock .mf-table-controls--cards button.mf-table-controls__seat:not(:disabled, [aria-pressed="true"]):hover,
   .mf-game-dock__pagination button:not([aria-disabled="true"]):hover {
     background: var(--noir-control);
     border-color: var(--noir-silver);

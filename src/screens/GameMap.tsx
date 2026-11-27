@@ -820,6 +820,7 @@ export function GameMap({ view, store, chat, send, canSend: connected = true, of
   } : undefined;
   const tableRoster: TableControlsProps = {
     players: tablePlayers,
+    self: meAlive && !ghost ? me : undefined,
     readOnly: !tableOn,
     ...(tableFocus !== undefined ? { focus: tableFocus } : {}),
     ...(tableBallot && mine !== undefined ? { selected: mine } : {}),

@@ -79,11 +79,12 @@ export function GameDock({ scope, initialPane, peopleAction, preserveWriting, ke
   const gesture = useRef<{ id: number; x: number; y: number } | undefined>(undefined);
   const lastSwipe = useRef<{ target: HTMLButtonElement; at: number } | undefined>(undefined);
   const roster = contents.people;
+  const players = roster?.self ? [roster.self, ...roster.players] : roster?.players ?? [];
   const [peoplePage, setPeoplePage] = useState<number>();
   const [actionPage, setActionPage] = useState<{ scope: string; page: number }>();
-  const pageCount = Math.ceil((roster?.players.length ?? 0) / PEOPLE_PER_PAGE);
+  const pageCount = Math.ceil(players.length / PEOPLE_PER_PAGE);
   const selectedSeat = roster?.pick?.mine ?? roster?.selected ?? roster?.focus;
-  const selectedIndex = roster?.players.findIndex((player) => player.seat === selectedSeat) ?? -1;
+  const selectedIndex = players.findIndex((player) => player.seat === selectedSeat);
   const initialPage = selectedIndex >= 0 ? Math.floor(selectedIndex / PEOPLE_PER_PAGE) : 0;
   const savedPage = activeAction ? actionPage?.scope === scope ? actionPage.page : undefined : peoplePage;
   const page = Math.min(savedPage ?? initialPage, Math.max(0, pageCount - 1));
@@ -286,8 +287,8 @@ export function GameDock({ scope, initialPane, peopleAction, preserveWriting, ke
                     event.stopPropagation();
                   }}>
                   <TableControls {...roster} suspectHold={holdAction} holdingSuspect={holdingSeat}
-                    cards players={roster.players.slice(page * PEOPLE_PER_PAGE, (page + 1) * PEOPLE_PER_PAGE)}
-                    pagedPlayers={pageCount > 1 ? roster.players : undefined} />
+                    cards players={players.slice(page * PEOPLE_PER_PAGE, (page + 1) * PEOPLE_PER_PAGE)}
+                    pagedPlayers={pageCount > 1 ? players : undefined} />
                 </div>
                 {activeAction?.footer}
               </div>

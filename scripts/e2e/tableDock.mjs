@@ -33,7 +33,7 @@ async function nicknameColor(parent, seat) {
 async function peoplePage(page) {
   return page.locator('[data-dock-pane="people"] [data-table-seat]').evaluateAll((cards) => cards.map((card) => {
     const { left, right, top, bottom, width, height } = card.getBoundingClientRect();
-    return { seat: Number(card.getAttribute("data-table-seat")), vote: card.hasAttribute("data-pick"), rect: { left, right, top, bottom, width, height } };
+    return { seat: Number(card.getAttribute("data-table-seat")), self: card.hasAttribute("data-table-self"), vote: card.hasAttribute("data-pick"), rect: { left, right, top, bottom, width, height } };
   }));
 }
 
@@ -67,8 +67,9 @@ export function makeFirstBallotDockFlow({ recorder, startHost, openGuest, checkR
       const lookPages = await readPeoplePages(guest.page, peoplePage);
       const selectedLook = guest.page.locator('[data-table-seat][aria-pressed="true"]');
       const beforeSwipe = await selectedLook.evaluateAll(cards => cards.map(c => c.getAttribute("data-table-seat")));
-      rec(id, "FB0", "8인 참가자 보기에서 일곱 얼굴이 한 줄씩 같은 높이로 나뉘고 모든 카드가 44px 이상이다",
-        peoplePagesFit(lookPages, ctx.size) && lookPages[0].length === 4 && lookPages[1]?.length === 3);
+      rec(id, "FB0", "8인 참가자 보기에서 내 카드가 첫 칸에 있고 두 페이지의 높이가 같다",
+        peoplePagesFit(lookPages, ctx.size) && lookPages.length === 2 && lookPages.every(cards => cards.length === 4)
+        && lookPages[0][0].self && lookPages[0][0].seat === seat && lookPages.flat().filter(card => card.self).length === 1);
       const touch = ctx.size.mobile !== false;
       await swipe(guest.page, `[data-table-seat="${lookPages[0][2].seat}"]`, -1, touch, "x", 780);
       await guest.page.locator("[data-people-page]").filter({ hasText: "2/2" }).waitFor({ timeout: 3000 });
@@ -98,7 +99,8 @@ export function makeFirstBallotDockFlow({ recorder, startHost, openGuest, checkR
       const votePages = await readPeoplePages(guest.page, peoplePage);
       rec(id, "FB3", "바라보기와 첫날 지목에서 후보 좌석 순서가 같다",
         votePages.flat().filter(card => card.vote).length === 7 &&
-        JSON.stringify(lookPages.flat().map(card => card.seat)) === JSON.stringify(votePages.flat().map(card => card.seat)));
+        votePages.flat().every(card => !card.self)
+        && JSON.stringify(lookPages.flat().filter(card => !card.self).map(card => card.seat)) === JSON.stringify(votePages.flat().map(card => card.seat)));
 
       const secondPageSeat = hostPages[1]?.[0]?.seat;
       const target = secondPageSeat ?? seat;
@@ -307,9 +309,12 @@ export function makeTableDockFlow({ recorder, openGame, closeGame, writeSheet, g
       await openTableDockPane(hp, "people");
       const roster = hp.locator('[data-dock-pane="people"]');
       await checkRoomWidth(ctx, `${id}/people`, hp, GAME_RAILS, ["[data-table-controls]"]);
-      rec(sc, "TD3", "참가자 판에는 자신을 뺀 세 명이 보이고 토론 중에는 얼굴을 지목할 수 없다",
-        await roster.locator("[data-table-seat]").count() === 3
-        && await roster.locator(`[data-table-seat="${game.hostSeat}"]`).count() === 0
+      const ownCard = roster.locator(`[data-table-seat="${game.hostSeat}"][data-table-self]`);
+      rec(sc, "TD3", "참가자 판 첫 칸은 '나'로 표시하며 지목하거나 의심할 수 없다",
+        await roster.locator("[data-table-seat]").count() === 4
+        && await roster.locator("[data-table-seat]").first().getAttribute("data-table-seat") === String(game.hostSeat)
+        && await ownCard.locator(".mf-table-controls__self-badge").textContent() === "나"
+        && await roster.locator("button[data-table-self], [data-table-self][data-suspect-holdable]").count() === 0
         && await roster.locator("[data-pick]").count() === 0
         && await hp.locator("[data-chat-input]").count() === 0);
       const peopleColors = await Promise.all(guests.map(({ seat }) => nicknameColor(roster, seat)));
@@ -319,7 +324,7 @@ export function makeTableDockFlow({ recorder, openGame, closeGame, writeSheet, g
       rec(sc, "TD4", "손잡이를 아래로 밀면 펼친 패널이 닫힌다", await hp.locator("[data-dock-pane]").count() === 0);
       await swipe(hp, '[data-dock-tab="people"]', -1, ctx.size.mobile !== false);
       await dockMode(hp, "people").waitFor({ timeout: 3500 });
-      rec(sc, "TD4b", "참가자 탭을 위로 밀면 얼굴판이 열린다", await roster.locator("[data-table-seat]").count() === 3);
+      rec(sc, "TD4b", "참가자 탭을 위로 밀면 얼굴판이 열린다", await roster.locator("[data-table-seat]").count() === 4);
       await swipe(hp, "[data-dock-handle]", 1, ctx.size.mobile !== false);
       await dockMode(hp, "closed").waitFor({ timeout: 3500 });
 
