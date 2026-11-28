@@ -56,6 +56,12 @@ export function keywordAnswerBlocked(state: RoomState, text: string): boolean {
   return forms !== undefined && violatesKeyword(text, forms);
 }
 
+/** 역할 배정 때 고정한 좌석에만 제시어를 가린다. 기존 판은 저장된 좌석 목록이 없다. */
+export function knowsKeyword(state: RoomState, actor: Player): boolean {
+  return actor.role !== undefined && actor.role !== "mafia"
+    && (actor.role !== "citizen" || !state.keyword?.hiddenCitizenSeats?.includes(actor.seat));
+}
+
 export type AnswerError = "WRONG_PHASE" | "BAD_MESSAGE";
 
 /**
@@ -103,8 +109,7 @@ export function submitAnswer(
     return { ok: true, state: { ...state, players: state.players.map((p) => (p.id === actorId ? { ...p, answerDraft: clean } : p)) } };
   }
   if (blank) return { ok: false, error: "BAD_MESSAGE" };
-  const knowsKeyword = actor.role !== undefined && actor.role !== "mafia";
-  if ((automatic || knowsKeyword) && keywordAnswerBlocked(state, clean)) {
+  if ((automatic || knowsKeyword(state, actor)) && keywordAnswerBlocked(state, clean)) {
     return { ok: false, error: "BAD_MESSAGE" };
   }
   return {

@@ -1,10 +1,11 @@
 // 23-01 트레이서: 실제 방 DO 로 시작 → roleReveal → keyword → dayAnnounce 를 돈다(D-01·D-06).
-// 키워드는 시민 편 소켓만 me.keyword 로 받고, 마피아 소켓의 view.me 에는 키 자체가 없다. 장르 라벨은 모두에게 같다.
+// 제시어는 아는 사람의 소켓만 me.keyword 로 받는다. 장르 라벨은 모두에게 같다.
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { genreLabelOf } from "../../shared/game/keywords";
 import { FIRST_ANSWER_TURN_MS } from "../../shared/game/phases";
+import type { RoomState } from "../../shared/game/room";
 import { openKeyword } from "../helpers/keyword";
-import { actorsOf, advanceTo, chatSend, chatsOf, editRoom, lastViewOf, mark, nextFrame, pause, seat, send, settle, storedRoom, summary, verdictAll } from "./helpers";
+import { actorsOf, advanceTo, chatSend, chatsOf, connect, editRoom, hello, lastViewOf, mark, nextFrame, pause, seat, send, settle, storedRoom, summary, verdictAll } from "./helpers";
 import type { Seated, StoredRoom, TestSocket } from "./helpers";
 
 let restore: () => void = () => {};
@@ -13,10 +14,10 @@ beforeEach(() => {
 });
 afterEach(() => restore());
 
-type KeywordRoom = StoredRoom & { keyword?: { genre: string; word: string } };
+type KeywordRoom = StoredRoom & Pick<RoomState, "keyword">;
 
 describe("첫날 키워드 단계 (D-01·D-06)", () => {
-  it("역할 확인 → 키워드 카드 → 낮 시작: 장르는 모두 같고, 단어는 시민 편만 받는다", async () => {
+  it("역할 확인 → 키워드 카드 → 낮 시작: 가려진 시민은 재접속 후에도 제시어를 받지 않는다", async () => {
     const room = await seat(3, 0); // 4명 판
     const socks = [room.host, ...room.guests.map((g) => g.sock)];
     send(room.host, { t: "start" });
@@ -32,23 +33,33 @@ describe("첫날 키워드 단계 (D-01·D-06)", () => {
     const word = stored.keyword!.word;
 
     const actors = actorsOf(room);
-    let mafia = 0;
-    let citizenSide = 0;
+    const hiddenSeats = stored.keyword!.hiddenCitizenSeats!;
+    expect(hiddenSeats).toHaveLength(1);
+    const hidden = actors.find((a) => a.seat === hiddenSeats[0])!;
+    expect(hidden.role).toBe("citizen");
+    let knowers = 0;
     for (const a of actors) {
       const view = lastViewOf(a.sock);
       expect(view.phase).toBe("keyword");
       expect(view.phaseDurationMs).toBe(35_000);
       expect(view.day?.keyword).toEqual({ genre: genreLabelOf(stored.keyword!.genre) });
-      if (a.role === "mafia") {
-        mafia += 1;
+      if (a.role === "mafia" || a === hidden) {
         expect(Object.hasOwn(view.me, "keyword")).toBe(false);
       } else {
-        citizenSide += 1;
+        knowers += 1;
         expect(view.me.keyword).toBe(word);
       }
     }
-    expect(mafia).toBeGreaterThan(0);
-    expect(citizenSide).toBeGreaterThan(0);
+    expect(knowers).toBe(2);
+
+    const replacement = await connect(room.code);
+    await hello(replacement, hidden.token);
+    const rejoined = lastViewOf(replacement);
+    expect(rejoined.phase).toBe("keyword");
+    expect(rejoined.me).toMatchObject({ seat: hidden.seat, role: "citizen" });
+    expect(Object.hasOwn(rejoined.me, "keyword")).toBe(false);
+    expect(((await storedRoom(room.code)) as KeywordRoom).keyword?.hiddenCitizenSeats).toEqual(hiddenSeats);
+    socks[socks.indexOf(hidden.sock)] = replacement;
 
     await advanceTo(room.code, socks, "dayAnnounce");
     for (const sock of socks) {
@@ -169,11 +180,12 @@ describe("키워드 답 접수 (D-07·D-10)", () => {
     ]);
   }, 40_000);
 
-  it("시민 편은 금지 초안 안내를 받고 바꿀 수 있고, 마피아는 같은 글을 평소대로 접수한다", async () => {
+  it("제시어 보유자만 금지 초안 안내를 받고, 마피아와 가려진 시민의 제출은 같은 응답으로 접수한다", async () => {
     const { room, socks, word } = await inKeyword();
     const actors = actorsOf(room);
-    const citizen = actors.find((x) => x.role !== "mafia")!;
+    const citizen = actors.find((x) => x.role === "police")!;
     const mafia = actors.find((x) => x.role === "mafia")!;
+    const hidden = actors.find((x) => x.role === "citizen" && !Object.hasOwn(lastViewOf(x.sock).me, "keyword"))!;
     const others = (me: TestSocket): TestSocket[] => socks.filter((s) => s !== me);
 
     const drafts = socks.map((s) => mark(s));
@@ -188,17 +200,28 @@ describe("키워드 답 접수 (D-07·D-10)", () => {
     for (const o of others(citizen.sock)) expect(summary(await settle(o, m1[socks.indexOf(o)]!))).toBe("[]");
     expect(((await storedRoom(room.code)) as AnswerRoom).keywordProbed).toBeUndefined();
 
-    const m2 = socks.map((s) => mark(s));
-    answerOf(mafia.sock, word, true);
-    expect(summary(await settle(mafia.sock, m2[socks.indexOf(mafia.sock)]!))).toBe("[state:keyword]");
-    expect(lastViewOf(mafia.sock).me.answer).toEqual({ text: word, final: true });
-    for (const o of others(mafia.sock)) expect(summary(await settle(o, m2[socks.indexOf(o)]!))).toBe("[]");
+    for (const actor of [mafia, hidden]) {
+      for (const final of [false, true]) {
+        const marks = socks.map(mark);
+        answerOf(actor.sock, word, final);
+        expect(summary(await settle(actor.sock, marks[socks.indexOf(actor.sock)]!))).toBe("[state:keyword]");
+        expect(lastViewOf(actor.sock).me.answer).toEqual({ text: word, final });
+        for (const other of others(actor.sock)) expect(summary(await settle(other, marks[socks.indexOf(other)]!))).toBe("[]");
+      }
+    }
     expect(((await storedRoom(room.code)) as AnswerRoom).keywordProbed).toBeUndefined();
 
     await pause(450);
     const m3 = mark(citizen.sock);
     answerOf(citizen.sock, "안경", true);
     expect(summary(await settle(citizen.sock, m3))).toBe("[state:keyword]");
+    await advanceTo(room.code, socks, "answerReveal");
+    for (const sock of socks) {
+      const rows = lastViewOf(sock).day?.keyword?.answers;
+      expect(rows?.[0]).toEqual({ order: 1, seat: citizen.seat, text: "안경" });
+      expect(rows?.find((row) => row.seat === hidden.seat)?.text).toBeNull();
+      expect(rows?.find((row) => row.seat === mafia.seat)?.text).toBeNull();
+    }
   }, 40_000);
 
   it("첫 제출자의 의자부터 한 답씩 보내고, 발표자와 다른 상대에게 붙인 딱지를 토론까지 유지한다", async () => {

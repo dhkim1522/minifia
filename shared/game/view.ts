@@ -30,7 +30,7 @@ import { ROOM_MAP_ID } from "./maps";
 import { phaseDurationOf } from "./discussion";
 import { buildSummary } from "./endgame";
 import { noExecutionOf } from "./execution";
-import { answerOpenOf, keywordAnswerBlocked } from "./keywordAnswer";
+import { answerOpenOf, keywordAnswerBlocked, knowsKeyword } from "./keywordAnswer";
 import { keywordPresentationOf } from "./keywordPresentation";
 import { genreLabelOf } from "./keywords";
 import { MAP_PHASES } from "./movement";
@@ -270,9 +270,9 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     }
   }
 
-  // 키워드는 keyword 단계의 산 시민 편(경찰·의사·시민) 본인에게만(D-06, T-23-01) — 역할이 있고 마피아가 아닐 때만 키를 만든다.
+  // 키워드는 keyword 단계의 산 제시어 보유자 본인에게만 보낸다.
   // 마피아·탈락자·다른 단계의 view 에는 키 자체가 없다(값이 빈 것이 아니라 키가 없다).
-  if (state.phase === "keyword" && state.keyword !== undefined && isAlive(me) && me.role !== undefined && me.role !== "mafia") {
+  if (state.phase === "keyword" && state.keyword !== undefined && isAlive(me) && knowsKeyword(state, me)) {
     myInfo.keyword = state.keyword.word;
   }
   // 내 답(P23-13 재접속 복원): keyword 단계에서만, 본인의 확정(answerSubmits 의 내 좌석)이 우선이고 없으면 쓰던 글(초안). 값이 있을 때만 키를 만든다.

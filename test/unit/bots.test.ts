@@ -817,6 +817,9 @@ describe("일반 봇의 키워드 답과 의심딱지", () => {
     expect(answers.every(({ at }) => at > 0 && at < 1_500)).toBe(true);
     const swapped = { ...state, keyword: { genre: "movie", word: "타이타닉" }, players: state.players.map((p) => ({ ...p, role: "mafia" as const })) };
     expect(plans(swapped)).toEqual(answers);
+    const hiddenBotSeats = state.players.filter((p) => p.isBot && p.role === "citizen").map((p) => p.seat);
+    expect(hiddenBotSeats.length).toBeGreaterThan(0);
+    expect(plans({ ...state, keyword: { ...state.keyword, hiddenCitizenSeats: hiddenBotSeats } })).toEqual(answers);
     expect(plans({ ...state, testBotVote: { exec: "no" } })).toEqual([]);
   });
 

@@ -308,6 +308,7 @@ const SERVER_ONLY_KEYS: readonly string[] = [
   "keywordAnswers",
   "keywordPresentationIndex",
   "keywordReveal",
+  "hiddenCitizenSeats",
   "answerDraft", // 쓰던 글 — 본인 값은 me.answer 로만
   "phaseSkipVotes", // 동의한 참가자의 내부 ID는 서버 전용이다
   "earlyFrom", // 조기 진행이 마감을 줄이기 전의 원래 마감(23-08, D-11) — 서버 전용, 찬반 번복 연장의 상한. 화면은 줄어든 phaseEndsAt 만 본다
@@ -324,7 +325,7 @@ const ME_KEYS: ReadonlySet<string> = new Set([
   "whisperUsed", // 오늘 귓속말을 이미 보냈다(결정 0066-2) — 토론 단계의 산 본인에게만, 값은 true 뿐
   "ballot", // 동점 결선(결정 0066-4)·마지막 3인 동시 지목(결정 0066-5)에서 본인이 고른 좌석 — 투표 창·결과/지목 창·공개의 산 본인에게만, 값은 좌석 하나
   "nightTally", "nightSure", // 밤 산 마피아 본인에게만(결정 0061-7) — 아래 "마피아 집계" describe 가 조건을 단언한다
-  "keyword", // 첫날 키워드(23-01, D-06) — keyword 단계의 산 시민 편 본인에게만. 조건은 phaseKeyViolations 가 단언한다
+  "keyword", // 첫날 키워드 — keyword 단계의 산 제시어 보유자 본인에게만
   "answer", // 키워드 단계 본인이 쓰던 글·확정 여부(23-06, P23-13) — keyword 단계의 산 본인에게만, 값이 있을 때만(phaseKeyViolations 가 단언)
   "suspectTo", // 현재 붙인 의심 대상 좌석 — 플레이 중의 산 본인에게만
 ]);
@@ -384,7 +385,8 @@ function phaseKeyViolations(s: RoomState, viewer: Player, view: RoomView, phase:
   else if (answerOpen && day.keyword?.answer !== s.keyword?.word) out.push(`${tag}: day.keyword.answer value`);
   else if (answerOpen && flat(day.keyword?.answers) !== flat(s.keywordAnswers ?? [])) out.push(`${tag}: day.keyword.answers value`);
   else if (row && flat(day.keyword?.presentation) !== flat({ order: row.order, total: s.keywordAnswers?.length, seat: row.seat, text: row.text })) out.push(`${tag}: day.keyword.presentation value`);
-  const wantMeKeyword = phase === "keyword" && isAlive(viewer) && viewer.role !== undefined && viewer.role !== "mafia";
+  const hiddenCitizen = viewer.role === "citizen" && s.keyword?.hiddenCitizenSeats?.includes(viewer.seat) === true;
+  const wantMeKeyword = phase === "keyword" && s.keyword !== undefined && isAlive(viewer) && viewer.role !== undefined && viewer.role !== "mafia" && !hiddenCitizen;
   if (("keyword" in view.me) !== wantMeKeyword) out.push(`${tag}: me.keyword presence ${"keyword" in view.me}`);
   else if (wantMeKeyword && view.me.keyword !== s.keyword?.word) out.push(`${tag}: me.keyword value`);
   // 내 답(23-06): keyword 단계의 산 본인에게만, 쓴 것이 있을 때만(확정 우선). 남의 것은 값으로도 닿지 않는다.

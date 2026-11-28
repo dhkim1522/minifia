@@ -4,6 +4,7 @@
 import { exports } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GENRES } from "../../shared/game/keywords";
+import type { RoomState } from "../../shared/game/room";
 import type { ServerMessage } from "../../shared/protocol";
 import { openKeyword } from "../helpers/keyword";
 import { actorsOf, advanceTo, editRoom, lastViewOf, mark, nextFrame, seat, send, settle, storedRoom, summary } from "./helpers";
@@ -18,10 +19,12 @@ afterEach(() => restore());
 const WORD = "해리포터";
 const SECRETS = [WORD, "Harry Potter", "해포"] as const;
 /** 서버 전용 이름: 어떤 프레임의 어떤 경로에도 키로 없다. RoomState.keyword 는 view 키 day.keyword·me.keyword 와 이름이 같아 넣을 수 없고 값 검사(SECRETS)로 지킨다(RESEARCH P2). */
-const SERVER_ONLY_NAMES = ["keywordProbed", "answerSubmits", "answerDraft", "keywordAnswers", "keywordPresentationIndex", "keywordReveal"] as const;
+const SERVER_ONLY_NAMES = ["keywordProbed", "answerSubmits", "answerDraft", "keywordAnswers", "keywordPresentationIndex", "keywordReveal", "hiddenCitizenSeats"] as const;
 
 const socksOf = (room: Seated): TestSocket[] => [room.host, ...room.guests.map((g) => g.sock)];
 const answerOf = (sock: TestSocket, text: string, final: boolean): void => send(sock, { t: "answer", text, final });
+const keywordOf = (r: Record<string, unknown>, word: string): RoomState["keyword"] =>
+  ({ ...(r.keyword as RoomState["keyword"]), genre: GENRES[0]!.id, word });
 const frameText = (sock: TestSocket): string => sock.frames.join("\n");
 const parse = (raw: string): ServerMessage => JSON.parse(raw) as ServerMessage;
 const statesOf = (sock: TestSocket, from = 0): Array<Extract<ServerMessage, { t: "state" }>> =>
@@ -39,7 +42,7 @@ async function fixedKeywordGame(options: { hostRole?: "mafia" | "citizen" } = {}
   const startMark = socks.map((s) => mark(s));
   send(room.host, { t: "start" });
   for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
-  await editRoom(room.code, (r) => ({ ...r, keyword: { genre: GENRES[0]!.id, word: WORD } }));
+  await editRoom(room.code, (r) => ({ ...r, keyword: keywordOf(r, WORD) }));
   await advanceTo(room.code, socks, "keyword");
   for (const sock of socks) await settle(sock, mark(sock));
   return { room, socks, startMark };
@@ -51,20 +54,27 @@ const previewText = async (code: string): Promise<string> => {
   return res.text();
 };
 
-const rolesOf = (room: Seated): { mafia: Actor; citizen: Actor; all: Actor[] } => {
+const rolesOf = (room: Seated): { mafia: Actor; citizen: Actor; hidden: Actor } => {
   const all = actorsOf(room);
-  return { mafia: all.find((a) => a.role === "mafia")!, citizen: all.find((a) => a.role === "citizen")!, all };
+  const citizens = all.filter((a) => a.role === "citizen");
+  return {
+    mafia: all.find((a) => a.role === "mafia")!,
+    citizen: citizens.find((a) => Object.hasOwn(lastViewOf(a.sock).me, "keyword"))!,
+    hidden: citizens.find((a) => !Object.hasOwn(lastViewOf(a.sock).me, "keyword"))!,
+  };
 };
 
-describe("① 마피아 소켓의 어떤 프레임에도 정답이 없다 — 첫날 키워드부터 정답 공개 직전까지", () => {
+describe("① 제시어를 모르는 소켓의 프레임에는 정답 공개 직전까지 정답이 없다", () => {
   it("마피아가 제시어를 적은 판에서 자기 입력의 접수 응답 외에는 공개 전까지 정답이 노출되지 않는다", async () => {
     const { room, socks } = await fixedKeywordGame();
-    const { mafia, citizen, all } = rolesOf(room);
+    const { mafia, citizen, hidden } = rolesOf(room);
     const stored = (await storedRoom(room.code)) as StoredRoom & { keyword?: { word: string } };
     expect(stored.keyword?.word).toBe(WORD);
 
     // ② 비인증 미리보기: keyword 단계에서도 단어가 없다
-    for (const s of SECRETS) expect(await previewText(room.code), `preview keyword ${s}`).not.toContain(s);
+    const preview = await previewText(room.code);
+    for (const s of SECRETS) expect(preview, `preview keyword ${s}`).not.toContain(s);
+    expect(preview).not.toContain('"hiddenCitizenSeats"');
 
     answerOf(mafia.sock, "마법사 같은 글", false);
     await settle(mafia.sock, mark(mafia.sock));
@@ -76,7 +86,8 @@ describe("① 마피아 소켓의 어떤 프레임에도 정답이 없다 — �
 
     // 시민의 keyword 단계 프레임에는 단어가 있다 — 검사가 살아 있음을 확인(me.keyword)
     expect(frameText(citizen.sock)).toContain(WORD);
-    for (const a of all.filter((x) => x.role !== "mafia")) expect(lastViewOf(a.sock).me.keyword, `seat ${a.seat}`).toBe(WORD);
+    expect(lastViewOf(citizen.sock).me.keyword).toBe(WORD);
+    expect(Object.hasOwn(lastViewOf(hidden.sock).me, "keyword")).toBe(false);
 
     await advanceTo(room.code, socks, "dayAnnounce");
     const published = (await storedRoom(room.code)) as StoredRoom & { keywordAnswers?: Array<{ seat: number; text: string | null }> };
@@ -85,8 +96,8 @@ describe("① 마피아 소켓의 어떤 프레임에도 정답이 없다 — �
     for (const s of SECRETS) expect(await previewText(room.code), `preview presentation ${s}`).not.toContain(s);
     await advanceTo(room.code, socks, "answerReveal");
 
-    // 정답 공개 직전까지 모든 마피아 소켓의 모든 프레임 원문
-    for (const a of all.filter((x) => x.role === "mafia")) {
+    // 정답 공개 직전까지 제시어를 모르는 두 소켓의 모든 프레임 원문
+    for (const a of [mafia, hidden]) {
       const firstReveal = a.sock.frames.findIndex((raw) => {
         const frame = parse(raw);
         return frame.t === "state" && frame.view.phase === "answerReveal";
@@ -97,7 +108,7 @@ describe("① 마피아 소켓의 어떤 프레임에도 정답이 없다 — �
         expect(frame.view.me.answer).toEqual({ text: ownSubmission, final: true });
         return JSON.stringify({ ...frame, view: { ...frame.view, me: { ...frame.view.me, answer: undefined } } });
       }).join("\n");
-      for (const s of SECRETS) expect(text, `mafia seat ${a.seat} before reveal: ${s}`).not.toContain(s);
+      for (const s of SECRETS) expect(text, `seat ${a.seat} before reveal: ${s}`).not.toContain(s);
       const turns = statesOf(a.sock).filter((frame) => frame.view.day?.keyword?.presentation !== undefined);
       expect([...new Set(turns.map((frame) => frame.view.day!.keyword!.presentation!.order))]).toEqual([1, 2, 3, 4]);
       expect(turns.every((frame) => frame.view.day?.keyword?.answers === undefined)).toBe(true);
@@ -108,10 +119,9 @@ describe("① 마피아 소켓의 어떤 프레임에도 정답이 없다 — �
       for (const name of SERVER_ONLY_NAMES) expect(text, name).not.toContain(`"${name}"`);
     }
 
-    // 정답 공개: 이 프레임부터 모두에게 같은 값 — 마피아에게 처음 닿는다
+    // 정답 공개부터 모두 같은 값을 받는다.
     expect((await storedRoom(room.code)).phase).toBe("answerReveal");
-    expect(lastViewOf(mafia.sock).day?.keyword?.answer).toBe(WORD);
-    expect(lastViewOf(citizen.sock).day?.keyword?.answer).toBe(WORD);
+    for (const sock of socks) expect(lastViewOf(sock).day?.keyword?.answer).toBe(WORD);
     await advanceTo(room.code, socks, "discussion");
     expect(lastViewOf(mafia.sock).day?.keyword?.answer).toBe(WORD);
   }, 90_000);
@@ -120,7 +130,7 @@ describe("① 마피아 소켓의 어떤 프레임에도 정답이 없다 — �
 describe("③④ keyword 단계 view 모양: day.keyword 열은 모두 같고, me 키 차이는 keyword(와 역할 구조 키 allies)뿐이다", () => {
   it("모든 소켓의 day.keyword 키 집합이 같다(genre) — 마피아 me 에는 keyword 키 자체가 없다", async () => {
     const { room, socks } = await fixedKeywordGame();
-    const { mafia, citizen, all } = rolesOf(room);
+    const { mafia, citizen, hidden } = rolesOf(room);
     const dayKeys = socks.map((s) => Object.keys(lastViewOf(s).day?.keyword ?? {}).sort().join(","));
     expect(new Set(dayKeys)).toEqual(new Set(["genre"]));
     expect(new Set(socks.map((s) => JSON.stringify(lastViewOf(s).day?.keyword))).size).toBe(1);
@@ -136,8 +146,7 @@ describe("③④ keyword 단계 view 모양: day.keyword 열은 모두 같고, m
     expect(mine.has("answer") || theirs.has("answer")).toBe(false);
     expect(mine.has("keyword")).toBe(false);
     expect(theirs.has("keyword")).toBe(true);
-    // 경찰·시민 사이에도 keyword 는 둘 다 가진다(마피아만 없다)
-    for (const a of all.filter((x) => x.role !== "mafia")) expect(Object.hasOwn(lastViewOf(a.sock).me, "keyword")).toBe(true);
+    expect(meKeys(hidden)).toEqual(new Set([...theirs].filter((key) => key !== "keyword")));
   }, 60_000);
 });
 
@@ -147,7 +156,7 @@ describe("⑤ 제시어를 모르는 작성자의 비공개 초안·확정 접�
     for (const word of [WORD, "타이타닉"]) {
       const { room, socks } = await fixedKeywordGame();
       const { mafia } = rolesOf(room);
-      await editRoom(room.code, (r) => ({ ...r, keyword: { genre: GENRES[0]!.id, word } }));
+      await editRoom(room.code, (r) => ({ ...r, keyword: keywordOf(r, word) }));
       for (const final of [false, true]) {
         const marks = socks.map(mark);
         answerOf(mafia.sock, sent, final);

@@ -1,5 +1,5 @@
 // 23-01 트레이서: 첫날 roleReveal → keyword → dayAnnounce, 키워드 선택(beginGame), view 모양(D-01·D-05·D-06·D-29).
-// 키워드는 서버 전용 값이다 — 장르 라벨은 모두에게, 단어는 산 시민 편 본인에게만(마피아 view 에는 키가 없다).
+// 장르 라벨은 모두에게, 단어는 산 제시어 보유자 본인에게만 보낸다.
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { genreLabelOf, GENRES, keywordEntryOf, KEYWORD_SWITCH } from "../../shared/game/keywords";
 import { answerOpenOf } from "../../shared/game/keywordAnswer";
@@ -15,7 +15,7 @@ import {
   PHASE_DEFS,
   ROLE_REVEAL_MS,
 } from "../../shared/game/phases";
-import { beginGame, startGame } from "../../shared/game/room";
+import { beginGame, normalizeStoredRoom, startGame } from "../../shared/game/room";
 import type { RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { buildView } from "../../shared/game/view";
@@ -68,7 +68,7 @@ describe("beginGame 의 키워드 선택 (D-05·D-29)", () => {
     expect("keyword" in next).toBe(false);
   });
 
-  it("키워드는 맨 끝에서 난수를 두 번만 더 쓴다(역할·맵 순서는 그대로)", () => {
+  it("키워드는 역할 확정 뒤 장르·단어·가릴 좌석 순으로 난수를 쓴다", () => {
     const count = (): number => {
       const gen = seededRandInt(7);
       let n = 0;
@@ -80,7 +80,36 @@ describe("beginGame 의 키워드 선택 (D-05·D-29)", () => {
     };
     const on = count();
     KEYWORD_SWITCH.on = false;
-    expect(on - count()).toBe(2);
+    expect(on - count()).toBe(3);
+  });
+
+  it.each([[4, 1], [5, 1], [6, 1], [7, 1], [8, 2]])("%i인 판에서 가릴 일반 시민 %i명을 중복 없이 뽑고 제시어 보유자는 2명 이상이다", (total, expected) => {
+    for (const testRole of ["mafia", "citizen"] as const) {
+      const lobby = { ...lobbyOf(total), testMode: true as const, testRole };
+      const state = beginGame(lobby, 1000, () => 0, keywordPickerNow());
+      const seats = state.keyword!.hiddenCitizenSeats!;
+      const citizens = state.players.filter((p) => p.role === "citizen");
+      expect(seats).toEqual(citizens.slice(0, expected).map((p) => p.seat));
+      expect(new Set(seats).size).toBe(expected);
+      expect(state.players.filter((p) => p.role !== "mafia" && !seats.includes(p.seat)).length).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it("가린 좌석은 저장 복구까지 유지되고 새 판에서 다시 뽑는다", () => {
+    const lobby = lobbyOf(8);
+    const pick = () => ({ genre: GENRES[0]!.id, word: "해리포터" });
+    const first = beginGame(lobby, 1000, () => 0, pick);
+    const restored = normalizeStoredRoom(JSON.parse(JSON.stringify(first)) as RoomState, 1100);
+    expect(restored.keyword?.hiddenCitizenSeats).toEqual(first.keyword?.hiddenCitizenSeats);
+
+    let selecting = false;
+    const next = beginGame({ ...lobby, keyword: restored.keyword }, 2000, (n) => selecting ? n - 1 : 0, () => {
+      selecting = true;
+      return pick();
+    });
+    const citizens = next.players.filter((p) => p.role === "citizen");
+    expect(next.keyword?.hiddenCitizenSeats).toEqual(citizens.slice(-2).reverse().map((p) => p.seat));
+    expect(next.keyword?.hiddenCitizenSeats).not.toEqual(restored.keyword?.hiddenCitizenSeats);
   });
 });
 
@@ -125,24 +154,31 @@ describe("keyword 단계 view (D-06 누설 없음)", () => {
     }
   });
 
-  it("시민·경찰·의사 본인은 me.keyword 로 단어를 받고, 마피아는 키 자체가 없다", () => {
+  it("제시어를 가린 시민은 자기 직업을 유지하고 마피아처럼 me.keyword 키가 없다", () => {
     const state = kwState();
     const word = state.keyword!.word;
-    let mafia = 0;
-    let citizenSide = 0;
+    const hidden = state.keyword!.hiddenCitizenSeats!;
+    expect(hidden).toHaveLength(1);
     for (const p of state.players) {
       const view = buildView(state, p.id, state.phaseEndsAt! - 1000);
-      if (p.role === "mafia") {
-        mafia += 1;
+      expect(view.me.role).toBe(p.role);
+      expect(JSON.stringify(view)).not.toContain("hiddenCitizenSeats");
+      if (p.role === "mafia" || hidden.includes(p.seat)) {
         expect("keyword" in view.me).toBe(false);
         expect(JSON.stringify(view)).not.toContain(word);
       } else {
-        citizenSide += 1;
         expect(view.me.keyword).toBe(word);
       }
     }
-    expect(mafia).toBeGreaterThan(0);
-    expect(citizenSide).toBeGreaterThan(0);
+  });
+
+  it("가린 좌석 기록이 없는 예전 판은 시민 편 전원에게 단어를 보낸다", () => {
+    const state = kwState();
+    const { genre, word } = state.keyword!;
+    const old = normalizeStoredRoom({ ...state, keyword: { genre, word } }, state.phaseEndsAt! - 1000);
+    for (const p of old.players) {
+      expect(buildView(old, p.id, old.phaseEndsAt! - 1000).me.keyword).toBe(p.role === "mafia" ? undefined : word);
+    }
   });
 
   it("역할 확인·낮 시작 단계의 view 에는 me.keyword 가 없다", () => {

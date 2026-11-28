@@ -37,9 +37,9 @@ export interface KeywordProps {
 /** 키워드 카드 글(P23-4·5). 이 화면의 문구는 이 한 곳이다 — 키워드·역할 값은 데이터 속성에 싣지 않는다. */
 const KEYWORD_COPY = {
   genre: (genre: string): string => `주제 · ${genre}`,
-  /** 마피아의 키워드 자리(서버가 단어를 보내지 않는다) */
+  /** 제시어를 받지 않은 사람의 키워드 자리 */
   hidden: "???",
-  /** 마피아 키워드 자리의 접근성 이름 */
+  /** 가려진 제시어 자리의 접근성 이름 */
   hiddenName: "제시어를 볼 수 없어요",
   /** 카드 접근성 이름 */
   cardName: "제시어 카드",
@@ -58,8 +58,8 @@ const META_ID = "mf-keyword-meta";
 const CARD_ENTER_MS = 420;
 
 // 첫날 키워드 카드(23-01, P23-1~5) + 답 입력줄(23-09, P23-6·9~15). 역할 확인과 같은 3D 무대(PreGame, sceneKey preGame) 위 가운데 카드 안에 제시어와 답 입력을 모은다 — 무대는 PreGame 이 깐다.
-// 카드는 맨 위 장르, 가운데 큰 키워드(마피아는 ???), 아래 단서 입력칸이다.
-// 키워드는 서버가 시민 편 본인에게만 보낸다(me.keyword). 마피아는 키 자체가 없으니 DOM 에도 단어가 없다. 입력줄 표식(data-answer-*)에는 역할·키워드 값이 없다(T-23-33).
+// 카드는 맨 위 장르, 가운데 큰 키워드 또는 ???, 아래 단서 입력칸이다.
+// 서버가 me.keyword를 보내지 않으면 ???를 그린다. 입력줄 표식(data-answer-*)에는 역할·키워드 값이 없다(T-23-33).
 // 제시어가 표시되면 입력줄이 열린다. 글이 있으면 입력칸 안에 전송을, 서버 접수 뒤에는 같은 자리에 체크를 보여 준다.
 // 입력과 초안 저장은 useKeywordAnswer가 관리한다. 키보드가 열리면 카드가 작아지고 보이는 영역 안에 놓인다.
 export function Keyword({ view, offset, epoch = 0, myRoleButton, send, canSend, onEvent, timeless = false, embedded = false, introActive = false }: KeywordProps) {

@@ -215,10 +215,10 @@ export interface RoomState {
   /** 이전 버전에서 저장한 맵 선택. 새 판은 재즈 바에서 열린다. */
   mapChoice?: MapChoice;
   /**
-   * 서버 전용(결정 0089-2·D-05). 첫날 키워드 — beginGame 이 역할 배정 뒤 randInt 두 번(장르·단어)으로 고른다. 없으면 keyword 단계를 건너뛴다(D-29, 옛 저장 방·시험 스위치 끔).
-   * view 키 day.keyword(장르 라벨)·me.keyword(시민 편 본인의 단어)와 이름이 같아 SERVER_ONLY_KEYS 이름 검사에 넣지 않고 값으로 지킨다(RESEARCH P2).
+   * 서버 전용 첫날 키워드. 없으면 keyword 단계를 건너뛴다(D-29, 옛 저장 방·시험 스위치 끔).
+   * hiddenCitizenSeats 는 예전 판에는 없으며, 어떤 뷰에도 보내지 않는다.
    */
-  keyword?: { genre: string; word: string };
+  keyword?: { genre: string; word: string; hiddenCitizenSeats?: number[] };
   /** 서버 전용. 확정 제출한 답은 서버 접수 순서로 저장한다. closeKeyword에서 지운다. */
   answerSubmits?: Array<{ seat: number; text: string }>;
   /** 서버 전용. 원탁 순서의 전체 답안. 발표 중에는 현재 한 줄만 뷰에 보낸다. */
@@ -481,7 +481,7 @@ export function beginGame(
     state.testMode === true && state.testRole !== undefined && rolesInPlay(seated.length).includes(state.testRole)
       ? giveRoleTo(shuffled, orderedIds, state.hostId, state.testRole)
       : shuffled;
-  // 키워드는 역할 배정 뒤 난수 두 번이다(D-29). 고르는 함수가 없으면(스위치 끔) 이전 판의 keyword 도 지운다.
+  // 고르는 함수가 없으면(스위치 끔) 이전 판의 keyword 도 지운다.
   // 의심 포스트잇(notes)도 같은 구조 분해로 뺀다 — 새 판에 어제 판의 종이가 따라오지 않게(벨트, D-08).
   const {
     keyword: _prevKeyword, answerSubmits: _prevSubmits, keywordAnswers: _prevAnswers,
@@ -489,6 +489,15 @@ export function beginGame(
     barChairs: _prevChairs, phaseSkipVotes: _prevSkip, ...rest
   } = state;
   const keyword = pickKeyword !== undefined ? pickKeyword(randInt) : undefined;
+  const hiddenCitizenSeats: number[] = [];
+  if (keyword !== undefined) {
+    const candidates = seated.filter((p) => roles.get(p.id) === "citizen").map((p) => p.seat);
+    const citizenSideCount = [...roles.values()].filter((role) => role !== "mafia").length;
+    const hideCount = Math.min(Math.round(candidates.length * 0.4), citizenSideCount - 2);
+    for (let i = 0; i < hideCount; i += 1) {
+      hiddenCitizenSeats.push(candidates.splice(randInt(candidates.length), 1)[0]!);
+    }
+  }
   // 옷장 조작이 없는 실험방은 좌석별 외형과 기본 코트로 인물을 구분한다.
   // 동물로 구분되는 방에서는 직접 고른 옷만 입는다.
   const dressed = state.playtest === true || state.players.every((p) => p.animal !== undefined)
@@ -496,7 +505,7 @@ export function beginGame(
     : resolveLookConflicts(state.players);
   return {
     ...rest,
-    ...(keyword !== undefined ? { keyword } : {}),
+    ...(keyword !== undefined ? { keyword: { ...keyword, hiddenCitizenSeats } } : {}),
     barChairs: barChairAssignment(seated.map((p) => p.seat)),
     startedAt: now,
     map: ROOM_MAP_ID,
