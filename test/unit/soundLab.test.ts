@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { initPerfDebug } from "../../src/debug/perfProbe";
 import { SOUND_LAB_PARAM, soundLabEnabled } from "../../src/debug/soundLabData";
 import { LAB_GROUPS, SOUND_LIMITS, SOUND_NAMES } from "../../src/debug/soundLabTable";
-import { analyzeSamples, mount, renderOffline, soundOk, type LabHook, type OfflineFactory, type RenderResult } from "../../src/debug/soundLab";
+import { analyzeSamples, declaredLengthMs, mount, renderOffline, soundOk, type LabHook, type OfflineFactory, type RenderResult } from "../../src/debug/soundLab";
 import { buildMixGraph } from "../../src/audio/synth";
 import { BED_IDS, BUS_GAIN, COMPRESSOR, MASTER_GAIN, RECIPES, SFX_IDS, SOUND_IDS } from "../../src/audio/recipes";
 import { FakeAudioContext, createFakeClock, type FakeGain } from "../helpers/fakeAudio";
@@ -313,6 +313,9 @@ describe("LAB_GROUPS·SOUND_NAMES — 묶음과 한글 이름 (E)", () => {
 });
 
 describe("soundOk — 합격 판정 경계 (D-18, T-12-22)", () => {
+  it("처형 먼지는 필터를 지난 가청 길이를 기준으로 검사한다", () => {
+    expect(declaredLengthMs("execution.rise")).toBe(1820);
+  });
   const base: RenderResult = { id: "ui.tap", peakDb: -10, rmsDb: -30, nan: 0, lengthMs: 100, declaredMs: 100 };
   it("피크 −3.0 통과 / −2.99 실패", () => {
     expect(soundOk({ ...base, peakDb: -3 })).toBe(true);

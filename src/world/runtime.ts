@@ -1668,6 +1668,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     }
     let boxes: TagBox[] = [];
     const compactSeats = new Set<number>();
+    const lobbyEdgeSeats = new Set<number>();
     let tableCenterX: number | undefined;
     for (const a of live) {
       const tag = a.tag;
@@ -1699,7 +1700,14 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         const outside = anchor.sx + step;
         tagX = outside >= gutter && outside <= width - gutter ? outside : anchor.sx - step;
       }
-      const x = snap(framed ? Math.min(lane + laneWidth - gutter, Math.max(lane + gutter, tagX)) : tagX);
+      // 대기실에서 화면 안에 보이는 사람의 긴 이름표만 가장자리 안으로 당긴다.
+      const visibleLobbyHead = compactBar && look === null && !a.ghost && a.exit === null
+        && anchor.visible !== false && anchor.sx >= 0 && anchor.sx <= width
+        && anchor.sy >= stage.top && anchor.sy <= stage.bottom;
+      const lobbyGutter = Math.min(w / 2 + 4, half);
+      const x = snap(framed ? Math.min(lane + laneWidth - gutter, Math.max(lane + gutter, tagX))
+        : visibleLobbyHead ? Math.min(width - lobbyGutter, Math.max(lobbyGutter, tagX)) : tagX);
+      if (visibleLobbyHead && a.seat !== mine && x !== snap(tagX)) lobbyEdgeSeats.add(a.seat);
       const bottom = snap(framed
         ? Math.min(stage.bottom - 11, Math.max(stage.top + 45, anchor.sy - NAMETAG_GAP))
         : anchor.sy - NAMETAG_GAP);
@@ -1721,6 +1729,14 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     } else if (compactSeats.size > 1 && width <= 430) {
       const spaced = spaceCompactTags(
         boxes.filter(box => compactSeats.has(box.seat)), snap(stage.top + 45), snap(stage.bottom - 11),
+      );
+      const adjusted = new Map(spaced.map(box => [box.seat, box]));
+      boxes = boxes.map(box => adjusted.get(box.seat) ?? box);
+    } else if (lobbyEdgeSeats.size > 0) {
+      // 좌우 보정으로 이름표가 부딪히면 이동한 것만 기존 여백에 한 줄 띄운다.
+      const spaced = spaceCompactTags(
+        boxes.filter(box => lobbyEdgeSeats.has(box.seat)), snap(stage.top + 29), snap(stage.bottom - 11),
+        undefined, boxes.filter(box => !lobbyEdgeSeats.has(box.seat)),
       );
       const adjusted = new Map(spaced.map(box => [box.seat, box]));
       boxes = boxes.map(box => adjusted.get(box.seat) ?? box);

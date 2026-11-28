@@ -2,7 +2,7 @@
 // flows.mjs 가 이미 3천 줄이라 흐름 본문은 이 파일에 둔다. flows.mjs 의 도우미는 `makeSoundFlows(helpers)` 로 받는다(avatar.mjs·politics.mjs 와 같은 모양 — 서로 import 하지 않는다).
 // helpers: { recorder, attempt, startHost, openGame, closeGame, nightScenario } (sound-script 는 startHost, sound-night-parity·sound-result 는 openGame·closeGame 을 쓴다)
 // 판정 문턱은 lib.mjs 의 순수 검사 함수(soundRenderChecks, SOUND_RENDER_LIMITS)에만 있고 여기서는 낮추지 않는다 (T-12-22).
-import { chooseRole, chooseVerdict, dropSockets, leaveLobby, openTableDockPane, openTestSheet, reconnectInit, SetupError, setBotVote, setBots, settle, showPeopleTarget, skipTo, sleep, startGame } from "./browser.mjs";
+import { chooseRole, chooseVerdict, closeSheet, dropSockets, leaveLobby, openTableDockPane, openTestSheet, reconnectInit, SetupError, setBotVote, setBots, settle, showPeopleTarget, skipTo, sleep, startGame } from "./browser.mjs";
 import { SOUND_RENDER_LIMITS, SOUND_SCRIPT_STEPS, soundButtonChecks, soundEmoteLeakChecks, soundNightParityChecks, soundRenderChecks, soundResultChecks, soundSequenceChecks, soundVerdictTimingChecks } from "./lib.mjs";
 import { readTimedResult } from "./result.mjs";
 
@@ -15,6 +15,8 @@ const UNLOCK_NICK = "소리방장";
 /** 훅 상태 기다리는 상한(ms): 탭 → running 은 3초 안 (D-21) */
 const HOOK_WAIT_MS = 3000;
 const BTN = "[data-sound-button]";
+const MENU = '[data-game-menu]';
+const MENU_LABEL = "게임 메뉴";
 
 const SCRIPT_NICK = "소리방장";
 
@@ -83,15 +85,19 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
     });
   const buttonState = (page) => page.locator(BTN).first().getAttribute("data-sound-state").catch(() => null);
   const buttonCount = (page) => page.locator(BTN).count().catch(() => -1);
+  async function openSoundMenu(page) {
+    await page.locator(MENU).click();
+    await page.getByRole("dialog", { name: MENU_LABEL }).locator(BTN).waitFor({ timeout: 10000 });
+  }
   const setVisibility = (page, state) =>
     page.evaluate((st) => {
       Object.defineProperty(document, "visibilityState", { configurable: true, get: () => st });
       document.dispatchEvent(new Event("visibilitychange"));
     }, state);
 
-  /** 단추·헤더·[테스트]·토스트·재접속 띠의 사각형을 한 번에 읽는다(soundButtonChecks 입력) */
-  async function readSoundGeometry(page, viewport) {
-    return page.evaluate(({ viewport: vp }) => {
+  /** 게임 메뉴의 소리 타일·제목·닫기와 배후 재접속 띠를 실제 화면에서 읽는다. */
+  async function readSoundGeometry(page) {
+    return page.evaluate(() => {
       const box = (el) => {
         if (!el) return null;
         const r = el.getBoundingClientRect();
@@ -99,11 +105,7 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
       };
       const btns = [...document.querySelectorAll("[data-sound-button]")];
       const b = btns[0] ?? null;
-      const header = document.querySelector(".mf-lobby__header");
-      const bandEl = document.querySelector("[data-host-band] .mv-host__band");
-      const headerButtons = [...document.querySelectorAll(".mf-lobby__header button")].map((el) => ({ kind: el.getAttribute("aria-label") ?? el.className, rect: box(el) }));
-      const toastEl = document.querySelector(".mv-toast.is-on .mv-toast__text");
-      const toastRect = toastEl && (toastEl.textContent ?? "").trim() !== "" ? box(toastEl) : null;
+      const menu = document.querySelector(".mf-room-menu");
       const banner = document.querySelector(".mf-reconnect");
       const br = box(banner);
       const rect = box(b);
@@ -115,25 +117,19 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
         const top = document.elementFromPoint(cx, cy);
         bannerHit.hitIsButton = !!top && top.closest("[data-sound-button]") === b;
       }
-      const z = b ? getComputedStyle(b).zIndex : null;
-      const bannerZ = banner ? getComputedStyle(banner).zIndex : null;
       return {
-        viewport: vp,
+        viewport: { w: innerWidth, h: innerHeight },
         button: { count: btns.length, rect, disc: rect },
-        // 14페이즈: 소리 단추는 자막 띠 아래 독에 선다 — 띠가 있으면 띠 면 아랫변이 기준이다
-        header: { bottom: bandEl ? bandEl.getBoundingClientRect().bottom : header ? header.getBoundingClientRect().bottom : null, buttons: headerButtons.filter((x) => x.rect) },
-        test: box(document.querySelector(".mf-lobby__test .mf-tt")),
-        toast: toastRect,
+        menu: { header: box(menu?.querySelector(".mf-room-menu__header")), title: box(menu?.querySelector(".mf-room-menu__title")), close: box(menu?.querySelector('[aria-label="닫기"]')) },
         bannerHit,
         labels: { state: b?.getAttribute("data-sound-state") ?? null, name: b?.getAttribute("aria-label") ?? null, pressed: b?.getAttribute("aria-pressed") ?? null },
-        z: { button: z, banner: bannerZ },
       };
-    }, { viewport });
+    });
   }
 
   /**
    * sound-unlock (D-21): 홈에는 단추가 없고, [방 만들기] 탭 → 훅 running · 단추 on, 단추 토글(ui.toggle 로그), 끈 채 새로고침 → 음소거 아이콘,
-   * 켠 채 새로고침 → 잠긴 음소거 아이콘 → 아무 데나 탭 → running, 탭 숨김 → suspended / 보임 → running, 단추 위치·겹침(SU1~SU7, 재접속 띠 위에서도).
+   * 켠 채 새로고침 → 잠금 → 아무 데나 탭 → running, 탭 숨김 → suspended / 보임 → running, 게임 메뉴 안의 단추 위치·겹침(SU1~SU7).
    * 방 없는 새 컨텍스트로 시작해 UI 탭으로 방을 만든다. 소리 출력은 보지 않고 훅의 상태·요청 로그만 읽는다.
    */
   async function soundUnlockFlow(ctx) {
@@ -144,6 +140,8 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
     try {
       context = await ctx.browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1, isMobile: true, hasTouch: true, locale: "ko-KR" });
       await context.addInitScript(reconnectInit);
+      // 홈에서는 WorldStage를 마운트하지 않는다. 방 생성 뒤 /r/...에서도 시험 훅 플래그를 이어 간다.
+      await context.addInitScript(() => sessionStorage.setItem("minifia:e2e", "1"));
       page = await context.newPage();
       page.setDefaultTimeout(8000);
       await page.goto(`${ctx.origin}${UNLOCK_URL}`, { waitUntil: "domcontentloaded" });
@@ -162,11 +160,16 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
         await page.getByRole("button", { name: "방 만들기" }).first().click();
         await page.locator(".mf-nick-sheet input").fill(UNLOCK_NICK);
         await page.getByRole("button", { name: "만들기", exact: true }).click();
-        await page.locator(BTN).first().waitFor({ timeout: 10000 });
+        await page.locator(`.mf-lobby ${MENU}`).waitFor({ timeout: 10000 });
       });
-      rec("sound-unlock/create", "SK2a", "[만들기] 탭으로 방에 들어가 소리 단추가 그려짐", created.ok, created.detail);
-      if (!created.ok) return;
+      if (!created.ok) {
+        rec("sound-unlock/create", "SK2a", "[만들기]로 방에 들어가 메뉴에서 소리 단추를 열 수 있음", false, created.detail);
+        return;
+      }
       const running = await hookIs(page, "running");
+      const menu = await attempt(() => openSoundMenu(page));
+      rec("sound-unlock/create", "SK2a", "[만들기]로 방에 들어가 메뉴에서 소리 단추를 열 수 있음", menu.ok, menu.detail);
+      if (!menu.ok) return;
       rec("sound-unlock/create", "SK2b", `탭 뒤 ${HOOK_WAIT_MS / 1000}초 안에 훅 running`, running.ok, running.detail);
       const st = await buttonState(page);
       rec("sound-unlock/create", "SK2c", "단추 data-sound-state=on", st === "on", `지금 ${st}`);
@@ -184,29 +187,25 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
       // ④ 끈 채 새로고침 → 음소거 아이콘
       await page.reload({ waitUntil: "domcontentloaded" });
       const offReload = await attempt(async () => {
-        await page.locator(BTN).first().waitFor({ timeout: 10000 });
-        await sleep(600);
+        await openSoundMenu(page);
         const state = await buttonState(page);
         const text = ((await page.locator(BTN).first().textContent()) ?? "").trim();
         return state === "off" && text === "" ? true : { ok: false, detail: `state ${state} · 글 '${text}'` };
       });
       rec("sound-unlock/reload-off", "SK4", "끈 채 새로고침 → 음소거 아이콘, data-sound-state=off", offReload.ok, offReload.detail);
+      if (!offReload.ok && await buttonCount(page) === 0) return;
 
-      // ⑤ 켠 채 새로고침 → 음소거 아이콘(locked) → 아무 데나 탭 → running
+      // ⑤ 켠 채 새로고침하면 메뉴를 누르기 전에는 잠겨 있다. 메뉴 누르기도 브라우저의 소리 허용 제스처다.
       await page.locator(BTN).first().click();
       const on = await hookIs(page, "running");
       rec("sound-unlock/reload-on", "SK5a", "off 에서 단추 탭 → 켜짐 · 훅 running", on.ok, on.detail);
       await page.reload({ waitUntil: "domcontentloaded" });
-      const locked = await attempt(async () => {
-        await page.locator(BTN).first().waitFor({ timeout: 10000 });
-        const state = await buttonState(page);
-        const text = ((await page.locator(BTN).first().textContent()) ?? "").trim();
-        const hook = await page.evaluate(() => window.__mfSound?.state ?? null);
-        return state === "locked" && text === "" && hook === "locked" ? true : { ok: false, detail: `state ${state} · 글 '${text}' · 훅 ${hook}` };
-      });
-      rec("sound-unlock/reload-on", "SK5b", "켠 채 새로고침 → 아이콘만 보이고 상태와 훅이 locked", locked.ok, locked.detail);
+      await page.locator(`.mf-lobby ${MENU}`).waitFor({ timeout: 10000 });
+      const locked = await hookIs(page, "locked");
+      rec("sound-unlock/reload-on", "SK5b", "켠 채 새로고침 → 메뉴를 열기 전 소리 훅이 locked", locked.ok && await buttonCount(page) === 0, locked.detail);
       await page.touchscreen.tap(Math.round(w / 2), 6);
       const woke = await hookIs(page, "running");
+      await openSoundMenu(page);
       rec("sound-unlock/reload-on", "SK5c", `화면 아무 곳 탭 → ${HOOK_WAIT_MS / 1000}초 안에 running · 단추 on`, woke.ok && (await buttonState(page)) === "on", woke.detail);
 
       // ⑥ 탭 숨김 → suspended, 보임 → running
@@ -223,14 +222,15 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
         await page.waitForSelector(".mf-reconnect", { timeout: 8000 });
       });
       rec("sound-unlock/geometry", "SK7", "재접속 띠를 띄움(소켓 끊기)", banner.ok && dropped > 0, banner.detail || `끊은 소켓 ${dropped}개`);
-      const g = await readSoundGeometry(page, { w, h });
-      infoRow(rec, "sound-unlock/geometry", "SK7z", `참고: z-index 단추 ${g.z.button} · 띠 ${g.z.banner} · 단추 ${JSON.stringify(g.button.rect)} · 시각 ${JSON.stringify(g.button.disc)} · 헤더 아래 끝 ${g.header.bottom}`);
-      // 테스트 방이므로 [테스트]·지도 칩이 있어야 SU4 가 공허하지 않다
-      rec("sound-unlock/geometry", "SK7t", "[테스트] 버튼이 있어 겹침 검사가 공허하지 않다", !!g.test, g.test ? "" : "[테스트] 사각형을 읽지 못함");
-      infoRow(rec, "sound-unlock/geometry", "SK7y", `참고: SU4 상대 ${g.header.buttons.length}개 · [테스트] ${JSON.stringify(g.test)} · 토스트 ${JSON.stringify(g.toast)}`);
+      const g = await readSoundGeometry(page);
+      infoRow(rec, "sound-unlock/geometry", "SK7z", `참고: 소리 단추 ${JSON.stringify(g.button.rect)} · 메뉴 헤더 ${JSON.stringify(g.menu.header)} · 띠가 중심을 덮는 위치 ${g.bannerHit.covers}`);
+      rec("sound-unlock/geometry", "SK7t", "게임 메뉴의 제목과 닫기 단추가 있음", !!g.menu.title && !!g.menu.close);
       for (const line of soundButtonChecks(g)) recOne(rec, "sound-unlock/geometry", line);
     } finally {
-      if (page) await leaveLobby(page);
+      if (page) {
+        await closeSheet(page, MENU_LABEL).catch(() => {});
+        await leaveLobby(page);
+      }
       await context?.close().catch(() => {});
     }
   }

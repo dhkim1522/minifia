@@ -2611,21 +2611,23 @@ test("executionTimelineChecks: 처형 단계 기록이 없으면 모든 줄이 �
   assert.ok(lines.every((l) => l.ok === false && /측정값 없음/.test(l.detail)));
 });
 
-// ---- 10-05: 동작 버튼·5+4 판 기하 (emoteTrayChecks, D-18) ----
+// ---- 공용 도구줄의 동작 버튼과 5+4 판 기하 (결정 0100) ----
 
-// 360x560 폰: 입력줄 윗변 460. 동작 버튼 48 · 입력칸 160(깃펜이 있는 모양) · 판 폭 328(좌우 16) · 칸 55.6x56 · 판 아랫변 = 입력줄 윗변 − 8.
+// 360×560 폰: 도구 위 4px에 바깥 판, 조작부 좌우 12px. 칸은 44px 높이이고 5+4로 가운데를 맞춘다.
 const trayGood = () => {
-  const cw = 55.6;
-  const topRow = [0, 1, 2, 3, 4].map((i) => rect(25 + i * (cw + 8), 313, cw, 56));
-  const lowRow = [0, 1, 2, 3].map((j) => rect(56.8 + j * (cw + 8), 377, cw, 56));
+  const topRow = [0, 1, 2, 3, 4].map((i) => ({ ...rect(17 + i * 66, 205, 62, 44), hit: true }));
+  const lowRow = [0, 1, 2, 3].map((j) => ({ ...rect(50 + j * 66, 253, 62, 44), hit: true }));
   return {
-    button: rect(16, 460, 48, 48),
+    button: rect(12, 317, 44, 44),
     input: rect(72, 460, 160, 48),
-    tray: rect(16, 306, 328, 146),
+    dock: rect(0, 306, 360, 254),
+    toolbar: rect(0, 306, 360, 66),
+    surface: rect(12, 200, 336, 102),
+    tray: rect(17, 205, 326, 92),
     cells: [...topRow, ...lowRow],
     nameFont: 14,
-    viewport: { w: 360, h: 560 },
-    character: { x: 180, y: 250 },
+    nameTag: rect(155, 100, 50, 24),
+    face: { x: 180, y: 150 },
     hasKb: false,
   };
 };
@@ -2636,9 +2638,9 @@ test("emoteTrayChecks: 정상 값은 EB1·EP2·TR1·TR2·EP3·TR3·EP4·TR4·TR5
   for (const l of lines) assert.deepEqual(Object.keys(l).sort(), ["detail", "id", "label", "ok"]);
 });
 
-test("emoteTrayChecks EB1: 버튼이 48x48 이 아니면 그 항목만 실패", () => {
+test("emoteTrayChecks EB1: 버튼이 44×44 기준에서 벗어나면 그 항목만 실패", () => {
   const g = trayGood();
-  g.button = rect(16, 460, 44, 48);
+  g.button = rect(12, 317, 43, 44);
   onlyFail(emoteTrayChecks(g), "EB1");
 });
 
@@ -2650,9 +2652,9 @@ test("emoteTrayChecks EP2: 입력칸 폭 150 미만이면 그 항목만 실패, 
   assert.equal(okOf(emoteTrayChecks(g)).EP2, true);
 });
 
-test("emoteTrayChecks TR1: 판 좌우 16 에서 벗어나거나 폭이 viewport − 32 가 아니면 그 항목만 실패", () => {
+test("emoteTrayChecks TR1: 조작부와 판 사이 좌우 여백이 12px을 벗어나면 그 항목만 실패", () => {
   const g = trayGood();
-  g.tray = rect(20, 306, 320, 146);
+  g.surface = rect(16, 200, 328, 102);
   onlyFail(emoteTrayChecks(g), "TR1");
 });
 
@@ -2661,29 +2663,45 @@ test("emoteTrayChecks TR2: 칸이 아홉 개가 아니거나 5+4 줄이 아니�
   eight.cells = eight.cells.slice(0, 8);
   assert.equal(okOf(emoteTrayChecks(eight)).TR2, false);
   const left = trayGood();
-  left.cells = left.cells.map((c, i) => (i >= 5 ? rect(c.left - 30, c.top, c.width, c.height) : c));
+  left.cells = left.cells.map((c, i) => (i >= 5 ? { ...rect(c.left - 30, c.top, c.width, c.height), hit: true } : c));
   assert.equal(okOf(emoteTrayChecks(left)).TR2, false);
   const rows = trayGood();
-  rows.cells = rows.cells.map((c, i) => (i === 2 ? rect(c.left, c.top + 9, c.width, c.height) : c)); // 세 번째 칸만 다른 줄
+  rows.cells = rows.cells.map((c, i) => (i === 2 ? { ...rect(c.left, c.top + 9, c.width, c.height), hit: true } : c)); // 세 번째 칸만 다른 줄
   assert.equal(okOf(emoteTrayChecks(rows)).TR2, false);
 });
 
-test("emoteTrayChecks EP3: 칸이 44 미만이면 그 항목만 실패", () => {
+test("emoteTrayChecks EP3: 칸이 44 미만이거나 가운데가 가려지면 그 항목만 실패", () => {
   const g = trayGood();
-  g.cells = g.cells.map((c, i) => (i === 4 ? rect(c.left + c.width - 43, c.top, 43, 56) : c)); // 오른쪽 변은 그대로, 폭만 43
+  g.cells = g.cells.map((c, i) => (i === 4 ? { ...rect(c.left + c.width - 43, c.top, 43, 44), hit: true } : c)); // 오른쪽 변은 그대로, 폭만 43
   onlyFail(emoteTrayChecks(g), "EP3");
+  const covered = trayGood();
+  covered.cells[0].hit = false;
+  onlyFail(emoteTrayChecks(covered), "EP3");
 });
 
-test("emoteTrayChecks TR3: 판 아랫변이 입력줄 윗변 − 8 에서 2 넘게 벗어나면 그 항목만 실패", () => {
+test("emoteTrayChecks TR3: 판 아랫변이 도구줄 윗변 − 4 에서 2 넘게 벗어나면 그 항목만 실패", () => {
   const g = trayGood();
-  g.tray = rect(16, 300, 328, 146); // 아랫변 446 (기대 452)
+  g.surface = rect(12, 194, 336, 102);
   onlyFail(emoteTrayChecks(g), "TR3");
 });
 
-test("emoteTrayChecks EP4: 캐릭터 점이 판 사각형 안이면 그 항목만 실패", () => {
+test("emoteTrayChecks TR3: 짧은 대기실은 도구 아래 판과 스크롤 기록, 입력을 유지한다", () => {
+  const g = {
+    ...trayGood(), shortLobby: true,
+    toolbar: rect(0, 130, 360, 66), log: { ...rect(8, 306, 344, 60), scrollable: true },
+  };
+  assert.deepEqual(soundFails(emoteTrayChecks(g)), []);
+  onlyFail(emoteTrayChecks({ ...g, log: { ...g.log, scrollable: false } }), "TR3");
+  onlyFail(emoteTrayChecks({ ...g, log: { ...g.log, top: 298 } }), "TR3");
+});
+
+test("emoteTrayChecks EP4: 눈높이 또는 이름표가 판에 가리면 그 항목만 실패", () => {
   const g = trayGood();
-  g.character = { x: 180, y: 400 };
+  g.face = { x: 180, y: 240 };
   onlyFail(emoteTrayChecks(g), "EP4");
+  const overlap = trayGood();
+  overlap.nameTag = rect(155, 180, 50, 24);
+  onlyFail(emoteTrayChecks(overlap), "EP4");
 });
 
 test("emoteTrayChecks TR4: 이름 글자 14px 미만이면 그 항목만 실패", () => {
@@ -3039,18 +3057,16 @@ test("soundRenderChecks: 배열이 아니거나 필드가 숫자가 아니면 �
   assert.ok(lines.some((l) => !l.ok));
 });
 
-// ---- 12-07: soundButtonChecks (SU1~SU7) ----
+// ---- 공용 게임 메뉴: soundButtonChecks (SU1~SU7, 결정 0100) ----
 
 const sRect = (left, top, width, height) => ({ left, top, width, height });
-/** 360 폭 로비 정상값(16-06): 띠 아래 끝 62, 소리 원 52 는 위 62 + 12 = 74, 오른쪽 16 → left 292 */
+/** 360 폭 로비 정상값. 메뉴 헤더 오른쪽에서 닫기 44px와 여백 8px를 비운다. */
 function soundIn(over = {}) {
   return {
     viewport: { w: 360, h: 560 },
-    button: { count: 1, rect: sRect(292, 74, 52, 52), disc: sRect(292, 74, 52, 52) },
-    header: { bottom: 62, buttons: [{ kind: "leave", rect: sRect(16, 18, 44, 44) }, { kind: "role", rect: sRect(300, 18, 44, 44) }] },
-    test: sRect(16, 70, 90, 44),
-    toast: sRect(110, 88, 140, 36),
-    bannerHit: { present: true, covers: true, hitIsButton: true },
+    button: { count: 1, rect: sRect(240, 200, 44, 44), disc: sRect(240, 200, 44, 44) },
+    menu: { header: sRect(24, 200, 312, 44), title: sRect(24, 209, 109, 26), close: sRect(292, 200, 44, 44) },
+    bannerHit: { present: true, covers: false, hitIsButton: true },
     labels: { state: "on", name: "소리 끄기", pressed: "true" },
     ...over,
   };
@@ -3068,48 +3084,48 @@ test("soundButtonChecks SU1: 단추가 0개나 2개면 실패(방 화면에 정�
   assert.deepEqual(suFails(soundIn({ button: { ...soundIn().button, count: 2 } })).includes("SU1"), true);
 });
 
-test("soundButtonChecks SU2: 누르기 영역 52×52 경계 — 51.99 실패 / 52 통과", () => {
-  assert.deepEqual(suFails(soundIn({ button: { ...soundIn().button, rect: sRect(292, 74, 52, 52) } })), []);
-  assert.deepEqual(suFails(soundIn({ button: { ...soundIn().button, rect: sRect(292, 74, 51.99, 52) } })), ["SU2"]);
-  assert.deepEqual(suFails(soundIn({ button: { ...soundIn().button, rect: sRect(292, 74, 52, 51.99) } })), ["SU2"]);
+test("soundButtonChecks SU2: 누르기 영역 44×44 경계 — 43.99 실패 / 44 통과", () => {
+  assert.deepEqual(suFails(soundIn()), []);
+  assert.deepEqual(suFails(soundIn({ button: { ...soundIn().button, rect: sRect(240, 200, 43.99, 44) } })), ["SU2"]);
+  assert.deepEqual(suFails(soundIn({ button: { ...soundIn().button, rect: sRect(240, 200, 44, 43.99) } })), ["SU2"]);
 });
 
-test("soundButtonChecks SU3: 위는 띠 아래 끝 + 12 (±2), 오른쪽 여백 16 (±2)", () => {
-  const at = (top, left) => suFails(soundIn({ button: { ...soundIn().button, rect: sRect(left, top, 52, 52) } }));
-  assert.deepEqual(at(76, 294), []); // +2 / −2
-  assert.deepEqual(at(72, 290), []); // −2 / +2
-  assert.deepEqual(at(76.01, 292), ["SU3"]);
-  assert.deepEqual(at(71.99, 292), ["SU3"]);
-  assert.deepEqual(at(74, 294.01), ["SU3"]); // 오른쪽 여백 13.99
-  assert.deepEqual(at(74, 289.99), ["SU3"]); // 오른쪽 여백 18.01
+test("soundButtonChecks SU3: 헤더 세로 중심과 오른쪽 52px 여백을 ±2px 이내로 지킨다", () => {
+  const at = (top, left) => suFails(soundIn({ button: { ...soundIn().button, rect: sRect(left, top, 44, 44) } }));
+  assert.deepEqual(at(202, 242), []);
+  assert.deepEqual(at(198, 238), []);
+  assert.deepEqual(at(202.01, 240), ["SU3"]);
+  assert.deepEqual(at(197.99, 240), ["SU3"]);
+  assert.deepEqual(at(200, 242.01), ["SU3"]);
+  assert.deepEqual(at(200, 237.99), ["SU3"]);
+  assert.deepEqual(suFails(soundIn({ viewport: { w: 283, h: 560 } })), ["SU3"]);
 });
 
-test("soundButtonChecks SU4: 헤더 단추·[테스트]·토스트와 겹침 0 — 겹치면 실패, 닿기만 하면 통과", () => {
-  assert.deepEqual(suFails(soundIn({ header: { bottom: 62, buttons: [{ kind: "role", rect: sRect(300, 50, 44, 44) }] } })), ["SU4"]);
-  assert.deepEqual(suFails(soundIn({ test: sRect(280, 70, 90, 44) })), ["SU4"]);
-  assert.deepEqual(suFails(soundIn({ toast: sRect(200, 88, 140, 36) })), ["SU4"]);
-  assert.deepEqual(suFails(soundIn({ test: sRect(202, 70, 90, 44) })), []); // 오른쪽변이 단추 왼쪽변에 닿기만
-  assert.deepEqual(suFails(soundIn({ test: null, toast: null })), []); // 없으면 겹칠 것이 없다
+test("soundButtonChecks SU4: 메뉴 제목이나 닫기와 겹치면 실패하고 접촉은 통과한다", () => {
+  const menu = soundIn().menu;
+  assert.deepEqual(suFails(soundIn({ menu: { ...menu, title: sRect(180, 209, 90, 26) } })), ["SU4"]);
+  assert.deepEqual(suFails(soundIn({ menu: { ...menu, close: sRect(280, 200, 44, 44) } })), ["SU4"]);
+  assert.deepEqual(suFails(soundIn({ menu: { ...menu, close: sRect(284, 200, 44, 44) } })), []);
 });
 
 test("soundButtonChecks SU5: 재접속 띠가 떠 있을 때 단추 중심의 최상단이 단추 자신이어야 한다(덮든 안 덮든)", () => {
   assert.deepEqual(suFails(soundIn({ bannerHit: { present: true, covers: true, hitIsButton: false } })), ["SU5"]);
   // 띠가 없으면 확인한 것이 없다 — 공허한 통과 금지
   assert.deepEqual(suFails(soundIn({ bannerHit: { present: false, covers: false, hitIsButton: true } })), ["SU5"]);
-  // 14페이즈: 단추가 띠 아래 독으로 내려와 띠가 덮지 않아도 단추 중심의 최상단이 단추 자신이면 통과, 아니면 실패
+  // 띠와 단추의 위치가 다르더라도 실제 중심 hit 를 확인한다.
   assert.deepEqual(suFails(soundIn({ bannerHit: { present: true, covers: false, hitIsButton: true } })), []);
   assert.deepEqual(suFails(soundIn({ bannerHit: { present: true, covers: false, hitIsButton: false } })), ["SU5"]);
 });
 
-test("soundButtonChecks SU6: 시각 지름 52 (±1) — 경계 51 / 53 통과, 50.99 / 53.01 실패", () => {
-  const d = (w, h) => suFails(soundIn({ button: { ...soundIn().button, disc: sRect(292, 74, w, h) } }));
-  assert.deepEqual(d(51, 51), []);
-  assert.deepEqual(d(53, 53), []);
-  assert.deepEqual(d(50.99, 52), ["SU6"]);
-  assert.deepEqual(d(52, 53.01), ["SU6"]);
+test("soundButtonChecks SU6: 시각 크기 44 (±1) — 경계 43 / 45 통과, 42.99 / 45.01 실패", () => {
+  const d = (w, h) => suFails(soundIn({ button: { ...soundIn().button, disc: sRect(240, 200, w, h) } }));
+  assert.deepEqual(d(43, 43), []);
+  assert.deepEqual(d(45, 45), []);
+  assert.deepEqual(d(42.99, 44), ["SU6"]);
+  assert.deepEqual(d(44, 45.01), ["SU6"]);
   const locked = soundIn({ labels: { state: "locked", name: "소리 켜기", pressed: "false" } });
   assert.deepEqual(suFails(locked), []);
-  assert.deepEqual(suFails({ ...locked, button: { ...locked.button, disc: sRect(292, 74, 112, 52) } }), ["SU6"]);
+  assert.deepEqual(suFails({ ...locked, button: { ...locked.button, disc: sRect(240, 200, 112, 44) } }), ["SU6"]);
 });
 
 test("soundButtonChecks SU7: 접근성 이름이 상태에 맞는다 — on '소리 끄기'(pressed true), off·locked '소리 켜기'(pressed false)", () => {
@@ -3973,13 +3989,13 @@ test("dressChecks: 옷장 단추는 다른 도구와 같은 44px다", () => {
   assert.equal(okOf(dressChecks(dressGood())).DB1, true);
 });
 
-test("emoteTrayChecks(16-05): 동작 단추는 48x48, 판 아랫변은 입력줄 윗변 − 8 — 옛 이름표 단추(44x59.6)와 간격 19.6 은 실패한다", () => {
+test("emoteTrayChecks(0100): 공용 도구줄 위 판을 허용하고 기존 48px 단추와 8px 간격은 실패한다", () => {
   const g = trayGood();
   assert.equal(okOf(emoteTrayChecks(g)).EB1, true);
   assert.equal(okOf(emoteTrayChecks(g)).TR3, true);
   const old = trayGood();
-  old.button = rect(16, 448.4, 44, 59.6); // 이름표가 있던 옛 모양
-  old.tray = rect(16, 306 - 11.6, 328, 146); // 아랫변 = 입력칸 윗변 − 19.6
+  old.button = rect(12, 317, 48, 48);
+  old.surface = rect(12, 196, 336, 102);
   assert.deepEqual(emoteTrayChecks(old).filter((l) => !l.ok).map((l) => l.id), ["EB1", "TR3"]);
 });
 

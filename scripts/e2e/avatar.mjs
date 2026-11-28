@@ -2,7 +2,7 @@
 // flows.mjs 가 이미 3천 줄이라 흐름 본문은 이 파일에 둔다. flows.mjs 의 도우미는 `makeAvatarFlows(helpers)` 로 받는다(politics.mjs 와 같은 모양 — 서로 import 하지 않는다).
 // helpers: { recorder, startHost, openGuest, attempt, walkableCentersOfApp, LOBBY_HOST_NICK, WORLD_GUEST_NICK, resetAndLeave, openGame, closeGame, untilGame }  (10-08 이 판 만들기 도우미 셋을 더했다)
 // 판정 문턱은 lib.mjs 의 순수 검사 함수(emoteTrayChecks·dressChecks)에만 있고 여기서는 낮추지 않는다.
-import { chooseRole, chooseVerdict, hitsInputSurface, leaveLobby, openTestSheet, sampleWorld, screensOfWorld, SetupError, setBots, settle, skipTo, sleep, startGame, tapWorld, typeAndSendChat, waitChatLine, waitWorldReady } from "./browser.mjs";
+import { chooseRole, chooseVerdict, installFakeViewport, leaveLobby, openTableDockPane, openTestSheet, sampleWorld, SetupError, setBots, settle, skipTo, sleep, startGame, tapWorld, typeAndSendChat, waitChatLine, waitWorldReady, walkableTapPoints } from "./browser.mjs";
 import { dressChecks, dressLockChecks, emoteDeliveryChecks, emoteTrayChecks, floatTrayChecks, worldTapRanking } from "./lib.mjs";
 
 /** 동작 하나를 보낸 뒤 두 페이지가 프레임을 받기까지 기다리는 상한(ms). 계획: 1.5초 안 */
@@ -45,23 +45,39 @@ function readEmoteUi(page, seat) {
       return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
     };
     const tray = q("[data-emote-tray]");
+    const button = q("[data-emote-button]");
+    const surface = tray?.closest('[data-playtest-surface="reaction"]');
+    const input = q("[data-chat-input]");
+    const chatLog = q("[data-chat-log]");
     const names = qa(".mv-emote-tray__name").map((el) => parseFloat(getComputedStyle(el).fontSize));
     const shown = window.__mfWorld?.shown(mySeat) ?? null;
     const pt = shown ? window.__mfWorld.screenOf(shown.x, shown.z) : null;
+    const nameTag = rect(q('.mf-world__tag[data-me="true"] .mv-tag'));
+    // 이름표는 머리 바로 위에 있다. 이름표와 발점 사이의 상단 1/4을 눈높이 대리점으로 잰다.
+    const face = pt && nameTag && pt.sy > nameTag.bottom
+      ? { x: pt.sx, y: nameTag.bottom + (pt.sy - nameTag.bottom) / 4 }
+      : null;
     const root = q(".mf-root");
     return {
-      vw: window.innerWidth,
-      vh: window.innerHeight,
-      button: rect(q("[data-emote-button]")),
-      input: rect(q("[data-chat-input]")),
+      button: rect(button),
+      toolbar: rect(button?.closest(".mf-room-toolbar")),
+      dock: rect(button?.closest(".mf-room-chat")),
+      input: rect(input),
       tray: rect(tray),
-      cells: qa("[data-emote]").map((el) => ({ id: el.getAttribute("data-emote"), rect: rect(el), off: el.getAttribute("aria-disabled") === "true", playing: el.classList.contains("is-playing") })),
+      surface: rect(surface),
+      shortLobby: matchMedia("(max-width: 430px) and (max-height: 600px)").matches,
+      log: chatLog ? { ...rect(chatLog), scrollable: getComputedStyle(chatLog).overflowY === "auto" } : null,
+      cells: qa("[data-emote]").map((el) => {
+        const r = rect(el);
+        return { id: el.getAttribute("data-emote"), rect: r, hit: el.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)), off: el.getAttribute("aria-disabled") === "true", playing: el.classList.contains("is-playing") };
+      }),
       nameFont: names.length > 0 ? Math.min(...names) : null,
-      character: pt ? { x: pt.sx, y: pt.sy } : null,
+      nameTag,
+      face,
       kbOpen: root?.getAttribute("data-kb-open") === "true",
-      buttonLabel: q("[data-emote-button]")?.getAttribute("aria-label") ?? null,
-      buttonOff: q("[data-emote-button]")?.getAttribute("aria-disabled") === "true",
-      expanded: q("[data-emote-button]")?.getAttribute("aria-expanded") ?? null,
+      buttonLabel: button?.getAttribute("aria-label") ?? null,
+      buttonOff: button?.getAttribute("aria-disabled") === "true",
+      expanded: button?.getAttribute("aria-expanded") ?? null,
       trayRole: tray?.getAttribute("role") ?? null,
       trayLabel: tray?.getAttribute("aria-label") ?? null,
       focusIsInput: document.activeElement === q("[data-chat-input]"),
@@ -103,7 +119,7 @@ function readDressUi(page) {
       float: visible(dresser) ? rect(dresser) : null,
       previousTool: visible(dresser?.previousElementSibling) ? rect(dresser.previousElementSibling) : null,
       floatLabel: q('[data-float="dress"]')?.getAttribute("aria-label") ?? null,
-      floatCount: qa("[data-float]").length,
+      tools: qa(".mf-lobby [data-room-tool]").filter(visible).map((el) => el.getAttribute("data-room-tool")),
       panel: rect(q(".mf-lobby__panel")),
       sheet: rect(q("[data-dress-sheet]")),
       sheetContainerTop: q("[data-dress-sheet]")?.offsetParent?.getBoundingClientRect().top ?? 0,
@@ -149,6 +165,7 @@ export function makeAvatarFlows(helpers) {
 
   /** 판을 연다(버튼 누름). 열렸는지 기다린다 */
   async function openTray(page) {
+    await openTableDockPane(page, "tools");
     await page.locator(BUTTON).click({ timeout: 3000 });
     await page.waitForSelector(TRAY, { timeout: 1500 });
   }
@@ -176,7 +193,7 @@ export function makeAvatarFlows(helpers) {
     const sc = "avatar-emote/tray";
     const host = await startHost(ctx, "avatar-emote", { nickname: LOBBY_HOST_NICK });
     const { page: hp, tracker: ht } = host;
-    const { guest: g, seat: gSeat } = await openGuest(ctx, WORLD_GUEST_NICK);
+    const { guest: g, seat: gSeat } = await openGuest(ctx, WORLD_GUEST_NICK, { initScripts: [installFakeViewport] });
     try {
       const { page: gp, tracker: gt } = g;
       const hSeat = ht.last().me.seat;
@@ -188,11 +205,12 @@ export function makeAvatarFlows(helpers) {
       // AE1: 두 페이지 모두 버튼 + 판 기하
       for (const [who, page, seat] of [["방장", hp, hSeat], ["손님", gp, gSeat]]) {
         const closed = await readEmoteUi(page, seat);
-        rec(`${sc}-${who}`, "AE1a", `${who}: 동작 버튼이 입력줄 맨 앞에 있고 접근성 이름 '동작 고르기', 판은 닫혀 있음`, closed.button !== null && closed.tray === null && closed.buttonLabel === "동작 고르기" && closed.button.left < (closed.input?.left ?? 0) && closed.expanded === "false", `버튼 ${closed.button ? `${Math.round(closed.button.left)},${Math.round(closed.button.top)}` : "없음"} · 이름 ${closed.buttonLabel} · 판 ${closed.tray ? "열림" : "닫힘"} · expanded ${closed.expanded}`);
+        rec(`${sc}-${who}`, "AE1a", `${who}: 동작 버튼이 입력칸 위 공용 도구줄에 있고 접근성 이름은 '동작 고르기'`, closed.button !== null && closed.toolbar !== null && closed.input !== null && closed.button.bottom <= closed.input.top && closed.tray === null && closed.buttonLabel === "동작 고르기" && closed.expanded === "false", `버튼 ${closed.button ? `${Math.round(closed.button.left)},${Math.round(closed.button.top)}` : "없음"} · 이름 ${closed.buttonLabel} · 판 ${closed.tray ? "열림" : "닫힘"} · expanded ${closed.expanded}`);
         await openTray(page);
+        await settle(page);
         const ui = await readEmoteUi(page, seat);
         rec(`${sc}-${who}`, "AE1b", `${who}: 판이 role=group 이름 '동작', 칸 아홉 개 순서 clap~throat`, ui.trayRole === "group" && ui.trayLabel === "동작" && ui.cells.map((c) => c.id).join(",") === "clap,praise,handshake,dance,surprise,cry,deny,point,throat", `role ${ui.trayRole} · 이름 ${ui.trayLabel} · 칸 ${ui.cells.map((c) => c.id).join(",")}`);
-        for (const l of emoteTrayChecks({ button: ui.button, input: ui.input, tray: ui.tray, cells: ui.cells.map((c) => c.rect), nameFont: ui.nameFont, viewport: { w: ui.vw, h: ui.vh }, character: ui.character, hasKb: ui.kbOpen })) {
+        for (const l of emoteTrayChecks({ ...ui, cells: ui.cells.map((c) => ({ ...c.rect, hit: c.hit })), hasKb: ui.kbOpen })) {
           rec(`${sc}-${who}`, l.id, l.label, l.ok, l.detail);
         }
         await closeTray(page);
@@ -249,20 +267,12 @@ export function makeAvatarFlows(helpers) {
 
       // AE4: 걷기 시작하면 playing 에서 빠지고, 걷는 동안 칸이 비활성, 걸음이 끝나면 풀림
       const sc4 = "avatar-emote/walk";
-      const [hw, gw] = await Promise.all([hp.evaluate(() => ({ top: document.querySelector(".mf-lobby__header")?.getBoundingClientRect().bottom ?? 0, bottom: document.querySelector(".mf-lobby__panel")?.getBoundingClientRect().top ?? 0 })), gp.evaluate(() => ({ top: document.querySelector(".mf-lobby__header")?.getBoundingClientRect().bottom ?? 0, bottom: document.querySelector(".mf-lobby__panel")?.getBoundingClientRect().top ?? 0 }))]);
       const from = await sampleWorld(gp, gSeat);
       if (!from) throw new SetupError("손님 위치를 읽지 못함(sample)");
-      const centers = walkableCentersOfApp();
-      const pad = 28;
-      const [gScreens, hScreens] = await Promise.all([screensOfWorld(gp, centers), screensOfWorld(hp, centers)]);
-      const inStage = (s, st) => !!s && Number.isFinite(s.sx) && s.sx > pad && s.sx < ctx.size.w - pad && s.sy > st.top + pad && s.sy < st.bottom - pad;
-      const onScreen = centers.map((c, i) => ({ ...c, sx: gScreens[i]?.sx, sy: gScreens[i]?.sy, hx: hScreens[i]?.sx, hy: hScreens[i]?.sy })).filter((c, i) => inStage(gScreens[i], gw) && inStage(hScreens[i], hw));
-      // 떠 있는 버튼(소리 단추 12페이즈·꾸미기 hanger)이 덮은 칸을 먼저 빼고 순위를 매긴다(worldFlow 와 같은 순서) — 문턱(3 단위·낮은 스테이지 1.5 단위)은 그대로다
-      const gHits = await hitsInputSurface(gp, onScreen);
-      const open = onScreen.filter((_, i) => gHits[i]);
+      const open = (await walkableTapPoints(gp, walkableCentersOfApp())).filter(Boolean);
       const { ranked } = worldTapRanking(open, from);
       const target = ranked[0];
-      if (!target) throw new SetupError(`탭할 목적지를 찾지 못함(보이는 칸 ${onScreen.length}개, 가리지 않은 칸 ${open.length}개)`);
+      if (!target) throw new SetupError(`탭할 목적지를 찾지 못함(손님 화면에서 누를 수 있는 칸 ${open.length}개)`);
       const free2 = await waitUnblocked(gp, gSeat);
       if (free2 === null) throw new SetupError("손님 동작 칸이 세 번째로 풀리지 않음");
       // 춤을 시작하고 곧바로 걷는다
@@ -290,18 +300,21 @@ export function makeAvatarFlows(helpers) {
         await closeTray(gp);
       }
 
-      // AE5: 키보드가 열려 있을 때(입력칸 포커스) 버튼은 판을 열지 않고 입력칸 blur, 값은 그대로, 두 번째 누름에 열림
+      // AE5: 실제 키보드 배치를 가상 visualViewport 로 열고, 한 번 눌러 키보드를 닫으며 동작 판을 연다.
       const sc5 = "avatar-emote/keyboard";
       await gp.locator("[data-chat-input]").fill("그대로");
-      await gp.locator("[data-chat-input]").focus();
-      await gp.locator(BUTTON).click({ timeout: 3000 });
-      await sleep(150);
+      await gp.evaluate(() => window.__mfVv.set(window.innerHeight - 260, 0));
+      await gp.waitForSelector('.mf-lobby[data-kb-open="true"]', { timeout: 1500 });
+      await openTray(gp);
+      await gp.waitForSelector('.mf-lobby[data-kb-open="true"]', { state: "detached", timeout: 1500 });
       const first = await readEmoteUi(gp, gSeat);
-      rec(sc5, "AE5a", "입력칸 포커스일 때 버튼을 누르면 판은 열리지 않고 입력칸 포커스가 빠짐", first.tray === null && !first.focusIsInput, `판 ${first.tray ? "열림" : "닫힘"} · 입력칸 포커스 ${first.focusIsInput}`);
-      await gp.locator(BUTTON).click({ timeout: 3000 });
-      await gp.waitForSelector(TRAY, { timeout: 1500 }).catch(() => {});
-      const second = await readEmoteUi(gp, gSeat);
-      rec(sc5, "AE5b", "두 번째 누름에 판이 열리고 입력칸 값('그대로')이 유지되며 키보드는 닫힌 채", second.tray !== null && second.inputValue === "그대로" && !second.kbOpen, `판 ${second.tray ? "열림" : "닫힘"} · 값 길이 ${second.inputValue?.length} · 키보드 ${second.kbOpen}`);
+      rec(sc5, "AE5a", "키보드가 열렸을 때 한 번 누르면 판이 열리고 입력칸 포커스가 빠짐", first.tray !== null && !first.focusIsInput, `판 ${first.tray ? "열림" : "닫힘"} · 입력칸 포커스 ${first.focusIsInput}`);
+      rec(sc5, "AE5b", "판이 열려 있는 동안 입력칸 값이 유지되고 키보드는 닫힘", first.inputValue === "그대로" && !first.kbOpen, `값 길이 ${first.inputValue?.length} · 키보드 ${first.kbOpen}`);
+      await gp.evaluate(() => window.__mfVv.set(window.innerHeight, 0));
+      await closeTray(gp);
+      await gp.locator(BUTTON).focus();
+      await gp.keyboard.press("Enter");
+      await gp.waitForSelector(`${TRAY} button:focus`, { timeout: 1500 });
       await gp.keyboard.press("Escape");
       const escClosed = await attempt(async () => {
         await gp.waitForSelector(TRAY, { state: "detached", timeout: 1000 });
@@ -335,10 +348,9 @@ export function makeAvatarFlows(helpers) {
       /** 닫힌 때의 버튼을 읽고(AD1) 눌러 시트를 연 뒤 시트·카드를 읽어(AD2) 같은 검사 줄로 기록한다. 끝나면 시트는 열려 있다. */
       const measure = async (who, page) => {
         const closed = await readDressUi(page);
-        // 결정 0075: 방장은 [봇] 버튼이 하나 더 떠 있다(옷장 + 봇), 손님은 옷장 하나.
-        const wantFloats = page === hp ? 2 : 1;
-        const idle = closed.sheet === null && closed.float !== null && closed.floatLabel === "캐릭터 꾸미기" && closed.floatCount === wantFloats;
-        rec(`${sc}-${who}`, "AD1a", `${who}: 로비에 '캐릭터 꾸미기' 버튼이 있고 시트는 닫혀 있음`, idle, `버튼 ${closed.float ? "있음" : "없음"} · 이름 ${closed.floatLabel} · 떠 있는 버튼 ${closed.floatCount}개 · 시트 ${closed.sheet ? "열림" : "닫힘"}`);
+        const expectedTools = page === hp ? "dress,bots" : "dress";
+        const idle = closed.sheet === null && closed.float !== null && closed.floatLabel === "캐릭터 꾸미기" && closed.tools.join(",") === expectedTools;
+        rec(`${sc}-${who}`, "AD1a", `${who}: 로비 도구줄에 꾸미기가 있고 봇은 방장만 사용하며 시트는 닫혀 있음`, idle, `이름 ${closed.floatLabel} · 도구 ${closed.tools.join(",")} · 시트 ${closed.sheet ? "열림" : "닫힘"}`);
         await page.locator(DRESS_FLOAT).click({ timeout: 3000 });
         await page.waitForSelector(DRESS_SHEET, { timeout: 1500 });
         const animalFocus = await page.evaluate(() => document.activeElement?.matches('[data-animal][aria-pressed="true"]') === true);
@@ -435,8 +447,6 @@ export function makeAvatarFlows(helpers) {
   async function sendEmote(page, seat, id) {
     const gap = GAP_MS - (Date.now() - (lastSend.get(page) ?? 0));
     if (gap > 0) await sleep(gap);
-    // 채팅을 보낸 뒤에는 입력칸에 초점이 남아 있다 — 이때 동작 버튼은 키보드만 닫는다(AE5). 평소 사람처럼 초점을 뺀 뒤 누른다
-    await page.evaluate(() => document.activeElement?.blur?.());
     const free = await waitUnblocked(page, seat);
     if (free === null) throw new SetupError("동작 칸이 풀리지 않음(8초) — 이동이 막혀서가 아니라 걷는 중이거나 앞 동작이 안 끝남");
     await openTray(page);
@@ -567,13 +577,18 @@ export function makeAvatarFlows(helpers) {
         rec(sc, "AP2-chat", "같은 지목 단계에서 손님의 채팅 한 줄도 방장에게 도착(이동 차단과 무관)", chat.ok, chat.detail);
       }
 
-      // AP3a 유언: 봇이 방장을 가리켜 방장이 처형자. 유언 단계는 조용히 지켜보는 장면이라 몸동작이 서버에서 막힌다(22-11 D-33) — 도착 0건
+      // AP3a 유언: UI는 동작을 제공하지 않는다. 조작 없이 보낸 프레임의 서버 차단은 emotePhases.test.ts에서 검사한다.
       {
         const sc = `${id}/will`;
         await skipTo(hp, ht, "defense");
         await reach([hp, gp], "defense");
-        await settle(hp);
-        await deliver(rec, `${sc}-defense`, "AP3a", { sender: H, receivers: [G], emoteId: "cry", mode: "absent", tagSamples: tags });
+        for (const who of [H, G]) {
+          const tab = who.page.locator('[data-dock-tab="tools"]');
+          if (await tab.count() > 0 && await tab.isEnabled()) await openTableDockPane(who.page, "tools");
+          const controls = await who.page.locator(`${BUTTON}, ${TRAY}`).count();
+          rec(sc, `AP3a-${who.name}`, `${who.name}: 유언 단계에서 동작 조작이 없음`, controls === 0, `동작 조작 ${controls}개`);
+          tags.push({ where: `${sc}/AP3a/${who.name}`, mark: await readTagEmoteMarks(who.page) });
+        }
       }
 
       // 처형 → 밤 → 아침. 방장은 유령이 된다
@@ -621,11 +636,16 @@ export function makeAvatarFlows(helpers) {
       await Promise.all([settle(hp), settle(gp)]);
       const sc = `${id}/night`;
 
+      for (const who of [H, G]) {
+        const tab = who.page.locator('[data-dock-tab="tools"]');
+        if (await tab.count() > 0 && await tab.isEnabled()) await openTableDockPane(who.page, "tools");
+      }
+
       const dom = await gp.evaluate(() => ({ button: document.querySelectorAll("[data-emote-button]").length, tray: document.querySelectorAll("[data-emote-tray]").length, cell: document.querySelectorAll("[data-emote]").length }));
       rec(sc, "AP5a", "시민 편 손님의 밤 DOM 에 [data-emote-button]·[data-emote-tray]·[data-emote] 가 0개(D-20)", dom.button === 0 && dom.tray === 0 && dom.cell === 0, `버튼 ${dom.button} · 판 ${dom.tray} · 칸 ${dom.cell}`);
       const hostDom = await hp.evaluate(() => document.querySelectorAll("[data-emote-button]").length);
-      // 15-08: 밤 마피아 화면은 시민 편과 같은 얼굴 목록 하나(채팅 패널 삭제)라 동작 버튼이 없다 — 마피아 → 시민 편 동작 도착 0건은 보낼 수단이 없는 것으로 대신한다
-      rec(sc, "AP5b", "마피아 방장의 밤 아래 패널에도 동작 버튼이 없다(15-08: 네 역할 같은 얼굴 목록)", hostDom === 0, `버튼 ${hostDom}`);
+      // 실제 밤의 도구를 열어도 동작은 없다. 마피아 소켓에서 직접 보낸 프레임의 수신 권한은 Worker 시험이 맡는다.
+      rec(sc, "AP5b", "마피아 방장의 밤 조작에도 동작 버튼이 없다", hostDom === 0, `버튼 ${hostDom}`);
       // 보낸 동작이 없어도 밤 두 화면(마피아 방장·시민 편 손님)의 이름표 층에 동작 표식이 없음은 그대로 표본으로 본다(AP7)
       for (const who of [H, G]) tags.push({ where: `${sc}/AP5/${who.name}`, mark: await readTagEmoteMarks(who.page) });
       recordTagSamples(rec, `${id}/tags`, tags);

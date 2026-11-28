@@ -253,9 +253,10 @@ export function makeNightDockFlow({ recorder, openGame, closeGame, checkRoomWidt
         await observer.page.locator(".mv-face__count").count() === 0 &&
         observer.tracker.last().me.nightTally === undefined && observer.tracker.last().me.pick === undefined);
       for (const guest of guests) {
-        const target = await showPeopleTarget(guest.page, face(guest.seat));
+        const targetSeat = guest.tracker.last()?.me.role === "mafia" ? secondSeat : guest.seat;
+        const target = await showPeopleTarget(guest.page, face(targetSeat));
         await target.click();
-        await guest.tracker.waitFor(view => view.me.pick === guest.seat, 3000, "참가자의 밤 선택 서버 반영");
+        await guest.tracker.waitFor(view => view.me.pick === targetSeat, 3000, "참가자의 밤 선택 서버 반영");
       }
       await ht.waitFor(view => view.phase === "morning", 38_000, "밤 마감 뒤 아침");
       await hp.locator('[data-game-stage][data-phase="morning"]').waitFor({ timeout: 8000 });

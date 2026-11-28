@@ -54,11 +54,6 @@ function finish(browser) {
   else done();
 }
 
-function abortNow(reason) {
-  aborted = reason;
-  finish(null);
-}
-
 let args;
 try {
   args = parseArgs(process.argv.slice(2));
@@ -123,7 +118,10 @@ try {
   process.exit(2);
 }
 
-const limitTimer = setTimeout(() => abortNow(`전체 ${OVERALL_LIMIT_MS / 1000}초 제한 초과`), OVERALL_LIMIT_MS);
+const limitTimer = setTimeout(() => {
+  aborted = `전체 ${OVERALL_LIMIT_MS / 1000}초 제한 초과`;
+  finish(browser);
+}, OVERALL_LIMIT_MS);
 limitTimer.unref();
 
 // 크기 고정 흐름(flow.size — pc·wakelock)은 폰 크기와 무관하므로 크기 목록과 곱하지 않고 자기 크기로 작업 하나만 만든다.
@@ -152,8 +150,18 @@ async function runJob({ flow, size }) {
   /** 던진 시도에서 이미 기록된 검사 실패. 재시도가 통과해도 결과 표에 남는다 */
   const carried = [];
   const carriedKeys = new Set();
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const ctx = { origin, size, shots: args.shots, browser, secrets, results: [], host: null, stage: "connect" };
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS && aborted === null; attempt++) {
+    // 방 준비 중에 실패해도 이 시도가 열었던 참가자 화면을 전부 닫는다.
+    const contexts = new Set();
+    const attemptBrowser = {
+      async newContext(options) {
+        const context = await browser.newContext(options);
+        contexts.add(context);
+        context.once("close", () => contexts.delete(context));
+        return context;
+      },
+    };
+    const ctx = { origin, size, shots: args.shots, browser: attemptBrowser, secrets, results: [], host: null, stage: "connect" };
     try {
       await flow.run(ctx);
       results.push(...ctx.results);
@@ -174,7 +182,7 @@ async function runJob({ flow, size }) {
       // 준비 실패로 다시 도는 시도는 결과 표에 남지 않으므로 어느 조작에서 멈췄는지 한 줄 알린다(08-24: 간헐 재시도 원인을 볼 수 있게)
       emit(`재시도: ${flow.id} ${size.label} ${attempt}/${MAX_ATTEMPTS} — ${String(e instanceof Error ? e.message : e).split("\n")[0].slice(0, 160)}${failed.length > 0 ? ` (이 시도에서 기록된 검사 실패 ${failed.length}건은 결과에 남김)` : ""}`);
     } finally {
-      await ctx.host?.context.close().catch(() => {});
+      await Promise.all([...contexts].map((context) => context.close().catch(() => {})));
     }
   }
   results.push(...carried);

@@ -980,11 +980,18 @@ export function hitsInputSurface(page, points) {
   return page.evaluate(
     (pts) =>
       pts.map((p) => {
+        if (!Number.isFinite(p?.sx) || !Number.isFinite(p?.sy)) return false;
         const el = document.elementFromPoint(p.sx, p.sy);
         return !!el && el.classList.contains("mf-world__input");
       }),
     points,
   );
+}
+
+/** 월드 칸마다 실제로 누를 수 있으면 칸을, 가려졌거나 화면 밖이면 null을 준다. */
+export async function walkableTapPoints(page, points) {
+  const hits = await hitsInputSurface(page, await screensOfWorld(page, points));
+  return points.map((point, i) => hits[i] ? point : null);
 }
 
 /**

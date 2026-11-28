@@ -23,7 +23,7 @@ import {
 import { morningScript, nightScript, resultScript, verdictScript, willScript, type MorningOutcome, type Script } from "../audio/script";
 import { buildMixGraph, buildVoice, noiseBufferFor } from "../audio/synth";
 import { installSoundHook } from "../audio/testHook";
-import { LAB_GROUPS, SOUND_LIMITS, SOUND_NAMES } from "./soundLabTable";
+import { AUDIBLE_LENGTH_REFERENCE_MS, LAB_GROUPS, SOUND_LIMITS, SOUND_NAMES } from "./soundLabTable";
 
 // ───────────────────────── 오프라인 렌더 ─────────────────────────
 
@@ -45,7 +45,7 @@ export interface RenderResult {
   nan: number;
   /** −60 dBFS 를 넘는 마지막 표본의 끝 시각(ms) */
   lengthMs: number;
-  /** 레시피가 선언한 길이(ms). 침대는 null */
+  /** 가청 길이 기준(ms). 배경음은 null */
   declaredMs: number | null;
 }
 
@@ -100,10 +100,12 @@ function audibleEndMs(ev: PlanEvent, bus: number): number {
 }
 
 /**
- * 효과음의 선언 길이(ms): 레시피가 선언한 레이어 엔벨로프에서 (버스·master 를 거친) 레벨이 −60 dBFS 아래로 내려가는 지점의 최댓값.
- * 레시피 선언의 at + dur + 릴리스 전체(recipeDurationMs)와 달리 들리지 않는 꼬리는 세지 않는다.
+ * 효과음의 가청 길이 기준(ms). 필터 잡음의 참조값이 없으면 레이어 엔벨로프에서 (버스·master를 거친) 레벨이
+ * −60dBFS 아래로 내려가는 지점의 최댓값을 쓴다. 합성기의 무음 릴리스 꼬리는 세지 않는다.
  */
 export function declaredLengthMs(id: SfxId): number {
+  const reference = AUDIBLE_LENGTH_REFERENCE_MS[id];
+  if (reference !== undefined) return reference;
   const bus = BUS_GAIN[RECIPES[id].bus] * MASTER_GAIN;
   let end = 0;
   for (const ev of renderPlan(id)) end = Math.max(end, audibleEndMs(ev, bus));

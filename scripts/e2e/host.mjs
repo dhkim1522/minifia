@@ -1,36 +1,35 @@
-// 14페이즈 사회자·이름표 E2E 흐름 (14-08): emcee-band(자막 띠, 폰 6종)·emcee-tools(도구 이름표 전수)·emcee-leak(역할 다섯 시점 누설)·emcee-sound(알림음).
-// 이름 앞머리는 emcee — 기존 host-handoff 와 `--only host` 앞부분 일치가 겹치지 않게 한다. 흐름은 화면을 읽기만 하고 판정은 lib.mjs 의 순수 함수(hostBandChecks 등)에 맡긴다:
+// 사회자 E2E: emcee-band(공통 헤더, 폰 6종)·emcee-tools(도구 이름표 전수)·emcee-leak(역할 다섯 시점 누설)·emcee-sound(알림음).
+// 이름 앞머리는 emcee — 기존 host-handoff 와 `--only host` 앞부분 일치가 겹치지 않게 한다.
 // 판정 문턱은 여기서 낮추지 않는다(T-14-21). 닉네임·토큰은 결과 줄에 남기지 않는다(T-14-22) — 단계 이름·역할 이름·개수만 쓴다.
 // flows.mjs 가 이미 3천 줄이라 흐름 본문은 이 파일에 둔다. flows.mjs 의 도우미는 `makeHostFlows(helpers)` 로 받는다(sound.mjs·politics.mjs 와 같은 모양 — 서로 import 하지 않는다).
 // helpers: { recorder, attempt, startHost, openGuest, closeGame, gameGH, settledResult }
 import {
   SetupError,
-  armBandWatch,
   chooseRole,
   closeRoleCard,
   openRoleCard,
   openTableDockPane,
   openTestSheet,
-  readBandWatch,
   readCallCount,
   readHostBand,
   readRoomText,
-  readTagRects,
   readToolButtons,
   readToolLabelCounts,
   closeSheet,
   setBotVote,
   setBots,
   settle,
+  showPeopleTarget,
   skipOnce,
   skipTo,
   sleep,
   startGame,
   chooseVerdict,
   tapTurnPick,
+  waitForPhaseStart,
 } from "./browser.mjs";
 import { TOD_ABSENT_PHASES, TOD_BY_PHASE, readTodHead, todAbsentChecks, todChecks } from "./polish.mjs";
-import { TIMELESS_PHASES, willLeakChecks, hostBandChecks, hostChimeChecks, hostLeakChecks, hostOverlapChecks, toolLabelChecks, viewKeyChecks } from "./lib.mjs";
+import { TIMELESS_PHASES, willLeakChecks, hostChimeChecks, hostLeakChecks, toolLabelChecks, viewKeyChecks } from "./lib.mjs";
 
 const BAND_NICK = "띠검사방장";
 /** 8명 투표 화면 시험용 손님 일곱(모두 4자 — UI-SPEC "이름표 버튼 8개 … (4자 이름, 폰 6종)", basic-vote 와 같은 이름). 봇 이름은 첫 봇이 8자 고정이라 4자 이름 전제가 맞지 않는다(결정 0052-3 과 같은 이유) */
@@ -39,14 +38,10 @@ const BAND_GUESTS = ["가나다라", "마바사아", "자차카타", "파하거�
 const MAX_STEPS = 90;
 /** 시간이 있는 단계의 최소 길이(ms) — src/game/hostLine.ts hostTimeOf 와 같은 값 */
 const HOST_TIME_MIN_MS = 3000;
-/** 띠 검사가 반드시 지나야 하는 단계(없으면 EB0 실패 — 공허 통과 금지). 배정은 3초 창이라 잡히면 더하고 못 잡아도 실패가 아니다 */
-const BAND_REQUIRED = ["lobby", "roleReveal", "keyword", "dayAnnounce", "discussion", "verdict", "nomination", "defense", "execution", "night", "morning", "ended"];
-/** 이 높이(px) 미만의 폰은 방 틀 높이 575 미만의 짧은 폰이다(DEFAULT_SIZES 의 360x560 probe) — UI#14 알려진 한계 적용 대상 */
-const SHORT_PHONE_H = 575;
-/** 이름표·얼굴 칸이 눌려야 하는 단계(띠·이름표 겹침 검사) */
-const TAG_PHASES = ["nomination", "night"];
-/** G·H(묶음) 검사를 하는 맵 단계 — 헤더가 있는 화면 */
+/** 공통 헤더와 화면 읽기 안내를 확인할 첫날 단계. */
+const BAND_REQUIRED = ["lobby", "roleReveal", "keyword", "dayAnnounce", "answerReveal", "discussion", "verdict", "nomination", "defense", "execution", "night", "morning", "ended"];
 const GH_PHASES = ["discussion", "nomination", "night", "morning"];
+const GUIDED_PHASES = ["roleReveal", "keyword", "discussion", "verdict", "nomination", "defense", "night"];
 /** 알림음: 낮 시작 직후 훅 로그가 쌓이도록 기다리는 시간(ms) */
 const CHIME_SETTLE_MS = 900;
 
@@ -69,19 +64,33 @@ async function settleBand(page, tracker, phase) {
   return tracker.last()?.phase === phase;
 }
 
-/** 이름표·얼굴 칸 사각형이 두 번 연속 같아질 때까지(최대 maxMs) 0.4초 간격으로 읽는다 — 투표 때 이름표가 걸어 모이는 동안은 재지 않는다 */
-async function readTagsStable(page, maxMs = 11000) {
-  const key = (rs) => JSON.stringify(rs.map((r) => [Math.round(r.left), Math.round(r.top)]));
-  let prev = null;
-  let rects = await readTagRects(page);
-  for (const t0 = performance.now(); performance.now() - t0 < maxMs; ) {
-    const k = key(rects);
-    if (rects.length > 0 && k === prev) return rects;
-    prev = k;
-    await sleep(400);
-    rects = await readTagRects(page);
-  }
-  return rects;
+/** 결정 0100: 화면에는 헤더 게이지만 두고 기존 사회자 줄은 화면 읽기에 제공한다. */
+function readCommonHeader(page) {
+  return page.evaluate(() => {
+    const all = (selector) => [...document.querySelectorAll(selector)];
+    const headers = all("[data-phase-header]");
+    const gauges = all("[data-phase-gauge]");
+    const guide = all("[data-host-line]");
+    const announcement = all("[data-room-announcement]");
+    const clean = (node) => (node?.textContent ?? "").replace(/\s+/g, " ").trim();
+    return {
+      headers: headers.length,
+      title: clean(headers[0]?.querySelector(".mv-phase__title")),
+      timers: gauges.map((el) => ({
+        role: el.getAttribute("role"),
+        label: el.getAttribute("aria-label"),
+        inHeader: el.closest("[data-phase-header]") !== null,
+        visual: el.getBoundingClientRect().height > 0,
+      })),
+      guideCount: guide.length,
+      guideReady: Boolean(guide[0]?.closest(".mf-sr-only")) && guide[0]?.getAttribute("role") === "status" && guide[0]?.getAttribute("aria-live") === "polite",
+      guideAccessible: !!clean(guide[0]) && !guide[0].closest('[aria-hidden="true"]'),
+      announcementCount: announcement.length,
+      announcementReady: announcement[0]?.classList.contains("mf-sr-only") && announcement[0]?.getAttribute("aria-live") === "polite" && !announcement[0].closest('[aria-hidden="true"]'),
+      announcement: clean(announcement[0]),
+      obsolete: all("[data-host-time], .mv-host__bar, .mv-host__bell, .mv-ring, .mf-timer").length,
+    };
+  });
 }
 
 /** ended 까지 넘긴다. 처형이 없는 날이 이어지면 한 번의 skipTo(24칸)로 모자랄 수 있어 몇 번 더 시도한다(마감이 먼저 지나 이미 ended 면 그대로 둔다).
@@ -143,154 +152,113 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
 
   // ---- emcee-band ----
 
-  /**
-   * emcee-band (HOST-01, TOOL-02, UI#13): 방장(경찰) + 4자 이름 사람 손님 7 = 8명판을 로비부터 결과까지 한 칸씩 넘기며 단계마다 띠를 읽는다 — 띠 하나·문장 하나·data-guide 가 띠 안·한 줄·
-   * 시간 표시·읽기 지원·옛 안내줄/링/타이머 0건·종 0개·대기실·결과는 면 숨김·처형·아침은 빈 글(hostBandChecks HB1~HB7, 18.1-12). 투표·밤에서 이름표 단추끼리·띠와 겹침 0(hostOverlapChecks).
-   * 맵 단계(토론·투표·밤·아침)는 묶음 G(14px·가로 넘침·콘솔 오류)와 H(제목·띠 문장·띠 시간 글자 대비)를 받는다. 폰 6종(extraSizes)이라 360x560 의 가장자리 잘림은 알려진 한계로 기록만 한다(판정은 그대로).
-   */
+  /** 8인 첫날의 공통 헤더, 화면 읽기 안내, 지목·밤 대상 조작을 확인한다. */
   async function emceeBandFlow(ctx) {
     const id = "emcee-band";
     const rec = recorder(ctx);
-    const host = await lobbyWith(ctx, id, { bots: 0, guests: 7, role: "police", vote: { exec: "yes", pick: "other" } });
-    try {
-      const { page: hp, tracker: ht } = host;
-      const done = new Set();
-      /** 지금 단계의 띠·(투표·밤이면) 이름표 겹침·(맵 단계면) G·H 를 한 번 읽는다 */
-      const measure = async (phase) => {
-        if (done.has(phase)) return;
-        const sc = `${id}/${phase}`;
-        const ok = await attempt(async () => {
-          if (!(await settleBand(hp, ht, phase))) throw new SetupError(`${phase} 를 읽기 전에 단계가 바뀜`);
-        });
-        if (!ok.ok) {
-          // 읽기 전에 단계가 지나간 것(2초짜리 낮 시작 등)은 실패 줄이 아니다 — 띠 감시 또는 EB0(덮음)이 판정한다. 그 밖의 실패(막이 안 걷힘 등)는 줄로 남긴다
-          if (!/단계가 바뀜/.test(ok.detail)) rec(sc, "EB1", `띠를 읽는다(${phase})`, false, ok.detail);
-          return false;
-        }
-        done.add(phase);
-        const view = ht.last();
-        const band = await readHostBand(hp);
-        const f = fold(hostBandChecks(band, { phase, timed: timedOf(view) }));
-        rec(sc, "HB", `안내와 시간 표시가 단계별 규칙을 따름(${phase}, ${band.text.length}자 문장)`, f.ok, f.detail);
-        await recordTod(hp, rec, sc, phase); // 18.1-08: 시간대 글자 D1·D4·D5(맵 단계) / D2(대기실·역할 확인)
-        // HB8(18.1-12): 대기실에서 띠 면이 숨어도 한 줄 자리는 그대로라 소리 단추 윗변이 승인 after n1 과 같은 자리(390x844 에서 118 ± 1). 다른 폰 크기는 값만 기록한다
-        if (phase === "lobby") {
-          const top = band.soundTop;
-          const exact = ctx.size.w === 390 && ctx.size.h === 844;
-          const fine = typeof top === "number" && Math.abs(top - 118) <= 1;
-          rec(sc, "HB8", `소리 단추 윗변이 승인 자리(390x844 에서 118 ± 1)${exact ? "" : " — 이 크기는 값만 기록"}`, exact ? fine : typeof top === "number", typeof top === "number" ? `윗변 ${Math.round(top * 10) / 10}px(${ctx.size.label})` : "소리 단추 측정값 없음", true);
-        }
-        // HB9(18.1-12, 참고 줄): 띠 면 아랫변·소리 독 아랫변 — 18.1-13 이 큰 글 자리를 잡는 데 쓴다(판정 아님, 값만 남긴다)
-        if (phase === "discussion" || phase === "execution") {
-          const r1 = (v) => (typeof v === "number" ? Math.round(v * 10) / 10 : "없음");
-          rec(sc, "HB9", `띠 면 아랫변·소리 독 아랫변 기록(${phase}, 참고)`, true, `띠 면 아랫변 ${r1(band.bandRect?.bottom)}px · 독 아랫변 ${r1(band.dockBottom)}px · 면 높이 ${r1(band.bandRect?.height)}px(${ctx.size.label})`, true);
-        }
-        // 묶음 G·H 를 이름표 모이기 기다림보다 먼저 한다 — 투표 15초 중 기다리는 동안 시간 숫자가 마지막 5초 색(진홍)으로 바뀌어 대비 측정이 흔들리지 않게
-        if (GH_PHASES.includes(phase)) await gameGH(ctx, id, phase, host);
-        if (TAG_PHASES.includes(phase)) {
-          const rects = await readTagsStable(hp);
-          const short = ctx.size.h < SHORT_PHONE_H;
-          const o = hostOverlapChecks({ band: band.bandRect, tags: rects }, { knownBandLimit: short });
-          rec(sc, o.id, `${o.label} (${phase}, 이름표 ${rects.length}개)`, o.ok, o.detail);
-          // UI#14 알려진 한계: 가장 낮은 폰(방 높이 575 미만)의 띠·이름표 겹침은 판정에서 빼고 잰 값 그대로 남긴다(고치지 않는다 — 띠는 눌림을 받지 않아 이름표는 계속 눌린다)
-          if (o.known !== "") rec(`${id}/${phase}`, "HO1k", `알려진 한계(UI#14): 낮은 폰(${ctx.size.label})의 이름표가 띠 아랫변과 겹침(판정 아님)`, true, o.known, true);
-        }
-      };
+    const host = await lobbyWith(ctx, id, { bots: 6, guests: 1, role: "police", vote: { exec: "yes", pick: "other" } });
+    const { page: hp, tracker: ht } = host;
+    const guest = host.guestPages[0];
+    const announcements = new Map();
+    const presentationOrders = new Set();
+    let nominated = false;
+    let nightSelected = false;
+    let yesCast = false;
 
-      await measure("lobby");
-      await armBandWatch(hp);
-      // 배정(3초 창)은 잡히면 읽는다 — 못 잡아도 실패가 아니다(필수 단계에 넣지 않았다)
-      let assigningBand = null;
-      let assigningTod = null;
-      await startGame(hp, ht, {
-        onAssigning: async () => {
-          assigningBand = await readHostBand(hp);
-          assigningTod = await hp.locator("[data-tod]").count().catch(() => null); // 18.1-08 D2: 배정 3초 창에는 시간대 글자가 없다(수만 센다)
-        },
-      });
-      if (assigningBand !== null) {
-        const f = fold(hostBandChecks(assigningBand, { phase: "assigning", timed: false }));
-        rec(`${id}/assigning`, "HB", "띠 한 구절·한 줄·종 없음·시간 없음(assigning)", f.ok, f.detail);
-        done.add("assigning");
-        const t = todAbsentChecks(assigningTod, { screen: "assigning" });
-        rec(`${id}/assigning`, t.id, t.label, t.ok, t.detail);
-      }
-      let voted = false;
-      let yesCast = false;
+    const measure = async (view) => {
+      const phase = view.phase;
+      const sc = `${id}/${phase}`;
+      if (!(await settleBand(hp, ht, phase))) return;
+      await waitForPhaseStart(hp, view);
+      if (ht.last()?.phase !== phase) return;
+      const header = await readCommonHeader(hp);
+      const expectHeader = !TIMELESS_PHASES.includes(phase);
+      const presenting = view.day?.keyword?.presentation !== undefined;
+      const expectTimers = phase === "nomination"
+        ? view.day?.turn?.endsAt ? [1] : [0, 1]
+        : [presenting || (phase !== "dayAnnounce" && timedOf(view)) ? 1 : 0];
+      const correctTimer = expectTimers.includes(header.timers.length) &&
+        header.timers.every((gauge) => gauge.role === "timer" && gauge.inHeader && gauge.visual && /^남은 시간 \d+초$/.test(gauge.label));
+      const correctAnnouncement = header.announcementCount === 1 && header.announcementReady &&
+        (phase === "lobby" ? header.announcement === "" : header.announcement !== "") &&
+        (phase !== "dayAnnounce" || !presenting || header.announcement === "답안 공개") &&
+        (phase !== "answerReveal" || header.announcement === "제시어 공개");
+      const correctGuide = header.guideCount === 1 && header.guideReady && (!GUIDED_PHASES.includes(phase) || header.guideAccessible);
+      rec(sc, "HB", `헤더와 화면 읽기 안내가 현재 단계에 맞는다 (${phase})`,
+        header.headers === Number(expectHeader) && (!expectHeader || header.title !== "") &&
+        correctTimer && correctAnnouncement && correctGuide && header.obsolete === 0,
+        `헤더 ${header.headers} · 게이지 ${header.timers.length}/${expectTimers.join(" 또는 ")} · 타이머 ${correctTimer} · 단계 안내 ${correctAnnouncement} · 사회자 줄 ${correctGuide} · 구형 요소 ${header.obsolete}`);
+      announcements.set(phase, header.announcement);
+      // 답안 발표 머리는 토론처럼 낮 낱말을 반복하지 않는다.
+      await recordTod(hp, rec, sc, presenting ? "discussion" : phase);
+      if (GH_PHASES.includes(phase)) await gameGH(ctx, id, phase, host);
+    };
+
+    try {
+      await ht.waitFor((v) => v.players.length === 8, 8000, "방장 포함 8인");
+      await measure(ht.last());
+      await startGame(hp, ht);
       for (let steps = 0; ht.last().phase !== "ended" && steps < MAX_STEPS; steps++) {
-        // 지금 단계를 먼저 읽고(낮 시작은 2초라 띠 감시가 맡는다) 한 칸 넘긴다 — 읽기가 길어져 단계가 지나가도 그 지금 단계를 건너뛰지 않는다
-        const cur = ht.last().phase;
-        if (cur === "dayAnnounce") {
-          // 낮 시작(2초)은 넘기지 않고 저절로 토론이 되기를 기다린다 — 넘기기를 누르면 토론까지 건너뛴다. 띠는 띠 감시가 잡는다
-          await ht.waitFor((v) => v.phase !== "dayAnnounce", 8000, "낮 시작 → 토론");
+        const view = ht.last();
+        const phase = view.phase;
+        const order = view.day?.keyword?.presentation?.order;
+        if (phase === "dayAnnounce" && order === undefined) {
+          await ht.waitFor((v) => v.phase !== "dayAnnounce", 8000, "시간대 전환");
           continue;
         }
-        if (!done.has(cur)) await measure(cur);
-        if (done.has("morning")) break;
-        if (ht.last().phase !== cur) continue;
-        if (cur === "verdict" && !yesCast) {
-          // 22페이즈 D-10: 찬반이 지목보다 앞이다 — 사람 손님들이 [찬성]을 눌러(0표면 곧장 밤이라 낮의 나머지 단계가 열리지 않는다) 지목으로 넘어가게 한다
+        if (!announcements.has(phase)) await measure(view);
+        if (ht.last().phase !== phase) continue;
+        if (phase === "dayAnnounce") {
+          const current = ht.last().day?.keyword?.presentation?.order;
+          const answer = hp.locator(`[data-answer-presentation][data-answer-order="${current}"]`);
+          await answer.waitFor({ state: "visible", timeout: 3500 });
+          presentationOrders.add(current);
+        }
+
+        if (phase === "verdict" && !yesCast) {
+          await chooseVerdict(hp, true);
+          await chooseVerdict(guest.page, true);
           yesCast = true;
-          const r = await attempt(async () => {
-            for (const g of host.guestPages) await chooseVerdict(g.page, true);
-          });
-          rec(`${id}/verdict`, "EB1", "손님들이 [찬성]을 눌러 지목 단계가 열린다", r.ok, r.detail);
+          rec(`${id}/verdict`, "EB1", "방장과 손님이 찬성 투표를 누른다", true);
         }
-        if (cur === "nomination" && !voted) {
-          // 순차 지목(D-12): 사람 손님은 스스로 표를 던지지 않는다 — 첫째 손님 이외의 일곱이 자기 차례에 첫째 손님을 눌러 유언·처형 단계가 열리게 한다(방장은 누르지 않아 자기 차례에 기권한다)
-          const target = host.guestPages[0].seat;
-          const r = await attempt(async () => {
-            await Promise.all(
-              host.guestPages.slice(1).map(async (g) => {
-                await g.tracker.waitFor((v) => v.phase === "nomination" && v.day?.turn !== undefined && v.day.turn.order[v.day.turn.i] === g.seat && v.day.turn.doneAt === undefined, 120_000, "내 차례");
-                await tapTurnPick(g.page, target);
-              }),
-            );
-          });
-          voted = true;
-          rec(`${id}/nomination`, "EB2", "손님이 자기 차례에 첫째 손님을 지목해 유언 단계가 열린다", r.ok, r.detail);
+        if (phase === "nomination" && !nominated) {
+          // 테스트 건너뛰기는 지목을 끝까지 집계한다. 실제 사람의 차례가 올 때까지 기다린다.
+          await ht.waitFor((v) => {
+            const turn = v.day?.turn;
+            return v.phase === "nomination" && turn?.order[turn.i] === v.me.seat && turn.doneAt === undefined;
+          }, 35_000, "방장 지목 차례");
+          await hp.locator('[data-phase-header] [data-phase-gauge][role="timer"]').waitFor({ timeout: 3000 });
+          await tapTurnPick(hp, guest.seat);
+          await ht.waitFor((v) => v.day?.points?.some((point) => point.seat === view.me.seat && point.target === guest.seat),
+            4000, "방장 지목 서버 반영");
+          nominated = true;
+          rec(`${id}/nomination`, "EB2", "방장이 지목 차례에서 참가자 카드를 누른다", true);
         }
-        await skipOnce(hp, ht).catch((e) => {
-          if (ht.last().phase === "ended") return;
-          throw e;
-        });
+        if (phase === "night" && !nightSelected) {
+          const target = ht.last().players.find((p) => p.alive !== false && p.seat !== view.me.seat)?.seat;
+          if (target === undefined) throw new SetupError("밤의 조사 대상을 찾지 못함");
+          await openTableDockPane(hp, "people");
+          const face = await showPeopleTarget(hp, `[data-face="${target}"]`);
+          await face.click({ timeout: 4000 });
+          await ht.waitFor((v) => v.me.pick === target, 4000, "밤 조사 대상 서버 반영");
+          nightSelected = true;
+          rec(`${id}/night`, "EB3", "경찰이 참가자 카드에서 대상을 고르면 서버에 반영된다", true);
+        }
+        if (phase === "morning") break;
+        if (ht.last().phase === phase) await skipOnce(hp, ht);
       }
-      // 한 칸 넘기고 읽기에는 짧은 단계(낮 시작 2초 등)는 띠 감시가 잡은 값으로 판정한다 — 같은 hostBandChecks, 시간 단계 여부는 서버 길이표(낮 시작 2초 < 3초)
-      const watched = (await readBandWatch(hp)) ?? [];
-      const timedMs = { dayAnnounce: 2000, defense: 10000, verdict: 10000, execution: 6600 };
-      for (const phase of Object.keys(timedMs)) {
-        if (done.has(phase)) continue;
-        const hit = watched.find((s) => s.phase === phase);
-        if (!hit) continue;
-        done.add(phase);
-        const f = fold(hostBandChecks(hit, { phase, timed: timedMs[phase] >= HOST_TIME_MIN_MS }));
-        rec(`${id}/${phase}`, "HB", `안내와 시간 표시가 단계별 규칙을 따름(${phase}, 띠 감시, ${hit.text.length}자 문장)`, f.ok, f.detail);
-      }
-      const missingMap = BAND_REQUIRED.filter((p) => p !== "ended" && !done.has(p));
-      rec(`${id}/coverage`, "EB0", "띠를 읽은 단계가 대기실·역할 확인·낮 시작·토론·찬반·지목·유언·처형·밤·아침을 모두 덮는다", missingMap.length === 0, `못 읽은 단계: ${missingMap.join(", ")}`);
+      await driveToEnd(hp, ht);
+      await measure(ht.last());
+      const missing = BAND_REQUIRED.filter((phase) => !announcements.has(phase));
+      const announced = BAND_REQUIRED.filter((phase) => phase !== "lobby").map((phase) => announcements.get(phase)).filter(Boolean);
+      rec(`${id}/coverage`, "EB0", "로비부터 결과까지 첫날 단계 모두에서 서로 다른 화면 읽기 안내를 확인한다",
+        missing.length === 0 && announced.length === BAND_REQUIRED.length - 1 && new Set(announced).size === announced.length,
+        `미확인 단계 ${missing.join(", ") || "없음"} · 고유 안내 ${new Set(announced).size}/${BAND_REQUIRED.length - 1}`);
+      rec(`${id}/coverage`, "EB0b", "답안 발표 카드가 8인 차례를 모두 표시한다", presentationOrders.size === 8, `발표 차례 ${presentationOrders.size}/8`);
+      rec(`${id}/coverage`, "EB0c", "찬반·지목·밤 조사 조작을 모두 확인했다", yesCast && nominated && nightSelected,
+        `찬반 ${yesCast} · 지목 ${nominated} · 밤 조사 ${nightSelected}`);
     } finally {
       await closeGame(asGame(host));
-    }
-    // 결과(ended)는 사람 손님 판에서 닿기 어렵다(사람이 투표하지 않으면 처형이 없어 여러 날이 걸린다) — 봇 판(방장 + 봇 5, 같은 폰 크기)으로 따로 닿아 같은 띠 판정을 한다
-    const endHost = await lobbyWith(ctx, id, { bots: 5, role: "police", vote: { exec: "yes", pick: "other" } });
-    try {
-      const { page: hp, tracker: ht } = endHost;
-      await startGame(hp, ht);
-      await driveToEnd(hp, ht);
-      const sc = `${id}/ended`;
-      const ok = await attempt(async () => {
-        if (!(await settleBand(hp, ht, "ended"))) throw new SetupError("ended 를 읽기 전에 단계가 바뀜");
-      });
-      rec(sc, "EB1", "띠를 읽는다(ended)", ok.ok, ok.detail);
-      if (ok.ok) {
-        const band = await readHostBand(hp);
-        const f = fold(hostBandChecks(band, { phase: "ended", timed: timedOf(ht.last()), answer: ht.last()?.day?.keyword?.answer !== undefined }));
-        rec(sc, "HB", `안내와 시간 표시가 단계별 규칙을 따름(ended, ${band.text.length}자 문장)`, f.ok, f.detail);
-        await recordTod(hp, rec, sc, "ended");
-      }
-      rec(`${id}/coverage`, "EB0b", "결과(ended) 단계의 띠를 읽었다", ok.ok, ok.detail);
-    } finally {
-      await closeGame(asGame(endHost));
     }
   }
 
@@ -438,6 +406,7 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
         if (phase === "defense" || phase === "execution") {
           // 22페이즈 P22-11: 유언·처형 단계 view 의 day 키 이름과 유언 시트 DOM 수(처형자에게만 있어야 한다)
           const v = ht.last();
+          await waitForPhaseStart(hp, v);
           const sheets = await hp.locator("[data-will-sheet]").count().catch(() => -1);
           willReads.push({ role: ghostGame ? "ghost" : role, phase, keys: Object.keys(v.day ?? {}).sort(), sheets, condemned: v.day?.candidate !== undefined && v.day.candidate === v.me.seat });
         }
@@ -512,7 +481,8 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
   const clearLog = (page) => page.evaluate(() => window.__mfSound?.clear());
 
   /**
-   * emcee-sound (HOST-02): 처음 입장 0번 → 단계 전환마다 ui.host 한 번(낮 시작 → 토론은 0번) → 새로고침 첫 프레임 0번 → 소리를 끄면 재생 0번(hostChimeChecks).
+   * emcee-sound (HOST-02): 처음 입장 0번, 단계 전환마다 ui.host 한 번, 발표자 변경과 둘째 날 낮 시작 → 토론은 0번.
+   * 새로고침 첫 프레임과 소리를 끈 뒤 재생도 0번인지 확인한다.
    * 소리 출력은 보지 않는다 — 훅 요청 로그만 읽는다. 구간은 로그 비우기로 나눈다.
    */
   async function emceeSoundFlow(ctx) {
@@ -538,37 +508,52 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
       await startGame(hp, ht);
       await settleBand(hp, ht, "roleReveal").catch(() => {});
 
-      /** 단계를 한 칸 넘기고 그 구간의 ui.host 를 센다 */
-      const stepSeg = async (kind, name) => {
+      /** 단계를 한 칸 넘기고 그 구간의 ui.host 를 센다. 같은 발표 단계의 차례 전환도 읽는다. */
+      const stepSeg = async (kind) => {
+        const before = ht.last().phase;
         await clearLog(hp);
         const phase = await skipOnce(hp, ht);
-        await sleep(CHIME_SETTLE_MS);
+        if (kind === "muted" || phase === before) await sleep(CHIME_SETTLE_MS);
+        else {
+          await attempt(() => hp.waitForFunction(() => window.__mfSound?.log.some((e) => e.id === "ui.host"), null, { timeout: 3800 }));
+        }
         const log = await hostLog(hp);
-        segs.push({ kind, name, count: log?.length ?? -1, played: log?.filter((e) => e.played).length ?? -1 });
+        segs.push({
+          kind: phase === before && before === "dayAnnounce" ? "presentationTurn" : kind,
+          name: `${before} → ${phase}`,
+          count: log?.length ?? -1,
+          played: log?.filter((e) => e.played).length ?? -1,
+        });
         return phase;
       };
-      // roleReveal → dayAnnounce(전환 1), dayAnnounce → discussion(0), discussion → nomination(1), nomination → …
-      const toDay = await stepSeg("transition", "역할 확인 → 낮 시작");
-      if (toDay === "dayAnnounce") {
-        // 낮 시작은 2초 단계라 넘기기를 누르면 토론까지 건너뛰거나(14-09: 배포본은 지연이 커서 이미 토론으로 넘어간 뒤 넘기기가 토론 → 투표를 건드려 1번이 잡혔다)
-        // 자동으로 넘어가는 것을 기다려 그 구간의 ui.host 를 센다. 0번이어야 한다는 문턱은 그대로다.
-        await clearLog(hp);
-        await ht.waitFor((v) => v.phase === "discussion", 8000, "낮 시작 → 다음 단계 자동 전환").catch(() => {});
-        await sleep(CHIME_SETTLE_MS);
-        const log = await hostLog(hp);
-        // 낮 시작 다음은 토론이다 — 그 구간의 ui.host 는 0번이어야 한다(HS3)
-        segs.push({ kind: "dayToDiscussion", name: "낮 시작 → 토론", count: log?.length ?? -1, played: log?.filter((e) => e.played).length ?? -1 });
+      for (let i = 0; i < 24 && !["morning", "ended"].includes(ht.last().phase); i++) {
+        await stepSeg("transition");
       }
-      for (let i = 0; i < 6 && ht.last().phase !== "ended"; i++) {
-        const from = ht.last().phase;
-        const to = await stepSeg("transition", `${from} → 다음 단계`);
-        if (to === "morning") break;
-      }
+      const firstDay = segs.filter((s) => s.kind === "transition").map((s) => s.name);
+      const expected = ["roleReveal → keyword", "keyword → dayAnnounce", "dayAnnounce → answerReveal", "answerReveal → discussion", "night → morning"];
+      rec(`${id}/coverage`, "ES2", "첫날 단서·답안·제시어 공개와 밤·아침 전환을 확인했다",
+        expected.every((name) => firstDay.includes(name)));
+      const turns = segs.filter((s) => s.kind === "presentationTurn");
+      rec(`${id}/chime`, "ES3", "발표자만 바뀔 때 사회자 알림음은 울리지 않는다",
+        turns.length > 0 && turns.every((s) => s.count === 0), `발표 차례 전환 ${turns.length}회 · 알림음 ${turns.map((s) => s.count).join(",")}`);
+
+      const toDay = await stepSeg("transition");
+      if (toDay !== "dayAnnounce" || ht.last().day?.keyword?.presentation !== undefined) throw new SetupError("둘째 날 낮 시작 미도달");
+      const dayStart = segs.at(-1);
+      await ht.waitFor((v) => v.phase === "discussion", 8000, "둘째 날 낮 시작 → 토론");
+      await sleep(CHIME_SETTLE_MS);
+      const dayToDiscussion = await hostLog(hp);
+      segs.push({
+        kind: "dayToDiscussion",
+        name: "둘째 날 낮 시작 → 토론",
+        count: dayToDiscussion === null ? -1 : dayToDiscussion.length - dayStart.count,
+        played: dayToDiscussion === null ? -1 : dayToDiscussion.filter((e) => e.played).length - dayStart.played,
+      });
 
       // 새로고침 첫 프레임(같은 단계에 다시 들어와도 울리지 않는다)
-      const reloadPhase = ht.last().phase;
+      const reloadSeq = ht.seq;
       await hp.reload({ waitUntil: "domcontentloaded" });
-      await ht.waitFor((v) => v.phase === reloadPhase || v.phase !== undefined, 15000, "새로고침 뒤 연결").catch(() => {});
+      await ht.waitFor(() => ht.seq > reloadSeq, 15000, "새로고침 뒤 새 상태 연결");
       await hp.waitForFunction(() => !!window.__mfSound, null, { timeout: 8000 }).catch(() => {});
       await settleBand(hp, ht, ht.last().phase).catch(() => {});
       await sleep(CHIME_SETTLE_MS);
@@ -594,7 +579,7 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
           }
         });
         rec(`${id}/muted`, "ES1", "소리 단추로 소리를 끈다", off.ok, off.detail);
-        if (off.ok) await stepSeg("muted", "소리 끔 → 단계 전환");
+        if (off.ok) await stepSeg("muted");
       }
       for (const l of hostChimeChecks(segs)) rec(`${id}/chime`, l.id, `${l.label} (구간 ${segs.length}개)`, l.ok, l.detail);
     } finally {

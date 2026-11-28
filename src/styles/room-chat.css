@@ -129,6 +129,17 @@
 .mf-room-chat__reactions .mv-emote-tray { position: static; grid-auto-rows: var(--tap-min); gap: 4px; padding: 0; border: 0; background: transparent; box-shadow: none; }
 .mf-room-chat__reactions[data-quick-reactions] .mv-emote-tray { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 
+/* 짧은 대기실에서는 감정 표현판을 도구 아래에 두어 얼굴과 이름표를 가리지 않는다. */
+@media (max-width: 430px) and (max-height: 600px) {
+  .mf-lobby .mf-room-chat:not(.is-compact) .mf-room-chat__reactions {
+    position: relative;
+    inset: auto;
+    margin: 4px 12px;
+    max-height: none;
+  }
+  .mf-lobby .mf-room-chat:not(.is-compact):has(.mf-room-chat__reactions) .mv-chat__log { max-height: 60px; }
+}
+
 .mf-game .mf-game__panel--chat,
 .mf-lobby .mf-lobby__panel,
 .mf-result .mf-result__panel:has(.mf-room-chat) {

@@ -2000,11 +2000,11 @@ export function executionTimelineChecks(log, { candidate, expectZoom }) {
   return lines;
 }
 
-// ---- 10페이즈 동작 버튼·5+4 판 (10-05, 결정 D-1·D-2·D-18, UI-SPEC A-1·A-2) ----
+// ---- 공용 도구줄의 동작 버튼과 5+4 판 (결정 0100) ----
 
 /** 10페이즈가 새로 더한 DOM 표식·훅 이름 4개. test/unit/e2eContract.test.ts 가 각각이 git 추적 src/ 파일에 실제로 있는지 확인한다(이름 오타 방지). 10-07 이 의상 표식 3개를 더했다. 이후 계획(단계)이 같은 목록에 더한다. */
 export const AVATAR_MARKERS = Object.freeze([
-  "data-emote-button", // 입력줄 맨 앞 동작 버튼(ChatPanel)
+  "data-emote-button", // 공용 도구줄의 동작 버튼
   "data-emote-tray", // 5+4 아이콘 판(EmoteTray)
   "data-emote", // 칸 data-emote="{id}"
   "__mfEmotes", // 테스트 훅 window.__mfEmotes = { last, playing }
@@ -2016,34 +2016,34 @@ export const AVATAR_MARKERS = Object.freeze([
 
 /**
  * 동작 버튼·판 기하(EB1·EP2·TR1~TR5·EP3·EP4). 사각형은 { left, top, width, height }.
- * button = 동작 버튼, input = 입력칸, tray = 판, cells = 칸 아홉 개, nameFont = 칸 이름 글자 크기 최솟값(px), viewport = { w, h },
- * character = 내 캐릭터의 화면 좌표 { x, y }, hasKb = 가상 키보드가 열려 있나.
- * EB1 버튼 48x48 ±1 · EP2 입력칸 폭 ≥ 150 · TR1 판 좌우 16 ±1·폭 = viewport − 32 ±1 · TR2 칸 아홉 개(윗줄 5·아랫줄 4)이고 두 줄 모두 판 가운데 정렬(좌우 여백 차 ≤ 2) ·
- * EP3 칸 폭·높이 ≥ 44 · TR3 판 아랫변 = 입력칸 윗변 − 8 ±2 · EP4 캐릭터 점이 판 사각형 밖 · TR4 이름 글자 ≥ 14 · TR5 판이 열려 있을 때 키보드는 닫혀 있음.
+ * button = 동작 버튼, input = 입력칸, toolbar = 공용 도구줄, dock = 공용 조작부, surface = 보이는 판의 바깥 면, tray = 5+4 안쪽 격자,
+ * cells = 아홉 칸의 사각형과 가운데 점 hit, nameFont = 칸 이름 글자 크기 최솟값(px),
+ * nameTag = 내 이름표, face = 눈높이 대리점 { x, y }, hasKb = 가상 키보드가 열려 있나.
  */
-export function emoteTrayChecks({ button, input, tray, cells, nameFont, viewport, character, hasKb } = {}) {
+export function emoteTrayChecks({ button, input, toolbar, dock, surface, tray, cells, nameFont, nameTag, face, hasKb, shortLobby = false, log } = {}) {
   const L = {
-    EB1: `동작 버튼 ${TAP_MIN + 4}x${TAP_MIN + 4}`,
+    EB1: `동작 버튼 ${TAP_MIN}×${TAP_MIN}`,
     EP2: "입력칸 폭 150 이상",
-    TR1: "판 좌우 16 · 폭 = 폰 폭 − 32",
+    TR1: "판의 바깥 면은 공용 조작부 좌우 12px 안쪽",
     TR2: "칸 아홉 개: 윗줄 5 · 아랫줄 4, 두 줄 모두 판 가운데",
-    EP3: `칸 누르기 영역 ${TAP_MIN} 이상`,
-    TR3: "판 아랫변 = 입력줄 윗변 − 8",
-    EP4: "판이 내 캐릭터를 가리지 않음",
+    EP3: `칸 누르기 영역 ${TAP_MIN} 이상이고 가운데를 누를 수 있음`,
+    TR3: shortLobby ? "도구줄 아래 판·60px 스크롤 기록·입력칸이 차례로 보임" : "판은 공용 도구줄 위 4px에 놓임",
+    EP4: "판이 내 이름표와 캐릭터의 눈높이를 가리지 않음",
     TR4: "칸 이름 글자 14px 이상",
     TR5: "판이 열려 있을 때 키보드는 닫혀 있음",
   };
   const rectOk = (r) => !!r && allNum(r.left, r.top, r.width, r.height);
-  const valid = rectOk(button) && rectOk(input) && rectOk(tray) && Array.isArray(cells) && cells.every(rectOk) && !!viewport && allNum(viewport.w, viewport.h) && !!character && allNum(character.x, character.y) && isNum(nameFont) && typeof hasKb === "boolean";
-  if (!valid) return Object.entries(L).map(([id, label]) => noMeasure(id, label, "button·input·tray·cells·nameFont·viewport·character·hasKb"));
+  const valid = [button, input, toolbar, dock, surface, tray].every(rectOk)
+    && Array.isArray(cells) && cells.every((cell) => rectOk(cell) && typeof cell.hit === "boolean")
+    && rectOk(nameTag) && !!face && allNum(face.x, face.y) && isNum(nameFont) && typeof hasKb === "boolean";
+  if (!valid) return Object.entries(L).map(([id, label]) => noMeasure(id, label, "button·input·toolbar·dock·surface·tray·cells·nameFont·nameTag·face·hasKb"));
   const out = [];
-  const eb1Bad = Math.abs(button.width - 48) > 1 || Math.abs(button.height - 48) > 1;
+  const eb1Bad = button.width + OVERLAP_EPS < TAP_MIN || button.height + OVERLAP_EPS < TAP_MIN || button.width > TAP_MIN + 1 || button.height > TAP_MIN + 1;
   out.push(result("EB1", L.EB1, eb1Bad ? [`${fmt(button.width)}x${fmt(button.height)}`] : []));
   out.push(result("EP2", L.EP2, input.width >= 150 ? [] : [`입력칸 폭 ${fmt(input.width)}`]));
   const t1 = [];
-  if (Math.abs(tray.left - 16) > 1) t1.push(`왼쪽 ${fmt(tray.left)}`);
-  if (Math.abs(viewport.w - right(tray) - 16) > 1) t1.push(`오른쪽 여백 ${fmt(viewport.w - right(tray))}`);
-  if (Math.abs(tray.width - (viewport.w - 32)) > 1) t1.push(`폭 ${fmt(tray.width)} (기대 ${viewport.w - 32})`);
+  if (Math.abs(surface.left - dock.left - 12) > 1) t1.push(`왼쪽 여백 ${fmt(surface.left - dock.left)}`);
+  if (Math.abs(right(dock) - right(surface) - 12) > 1) t1.push(`오른쪽 여백 ${fmt(right(dock) - right(surface))}`);
   out.push(result("TR1", L.TR1, t1));
   const t2 = [];
   if (cells.length !== 9) t2.push(`칸 ${cells.length}개`);
@@ -2067,11 +2067,23 @@ export function emoteTrayChecks({ button, input, tray, cells, nameFont, viewport
     }
   }
   out.push(result("TR2", L.TR2, t2));
-  out.push(result("EP3", L.EP3, cells.filter((c) => c.width + OVERLAP_EPS < TAP_MIN || c.height + OVERLAP_EPS < TAP_MIN).map((c) => `${fmt(c.width)}x${fmt(c.height)}`)));
-  const gap = input.top - bottom(tray);
-  out.push(result("TR3", L.TR3, Math.abs(gap - 8) > 2 ? [`입력줄 윗변과 간격 ${fmt(gap)} (기대 8)`] : []));
-  const covered = character.x >= tray.left && character.x <= right(tray) && character.y >= tray.top && character.y <= bottom(tray);
-  out.push(result("EP4", L.EP4, covered ? [`캐릭터 ${fmt(character.x)},${fmt(character.y)} 가 판 안`] : []));
+  out.push(result("EP3", L.EP3, cells.flatMap((c, i) => {
+    const errors = [];
+    if (c.width + OVERLAP_EPS < TAP_MIN || c.height + OVERLAP_EPS < TAP_MIN) errors.push(`${i + 1}번 ${fmt(c.width)}×${fmt(c.height)}`);
+    if (!c.hit) errors.push(`${i + 1}번 가운데가 가려짐`);
+    return errors;
+  })));
+  const gap = shortLobby ? surface.top - bottom(toolbar) : toolbar.top - bottom(surface);
+  const t3 = Math.abs(gap - 4) > 2 ? [`도구줄과 간격 ${fmt(gap)} (기대 4)`] : [];
+  if (shortLobby && (!rectOk(log) || !log.scrollable || Math.abs(log.height - 60) > 1 || bottom(surface) > log.top || bottom(log) > input.top)) {
+    t3.push("판·60px 스크롤 기록·입력칸 배치를 확인하지 못함");
+  }
+  out.push(result("TR3", L.TR3, t3));
+  const covered = face.x >= surface.left && face.x <= right(surface) && face.y >= surface.top && face.y <= bottom(surface);
+  const ep4 = [];
+  if (rectsOverlap(nameTag, surface)) ep4.push("이름표와 판이 겹침");
+  if (covered) ep4.push(`눈높이 ${fmt(face.x)},${fmt(face.y)} 가 판 안`);
+  out.push(result("EP4", L.EP4, ep4));
   out.push(result("TR4", L.TR4, nameFont >= 14 ? [] : [`${nameFont}px`]));
   out.push(result("TR5", L.TR5, hasKb ? ["키보드가 열려 있음"] : []));
   return out;
@@ -2273,59 +2285,50 @@ export function soundRenderChecks(results, limits = SOUND_RENDER_LIMITS) {
   return out;
 }
 
-// ---- 12페이즈 소리 단추 sound-unlock (12-07, 결정 D-4·D-21, UI-SPEC B-1·B-2) ----
+// ---- 게임 메뉴의 소리 단추 sound-unlock (결정 0100) ----
 
-/** 소리 단추 기하(16-06 V-2·V-4): 상자가 곧 면이라 누르기 = 시각 지름 52 ±1, 자막 띠 아랫변에서 12 아래 ±2, 오른쪽 여백 16 ±2, 알약 높이 52 · 폭 112 이상 */
-export const SOUND_BUTTON_GEOMETRY = Object.freeze({ tap: 52, disc: 52, discTol: 1, gap: 12, margin: 16, posTol: 2 });
+/** 공용 44px 타일. 메뉴 머리에서 닫기 버튼 하나와 그 옆 8px를 비운다. */
+export const SOUND_BUTTON_GEOMETRY = Object.freeze({ tap: TAP_MIN, disc: TAP_MIN, discTol: 1, closeGap: TAP_MIN + 8, posTol: 2 });
 const SOUND_NAMES = Object.freeze({ on: "소리 끄기", off: "소리 켜기", locked: "소리 켜기" });
 
 /**
- * 방 화면 소리 단추 위치·겹침·접근성 (sound-unlock). 사각형은 { left, top, width, height }.
- * viewport = { w, h } · button = { count, rect(누르기 영역), disc(보이는 타일) } · header = { bottom(헤더 아래 끝), buttons[{kind, rect}] } ·
- * test = [테스트] 사각형|null · toast = TopToast 글자 사각형|null · bannerHit = { present, covers(띠가 단추 중심을 덮음), hitIsButton(그 점의 최상단이 단추) } · labels = { state, name, pressed }.
- * SU1 정확히 하나 · SU2 누르기 ≥ 52×52 · SU3 위 = 헤더 아래 끝 + 12 (±2) · 오른쪽 여백 16 (±2) · SU4 헤더 단추·[테스트]·TopToast 와 겹침 0 ·
- * SU5 재접속 띠가 단추 중심을 덮을 때 최상단이 단추 자신(띠가 없거나 덮지 않으면 확인한 것이 없어 실패 — 공허한 통과 금지) ·
- * SU6 타일 폭·높이 52 (±1) · SU7 접근성 이름이 상태에 맞음(on '소리 끄기' · off/locked '소리 켜기', aria-pressed).
+ * 게임 메뉴 소리 단추 위치·겹침·접근성. 사각형은 { left, top, width, height }.
+ * button = { count, rect(누르기 영역), disc(보이는 타일) }, menu = { header, title, close },
+ * bannerHit = { present, covers, hitIsButton }(재접속 띠와 단추 가운데의 실제 적중), labels = { state, name, pressed }.
  */
-export function soundButtonChecks({ viewport, button, header, test, toast, bannerHit, labels } = {}) {
+export function soundButtonChecks({ viewport, button, menu, bannerHit, labels } = {}) {
   const G = SOUND_BUTTON_GEOMETRY;
   const L = {
-    SU1: "방 화면에 소리 단추가 정확히 하나",
+    SU1: "게임 메뉴에서 소리 단추가 정확히 하나",
     SU2: `누르기 영역 ${G.tap}x${G.tap} 이상`,
-    SU3: `위 = 헤더(자막 띠가 있으면 띠) 아래 끝 + ${G.gap} · 오른쪽 여백 ${G.margin} (±${G.posTol})`,
-    SU4: "헤더 단추·[테스트]·토스트 글자와 겹침 0",
+    SU3: "화면 안에서 게임 메뉴 간격과 세로 가운데 정렬을 지킴",
+    SU4: "메뉴 제목·닫기 단추와 겹침 0",
     SU5: "재접속 띠가 떠 있어도 단추 중심의 최상단이 단추 자신",
     SU6: `타일 폭·높이 ${G.disc}±${G.discTol}`,
     SU7: "접근성 이름·aria-pressed 가 상태에 맞음",
   };
   const okRect = (r) => !!r && allNum(r.left, r.top, r.width, r.height);
   const okButton = !!button && isNum(button.count) && okRect(button.rect) && okRect(button.disc);
-  const okHeader = !!header && isNum(header.bottom) && Array.isArray(header.buttons) && header.buttons.every((b) => !!b && okRect(b.rect));
-  const okOpt = (r) => r === null || r === undefined || okRect(r);
-  const need = (cond, id, what) => (cond ? null : noMeasure(id, L[id], what));
-  const missing = [
-    need(okButton && !!viewport && allNum(viewport.w, viewport.h), "SU1", "viewport { w, h } · button { count, rect, disc }"),
-  ];
-  if (missing[0] || !okHeader || !okOpt(test) || !okOpt(toast) || !bannerHit || typeof bannerHit.present !== "boolean" || !labels) {
-    return Object.entries(L).map(([id, label]) => noMeasure(id, label, "viewport · button · header { bottom, buttons } · test · toast · bannerHit { present, covers, hitIsButton } · labels { state, name, pressed }"));
+  const okMenu = !!menu && [menu.header, menu.title, menu.close].every(okRect);
+  if (!okButton || !viewport || !allNum(viewport.w, viewport.h) || !okMenu || !bannerHit || typeof bannerHit.present !== "boolean" || !labels) {
+    return Object.entries(L).map(([id, label]) => noMeasure(id, label, "viewport · button · menu { header, title, close } · bannerHit · labels"));
   }
   const r = button.rect;
   const out = [];
   out.push(result("SU1", L.SU1, button.count === 1 ? [] : [`${button.count}개`]));
   out.push(result("SU2", L.SU2, r.width >= G.tap && r.height >= G.tap ? [] : [`${fmt(r.width)}x${fmt(r.height)}`]));
   const bad3 = [];
-  const dTop = r.top - (header.bottom + G.gap);
-  if (Math.abs(dTop) > G.posTol) bad3.push(`위 ${fmt(r.top)} (헤더(띠) 아래 끝 ${fmt(header.bottom)} + ${G.gap} 과 ${fmt(dTop)})`);
-  const marginRight = viewport.w - right(r);
-  if (Math.abs(marginRight - G.margin) > G.posTol) bad3.push(`오른쪽 여백 ${fmt(marginRight)} (기대 ${G.margin})`);
+  if (r.left < 0 || r.top < 0 || right(r) > viewport.w || bottom(r) > viewport.h) bad3.push("단추가 화면 밖");
+  const centerOffset = (r.top + r.height / 2) - (menu.header.top + menu.header.height / 2);
+  if (Math.abs(centerOffset) > G.posTol) bad3.push(`세로 중심 차 ${fmt(centerOffset)}px`);
+  const marginRight = right(menu.header) - right(r);
+  if (Math.abs(marginRight - G.closeGap) > G.posTol) bad3.push(`오른쪽 여백 ${fmt(marginRight)}px (기대 ${G.closeGap})`);
   out.push(result("SU3", L.SU3, bad3));
   const bad4 = [];
-  for (const b of header.buttons) if (rectsOverlap(r, b.rect)) bad4.push(`헤더 ${b.kind} (${overlapText(r, b.rect)})`);
-  if (test && rectsOverlap(r, test)) bad4.push(`[테스트] (${overlapText(r, test)})`);
-  if (toast && rectsOverlap(r, toast)) bad4.push(`토스트 (${overlapText(r, toast)})`);
+  if (rectsOverlap(r, menu.title)) bad4.push(`메뉴 제목 (${overlapText(r, menu.title)})`);
+  if (rectsOverlap(r, menu.close)) bad4.push(`닫기 단추 (${overlapText(r, menu.close)})`);
   out.push(result("SU4", L.SU4, bad4));
   const bad5 = [];
-  // 14페이즈: 소리 단추가 띠 아래 독으로 내려와 재접속 띠가 더는 단추 중심을 덮지 않는다 — 덮든 안 덮든 단추 중심의 최상단이 단추 자신이어야 한다(띠가 없으면 확인한 것이 없어 실패)
   if (!bannerHit.present) bad5.push("재접속 띠가 떠 있지 않아 확인할 것이 없다");
   else if (bannerHit.hitIsButton !== true) bad5.push(bannerHit.covers === true ? "띠가 단추 중심을 덮고 있다(단추가 눌리지 않음)" : "단추 중심의 최상단이 단추가 아님");
   out.push(result("SU5", L.SU5, bad5));

@@ -1220,6 +1220,42 @@ describe("이름표 맨 앞 겹침 data-front (G-06-4)", () => {
     expect(marked).toEqual([3]);
   });
 
+  it("대기실 가장자리 이름표가 잘리거나 중앙 이름표를 가리지 않고 내보내기 버튼으로 작동한다", async () => {
+    const players = [player(0, "가나다라마바사아"), player(1, "아자차카타파하가", { connected: false }), player(2, "화면밖사람"), player(3, "헤더뒤사람")];
+    const ents = [seg(0, [-300, 100]), seg(1, [300, 100]), seg(2, [400, 100]), seg(3, [200, 400])];
+    const s = await open({ stageInsets: { top: 62, bottom: 160 } }, { players, ents });
+    const host = s.utils.container.querySelector(".mf-world__canvas")!;
+    Object.defineProperty(host, "clientWidth", { configurable: true, value: 360 });
+    Object.defineProperty(host, "clientHeight", { configurable: true, value: 560 });
+    const renderer = s.world.renderers[0]!;
+    const project = renderer.project;
+    let mineX = 5;
+    let guestX = 355;
+    renderer.project = (point) => ({
+      ...project(point),
+      sx: point.z === 4 ? 5 : point.x < 0 ? mineX : point.x === 3 ? guestX : 365,
+      ...(point.z === 4 ? { sy: 40 } : {}),
+    });
+    frames(220);
+
+    const tagPoint = (seat: number) => {
+      const [, x, y] = tagOf(s.utils, seat)!.style.transform.match(/^translate\(([^,]+)px, ([^,]+)px\)/)!;
+      return { x: Number(x), y: Number(y) };
+    };
+    expect(players.map(({ seat }) => tagPoint(seat).x)).toEqual([54, 306, 365, 5]);
+    expect(tagOf(s.utils, 0)!.textContent).toContain("가나다라마바사아 (나)");
+
+    const mineY = tagPoint(0).y;
+    mineX = 125;
+    guestX = 17;
+    frame();
+    expect(tagPoint(0)).toEqual({ x: mineX, y: mineY });
+    expect(tagPoint(1).x).toBe(54);
+    expect(Math.abs(tagPoint(1).y - mineY)).toBeGreaterThanOrEqual(28);
+    fireEvent.click(screen.getByRole("button", { name: "아자차카타파하가 님 내보내기" }));
+    expect(s.props.onKick).toHaveBeenCalledWith(1, "아자차카타파하가");
+  });
+
   it("이름표 폭은 처음 한 번만 읽고 프레임마다 읽지 않으며, view 갱신 뒤에만 다시 읽는다", async () => {
     const s = await open({}, { players: three, mySeat: 2, ents: near });
     frame();

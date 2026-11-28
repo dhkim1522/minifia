@@ -71,9 +71,9 @@ import {
   waitChatLine,
   waitForPhaseStart,
   waitWorldReady,
+  walkableTapPoints,
   readNightFaces,
   readPeoplePages,
-  readSideColumn,
   showPeopleTarget,
 } from "./browser.mjs";
 import {
@@ -139,7 +139,6 @@ import {
   graphemeCount,
   letterChecks,
   ownPenFontRequests,
-  sideColumnChecks,
   discussionLogHeight,
 } from "./lib.mjs";
 import { makeAvatarFlows } from "./avatar.mjs";
@@ -253,9 +252,32 @@ async function lobbyFlow(ctx) {
   const g1 = await readGuide(page);
   recOne(rec, "lobby/lobby", guideChecks(g1, { phase: "lobby" }));
   recOne(rec, "lobby/lobby", docHeightChecks(g1, { h }));
-  // 오른쪽 열에는 방장도 소리·옷장 52 원 둘이 있고 머리에는 44 정사각 둘이 있다.
-  const sideHost = await readSideColumn(page);
-  for (const r of sideColumnChecks({ viewport: { w, h }, screen: "lobby", host: true, ...sideHost })) recOne(rec, "lobby/lobby", r);
+  // 공용 도구는 채팅 위에 있고 소리는 헤더 메뉴에서 연다(결정 0100).
+  const toolbar = await page.locator(".mf-lobby .mf-room-toolbar button").evaluateAll((buttons) => buttons.map((button) => {
+    const { left, top, width, height, right, bottom } = button.getBoundingClientRect();
+    const center = document.elementFromPoint(left + width / 2, top + height / 2);
+    return {
+      id: button.getAttribute("data-room-tool") ?? button.getAttribute("data-playtest-action"),
+      left, top, width, height, right, bottom, hit: !!center && button.contains(center),
+    };
+  }));
+  rec("lobby/lobby", "L12", "도구줄은 감정 표현·꾸미기·봇 순서", toolbar.map((tool) => tool.id).join(",") === "reaction,dress,bots", JSON.stringify(toolbar.map((tool) => tool.id)));
+  const toolbarFits = toolbar.length === 3 && toolbar.every((tool, i) => tool.hit &&
+    tool.width + 0.5 >= 44 && tool.height + 0.5 >= 44 &&
+    rectInside(tool, { left: 0, top: 0, width: w, height: h }) &&
+    (i === 0 || toolbar[i - 1].right <= tool.left + 0.5));
+  rec("lobby/lobby", "L13", "도구는 화면 안에 겹치지 않고 44px 이상 눌림", toolbarFits, JSON.stringify(toolbar));
+  const sound = await attempt(async () => {
+    await page.locator(".mf-lobby__header [data-game-menu]").click();
+    const menu = page.getByRole("dialog", { name: "게임 메뉴" });
+    const button = menu.locator("[data-sound-button]");
+    await button.waitFor({ state: "visible", timeout: 3000 });
+    const box = await button.boundingBox();
+    await menu.getByRole("button", { name: "닫기", exact: true }).click();
+    await menu.waitFor({ state: "hidden", timeout: 3000 });
+    return { ok: box !== null && box.width + 0.5 >= 44 && box.height + 0.5 >= 44, detail: JSON.stringify(box) };
+  });
+  rec("lobby/lobby", "L14", "헤더 메뉴에서 44px 이상 소리 버튼을 찾을 수 있음", sound.ok, sound.detail);
 
   // 헤더의 방 코드와 초대 시트의 방 코드가 일치한다
   const share = await attempt(async () => {
@@ -462,23 +484,15 @@ async function worldFlow(ctx) {
     recOne(rec, sc, nameTagFitChecks(gw.tags, { expectTexts: [`${WORLD_GUEST_NICK} (나)`, LOBBY_HOST_NICK] }));
     await checkState(ctx, "world", "lobby"); // 방장 화면의 G (콘솔 오류·가로 넘침·다른 출처 요청 없음)
 
-    // 목적지: 손님 현재 위치에서 3 단위 이상 먼, 두 페이지 화면에 모두 보이고 입력 면 위에 있는 걸을 수 있는 칸 중 가장 먼 곳
-    // (뒤에서 방장이 같은 점을 눌러 두 캐릭터를 한 점에 모으려면 방장 화면에서도 눌릴 수 있어야 한다)
+    // 뒤에서 방장도 같은 곳으로 걸어가므로 양쪽의 실제 입력 면에서 누를 수 있는 칸만 고른다.
     const from = await sampleWorld(gp, gSeat);
     if (!from) throw new SetupError("손님 위치를 읽지 못함(sample)");
     const centers = walkableCentersOfApp();
-    const pad = 28;
-    const [gScreens, hScreens] = await Promise.all([screensOfWorld(gp, centers), screensOfWorld(hp, centers)]);
-    const inStage = (sc, st) => !!sc && !!st && Number.isFinite(sc.sx) && sc.sx > pad && sc.sx < ctx.size.w - pad && sc.sy > st.top + pad && sc.sy < st.bottom - pad;
-    // 작은 폰에서도 방장·참가자 양쪽 무대에 보이는 칸을 고른다.
-    const onScreen = centers.map((c, i) => ({ ...c, sx: gScreens[i]?.sx, sy: gScreens[i]?.sy, hx: hScreens[i]?.sx, hy: hScreens[i]?.sy })).filter((c, i) => inStage(gScreens[i], gw.stage) && inStage(hScreens[i], hw.stage));
-    // 3 단위 이상 먼 칸이 없는 낮은 스테이지(360x560 의 248)는 보이는 칸 중 가장 먼 칸과 더 짧은 걷는 길이 하한을 쓴다(worldTapRanking, 07-20)
-    // 떠 있는 버튼(꾸미기 hanger, 10페이즈)·이름표가 덮은 칸은 후보에서 먼저 뺀 뒤 순위를 매긴다 — 가린 칸 때문에 먼 칸이 사라지면 기존 낮은 스테이지 규칙(1.5 단위·0.8초)이 적용된다(문턱은 그대로)
-    const [allG, allH] = await Promise.all([hitsInputSurface(gp, onScreen), hitsInputSurface(hp, onScreen.map((c) => ({ sx: c.hx, sy: c.hy })))]);
-    const open = onScreen.filter((_, i) => allG[i] && allH[i]);
+    const [guestTaps, hostTaps] = await Promise.all([walkableTapPoints(gp, centers), walkableTapPoints(hp, centers)]);
+    const open = guestTaps.filter((point, i) => point && hostTaps[i]);
     const { ranked, low, minWalkMs } = worldTapRanking(open, from);
     const target = ranked[0];
-    if (!target) throw new SetupError(`탭할 목적지를 찾지 못함(두 화면에 보이는 칸 ${onScreen.length}개, ${low ? "1.5" : "3"} 단위 이상 먼 칸 ${ranked.length}개)`);
+    if (!target) throw new SetupError(`탭할 목적지를 찾지 못함(두 화면에서 누를 수 있는 칸 ${open.length}개, ${low ? "1.5" : "3"} 단위 이상 먼 칸 ${ranked.length}개)`);
 
     // 손님이 바닥을 한 번 누른다
     const tap = await tapWorld(gp, gt, gSeat, target.x, target.z);
@@ -559,7 +573,11 @@ async function worldFlow(ctx) {
   const probe = await attempt(async () => {
     const { guest: eg } = await openGuest(ctx, EMOJI_NICK);
     try {
-      await waitWorldReady(eg.page, 3); // 방장 + 나간 손님(연결 끊김으로 자리가 남음) + 이모지 손님
+      await eg.page.waitForFunction((nickname) => {
+        const tag = document.querySelector('.mf-world__tag[data-me="true"]');
+        return window.__mfWorld?.status() === "ready" && tag && tag.textContent?.includes(nickname)
+          && getComputedStyle(tag).visibility === "visible" && Number(getComputedStyle(tag).opacity) > 0.01;
+      }, EMOJI_NICK, { timeout: 20_000 });
       await settle(eg.page);
       recordMyTagWidth(ctx, "world/emoji", await readWorld(eg.page), " · 이모지 8개 + ' (나)'");
     } finally {
@@ -1002,18 +1020,11 @@ async function openPair(ctx, flowId) {
   await Promise.all([waitWorldReady(hp, 2), waitWorldReady(gp, 2)]);
   await Promise.all([settle(hp), settle(gp)]);
 
-  // 손님이 한 번 걷는다: 두 화면에 모두 보이는 가장 먼 칸(worldFlow 와 같은 고르기)
-  const [hw, gw] = await Promise.all([readWorld(hp), readWorld(gp)]);
+  // 손님이 걷고 방장은 위치를 받는다. 목적지는 손님 화면에서만 누를 수 있으면 된다.
   const from = await sampleWorld(gp, gSeat);
   if (!from) throw new SetupError("손님 위치를 읽지 못함(sample)");
-  const centers = walkableCentersOfApp();
-  const pad = 28;
-  const [gScreens, hScreens] = await Promise.all([screensOfWorld(gp, centers), screensOfWorld(hp, centers)]);
-  const inStage = (sc, st) => !!sc && !!st && Number.isFinite(sc.sx) && sc.sx > pad && sc.sx < ctx.size.w - pad && sc.sy > st.top + pad && sc.sy < st.bottom - pad;
-  const onScreen = centers.map((c, i) => ({ ...c, sx: gScreens[i]?.sx, sy: gScreens[i]?.sy, hx: hScreens[i]?.sx, hy: hScreens[i]?.sy })).filter((c, i) => inStage(gScreens[i], gw.stage) && inStage(hScreens[i], hw.stage));
-  const probe = pickTapTargets(onScreen, from, { minDist: 3 }).slice(0, 40);
-  const [gHits, hHits] = await Promise.all([hitsInputSurface(gp, probe), hitsInputSurface(hp, probe.map((c) => ({ sx: c.hx, sy: c.hy })))]);
-  const target = probe.find((_, i) => gHits[i] && hHits[i]);
+  const open = (await walkableTapPoints(gp, walkableCentersOfApp())).filter(Boolean);
+  const [target] = pickTapTargets(open, from, { minDist: 3 });
   if (!target) throw new SetupError("탭할 목적지를 찾지 못함");
   const tap = await tapWorld(gp, guest.tracker, gSeat, target.x, target.z);
   if (!tap.move) throw new SetupError("손님 구간이 오지 않음");

@@ -60,14 +60,15 @@ export function rankTags(boxes: readonly TagBox[], h: number = NAMETAG_H): TagRa
   });
 }
 
-/** Give cramped seats a nearby vertical lane while keeping their horizontal association. */
+/** Give cramped seats a nearby vertical lane while keeping their horizontal association. Reserved tags stay in place. */
 export function spaceCompactTags(
   boxes: readonly TagBox[], minBottom: number, maxBottom: number,
   eye?: { focus?: number; speaker?: number; center: number },
+  reserved: readonly TagBox[] = [],
 ): TagBox[] {
   const gap = eye === undefined ? 4 : EYE_TAG_GAP;
   const step = eye === undefined ? NAMETAG_H + gap : EYE_TAG_VERTICAL_GAP;
-  const placed: TagBox[] = [];
+  const placed = [...reserved];
   const bySeat = new Map<number, TagBox>();
   const priority = (box: TagBox): number => box.seat === eye?.focus ? 0 : box.seat === eye?.speaker || box.turn ? 1 : 2;
   const order = [...boxes].sort(eye === undefined

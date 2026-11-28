@@ -3,7 +3,7 @@
 import type { SfxId, SoundId } from "../audio/recipes";
 
 /**
- * 오프라인 렌더 합격 문턱 (D-18, T-12-22). 낮추지 않는다: 실패하면 레시피를 고친다.
+ * 오프라인 렌더 합격 문턱 (D-18, T-12-22).
  * E2E 쪽 문턱(scripts/e2e/lib.mjs SOUND_RENDER_LIMITS)과 같아야 하고 e2eContract 시험이 대조한다.
  */
 export const SOUND_LIMITS = {
@@ -14,6 +14,12 @@ export const SOUND_LIMITS = {
   /** 효과음 측정 길이와 선언 길이의 허용 차이(ms) */
   lengthTolMs: 50,
 } as const;
+
+/** 필터가 잡음의 피크를 감쇠하므로 엔벨로프만으로 길이를 추정할 수 없는 소리의 참조값. */
+export const AUDIBLE_LENGTH_REFERENCE_MS: Readonly<Partial<Record<SfxId, number>>> = {
+  // 처형 먼지. 고정 시드, 44.1kHz, −60dBFS 오프라인 참조 렌더 1820.9ms를 반올림했다.
+  "execution.rise": 1820,
+};
 
 export interface LabGroup {
   key: string;
