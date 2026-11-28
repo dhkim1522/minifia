@@ -3,7 +3,7 @@
 // day.mjs·avatar.mjs 와 같은 모양: helpers 를 받고 서로 import 하지 않는다.
 // helpers: { recorder, attempt, openGame, closeGame, allAt, untilGame, gameGH, GAME_HOST_NICK }.
 // 표식(data-keyword-*·data-answer-*·data-announce-label·data-early)에는 역할·키워드 값이 없다 — 키워드는 텍스트 노드로만 읽는다(T-23-43).
-import { chooseVerdict, installFakeViewport, openRoleCard, openTableDockPane, selectRoleCardTab, settle, showPeopleTarget, skipDayToExecution, skipTo, sleep, waitForPhaseStart, watchSockets } from "./browser.mjs";
+import { chooseVerdict, installFakeViewport, openRoleCard, openTableDockPane, selectRoleCardTab, settle, SetupError, showPeopleTarget, skipDayToExecution, skipTo, sleep, waitForPhaseStart, watchSockets } from "./browser.mjs";
 import { OVERLAP_EPS, TAP_MIN } from "./lib.mjs";
 
 const isNum = (x) => typeof x === "number" && Number.isFinite(x);
@@ -434,9 +434,24 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
   };
   const rec1 = (rec, sc, r, suffix = "") => rec(sc, r.id, `${r.label}${suffix}`, r.ok, r.detail);
 
-  /** 키워드 단계까지: 방장 마피아 + 참가자 1(시민 편) + 봇 2. 두 페이지에 입력줄 감시를 넣는다 */
-  const openKeyword = (ctx, id, { extraHost = [], vote = { exec: "no", pick: "host" } } = {}) =>
-    openGame(ctx, id, { ...GAME4, role: "mafia", vote, to: "keyword", hostNick: GAME_HOST_NICK, hostInitScripts: [installKeywordWatch, ...extraHost], guestInitScripts: [installKeywordWatch, ...extraHost] });
+  /** 방장 마피아 + 참가자 1(시민 편) + 봇 2. 제시어를 알아야 하는 검사에만 조건을 둔다. */
+  async function openKeyword(ctx, id, { extraHost = [], vote = { exec: "no", pick: "host" }, needsKnownGuest = false } = {}) {
+    const scripts = [installKeywordWatch, ...extraHost];
+    for (let setup = 0; setup < 2; setup++) {
+      const game = await openGame(ctx, id, { ...GAME4, role: "mafia", vote, to: "keyword", hostNick: GAME_HOST_NICK, hostInitScripts: scripts, guestInitScripts: scripts });
+      if (!needsKnownGuest) return game;
+      let guestView;
+      try {
+        guestView = await game.guests[0].tracker.waitFor((view) => view.phase === "keyword", 5000, "참가자 단서 단계");
+      } catch (error) {
+        await closeGame(game);
+        throw error;
+      }
+      if (guestView.me.keyword) return game;
+      await closeGame(game);
+    }
+    throw new SetupError("참가자가 제시어를 아는 배정이 두 판 모두 나오지 않음");
+  }
 
   async function readCorrection(page, tracker, word) {
     await waitOpen(page);
@@ -491,7 +506,7 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
   async function keywordFlow(ctx) {
     const id = "keyword";
     const rec = recorder(ctx);
-    const game = await openKeyword(ctx, id);
+    const game = await openKeyword(ctx, id, { needsKnownGuest: true });
     try {
       const { hp, ht, guests } = game;
       const [g] = guests;
@@ -728,7 +743,7 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
     const id = "keyword-sizes";
     const rec = recorder(ctx);
     const K = 336;
-    const game = await openKeyword(ctx, id, { extraHost: [installFakeViewport] });
+    const game = await openKeyword(ctx, id, { extraHost: [installFakeViewport], needsKnownGuest: true });
     try {
       const { hp, ht, guests } = game;
       const [g] = guests;
@@ -782,7 +797,7 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       rec(`${id}/keyword`, "KW12k", "참가자 둘이 제출하면 첫 발표로 넘어간다", first.day?.keyword?.presentation?.order === 1, `단계 ${first.phase}`);
 
       // 찬반: 봇 표가 다 들어온 뒤 사람 둘이 던지면 1.5초 안에 넘어가고, 유예 안 번복은 마감을 다시 늘린다
-      const discussion = await ht.waitFor((v) => v.phase === "discussion", announcementMs + 6000, "발표 뒤 토론");
+      const discussion = await ht.waitFor((v) => v.phase === "discussion", announcementMs + ANSWER_REVEAL_MS_COPY + 6000, "발표와 제시어 공개 뒤 토론");
       await waitForPhaseStart(hp, discussion);
       await sleep(900);
       await skipTo(hp, ht, "verdict");

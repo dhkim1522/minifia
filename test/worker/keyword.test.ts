@@ -139,6 +139,8 @@ async function inKeyword(options: { bots?: number } = {}): Promise<{ room: Seate
   }
   send(room.host, { t: "start" });
   for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
+  // 답안 예시인 '안경'도 단어 목록에 있으므로, 답안 흐름은 같은 제시어로 검증한다.
+  await editRoom(room.code, (r) => ({ ...r, keyword: { ...(r.keyword as KeywordRoom["keyword"]), genre: "movie", word: "해리포터" } }));
   await advanceTo(room.code, socks, "keyword");
   for (const sock of socks) await settle(sock, mark(sock));
   const stored = (await storedRoom(room.code)) as KeywordRoom;
