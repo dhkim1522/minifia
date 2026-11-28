@@ -124,6 +124,7 @@ import {
   ghostDomChecks,
   pickButtonChecks,
   basicOrderChecks,
+  EXEC_TIMING,
   OFF_DEVICE_ATTR_PREFIX,
   OFF_DEVICE_SELECTORS,
   NOMINATION_MS,
@@ -2154,7 +2155,8 @@ async function ghostFlow(ctx) {
           await Promise.all(guests.map((g) => untilGame(g.page, (x) => x.phase === phase || x.ghostView, 8000, `${phase} 손님 화면`).catch(() => {})));
           await settle(hp);
           const view = ht.last();
-          const gv = await ghostViewSettled(hp, view, 4000);
+          // 처형 진입 뒤 공개 유언 3초와 먼지 2.4초를 지나야 새 유령이 좌석에 잡힌다.
+          const gv = await ghostViewSettled(hp, view, phase === "execution" ? EXEC_TIMING.pinOffAt : 4000);
           for (const r of gv.rows) rec(sc, r.id, `${r.label} (${phase})`, r.ok, r.detail, r.ok);
           for (let i = 0; i < guests.length; i++) {
             const g = guests[i];
