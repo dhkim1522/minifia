@@ -216,7 +216,7 @@ export interface RoomState {
   mapChoice?: MapChoice;
   /**
    * 서버 전용 첫날 키워드. 없으면 keyword 단계를 건너뛴다(D-29, 옛 저장 방·시험 스위치 끔).
-   * hiddenCitizenSeats 는 예전 판에는 없으며, 어떤 뷰에도 보내지 않는다.
+   * hiddenCitizenSeats 는 제시어를 가린 시민팀 좌석이다. 예전 판에는 없으며 어떤 뷰에도 보내지 않는다.
    */
   keyword?: { genre: string; word: string; hiddenCitizenSeats?: number[] };
   /** 서버 전용. 확정 제출한 답은 서버 접수 순서로 저장한다. closeKeyword에서 지운다. */
@@ -491,9 +491,9 @@ export function beginGame(
   const keyword = pickKeyword !== undefined ? pickKeyword(randInt) : undefined;
   const hiddenCitizenSeats: number[] = [];
   if (keyword !== undefined) {
-    const candidates = seated.filter((p) => roles.get(p.id) === "citizen").map((p) => p.seat);
-    const citizenSideCount = [...roles.values()].filter((role) => role !== "mafia").length;
-    const hideCount = Math.min(Math.round(candidates.length * 0.4), citizenSideCount - 2);
+    const candidates = seated.filter((p) => roles.get(p.id) !== "mafia").map((p) => p.seat);
+    const citizenCount = [...roles.values()].filter((role) => role === "citizen").length;
+    const hideCount = Math.min(Math.round(citizenCount * 0.4), candidates.length - 2);
     for (let i = 0; i < hideCount; i += 1) {
       hiddenCitizenSeats.push(candidates.splice(randInt(candidates.length), 1)[0]!);
     }

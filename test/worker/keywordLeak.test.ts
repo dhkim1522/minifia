@@ -60,7 +60,7 @@ const rolesOf = (room: Seated): { mafia: Actor; citizen: Actor; hidden: Actor } 
   return {
     mafia: all.find((a) => a.role === "mafia")!,
     citizen: citizens.find((a) => Object.hasOwn(lastViewOf(a.sock).me, "keyword"))!,
-    hidden: citizens.find((a) => !Object.hasOwn(lastViewOf(a.sock).me, "keyword"))!,
+    hidden: all.find((a) => a.role !== "mafia" && !Object.hasOwn(lastViewOf(a.sock).me, "keyword"))!,
   };
 };
 
@@ -146,7 +146,7 @@ describe("③④ keyword 단계 view 모양: day.keyword 열은 모두 같고, m
     expect(mine.has("answer") || theirs.has("answer")).toBe(false);
     expect(mine.has("keyword")).toBe(false);
     expect(theirs.has("keyword")).toBe(true);
-    expect(meKeys(hidden)).toEqual(new Set([...theirs].filter((key) => key !== "keyword")));
+    expect(new Set([...meKeys(hidden)].filter((key) => key !== "records"))).toEqual(new Set([...theirs].filter((key) => key !== "keyword")));
   }, 60_000);
 });
 

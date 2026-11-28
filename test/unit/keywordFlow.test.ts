@@ -83,16 +83,24 @@ describe("beginGame 의 키워드 선택 (D-05·D-29)", () => {
     expect(on - count()).toBe(3);
   });
 
-  it.each([[4, 1], [5, 1], [6, 1], [7, 1], [8, 2]])("%i인 판에서 가릴 일반 시민 %i명을 중복 없이 뽑고 제시어 보유자는 2명 이상이다", (total, expected) => {
+  it.each([[4, 1], [5, 1], [6, 1], [7, 1], [8, 2]])("%i인 판에서 시민팀 %i명을 중복 없이 뽑고 제시어 보유자는 2명 이상이다", (total, expected) => {
     for (const testRole of ["mafia", "citizen"] as const) {
       const lobby = { ...lobbyOf(total), testMode: true as const, testRole };
       const state = beginGame(lobby, 1000, () => 0, keywordPickerNow());
       const seats = state.keyword!.hiddenCitizenSeats!;
-      const citizens = state.players.filter((p) => p.role === "citizen");
+      const citizens = state.players.filter((p) => p.role !== "mafia");
       expect(seats).toEqual(citizens.slice(0, expected).map((p) => p.seat));
       expect(new Set(seats).size).toBe(expected);
       expect(state.players.filter((p) => p.role !== "mafia" && !seats.includes(p.seat)).length).toBeGreaterThanOrEqual(2);
     }
+  });
+
+  it.each(["police", "doctor"] as const)("시민팀 추첨에 %s 좌석도 포함한다", (testRole) => {
+    const lobby = { ...lobbyOf(5), testMode: true as const, testRole };
+    const state = beginGame(lobby, 1000, () => 0, keywordPickerNow());
+    const host = state.players.find((p) => p.id === lobby.hostId)!;
+    expect(host.role).toBe(testRole);
+    expect(state.keyword?.hiddenCitizenSeats).toEqual([host.seat]);
   });
 
   it("가린 좌석은 저장 복구까지 유지되고 새 판에서 다시 뽑는다", () => {
@@ -107,7 +115,7 @@ describe("beginGame 의 키워드 선택 (D-05·D-29)", () => {
       selecting = true;
       return pick();
     });
-    const citizens = next.players.filter((p) => p.role === "citizen");
+    const citizens = next.players.filter((p) => p.role !== "mafia");
     expect(next.keyword?.hiddenCitizenSeats).toEqual(citizens.slice(-2).reverse().map((p) => p.seat));
     expect(next.keyword?.hiddenCitizenSeats).not.toEqual(restored.keyword?.hiddenCitizenSeats);
   });
@@ -154,7 +162,7 @@ describe("keyword 단계 view (D-06 누설 없음)", () => {
     }
   });
 
-  it("제시어를 가린 시민은 자기 직업을 유지하고 마피아처럼 me.keyword 키가 없다", () => {
+  it("제시어를 가린 시민팀 참가자는 자기 직업을 유지하고 me.keyword 키가 없다", () => {
     const state = kwState();
     const word = state.keyword!.word;
     const hidden = state.keyword!.hiddenCitizenSeats!;

@@ -36,7 +36,7 @@ describe("첫날 키워드 단계 (D-01·D-06)", () => {
     const hiddenSeats = stored.keyword!.hiddenCitizenSeats!;
     expect(hiddenSeats).toHaveLength(1);
     const hidden = actors.find((a) => a.seat === hiddenSeats[0])!;
-    expect(hidden.role).toBe("citizen");
+    expect(hidden.role).not.toBe("mafia");
     let knowers = 0;
     for (const a of actors) {
       const view = lastViewOf(a.sock);
@@ -56,7 +56,7 @@ describe("첫날 키워드 단계 (D-01·D-06)", () => {
     await hello(replacement, hidden.token);
     const rejoined = lastViewOf(replacement);
     expect(rejoined.phase).toBe("keyword");
-    expect(rejoined.me).toMatchObject({ seat: hidden.seat, role: "citizen" });
+    expect(rejoined.me).toMatchObject({ seat: hidden.seat, role: hidden.role });
     expect(Object.hasOwn(rejoined.me, "keyword")).toBe(false);
     expect(((await storedRoom(room.code)) as KeywordRoom).keyword?.hiddenCitizenSeats).toEqual(hiddenSeats);
     socks[socks.indexOf(hidden.sock)] = replacement;
@@ -125,9 +125,9 @@ type AnswerRoom = StoredRoom & { keywordProbed?: true; answerSubmits?: unknown }
 const answerOf = (sock: TestSocket, text: string, final: boolean): void => send(sock, { t: "answer", text, final });
 const socksOf = (room: Seated): TestSocket[] => [room.host, ...room.guests.map((g) => g.sock)];
 
-/** 사람 4명 판을 keyword 단계 첫 순간까지 돌린다. 모든 소켓의 프레임을 flush 해 둔다. */
-async function inKeyword(options: { bots?: number } = {}): Promise<{ room: Seated; socks: TestSocket[]; word: string }> {
-  const room = await seat(3, 0, options.bots ? { testMode: true } : {});
+/** 방을 keyword 단계 첫 순간까지 돌리고 모든 소켓의 프레임을 flush 한다. */
+async function inKeyword(options: { bots?: number; hiddenRole?: "citizen" | "police" | "doctor" } = {}): Promise<{ room: Seated; socks: TestSocket[]; word: string }> {
+  const room = await seat(options.hiddenRole === "doctor" ? 4 : 3, 0, options.bots ? { testMode: true } : {});
   const socks = socksOf(room);
   for (const sock of socks) await settle(sock, mark(sock));
   if (options.bots) {
@@ -140,7 +140,14 @@ async function inKeyword(options: { bots?: number } = {}): Promise<{ room: Seate
   send(room.host, { t: "start" });
   for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
   // 답안 예시인 '안경'도 단어 목록에 있으므로, 답안 흐름은 같은 제시어로 검증한다.
-  await editRoom(room.code, (r) => ({ ...r, keyword: { ...(r.keyword as KeywordRoom["keyword"]), genre: "movie", word: "해리포터" } }));
+  await editRoom(room.code, (r) => {
+    const keyword = { ...(r.keyword as KeywordRoom["keyword"]), genre: "movie", word: "해리포터" };
+    if (options.hiddenRole !== undefined) {
+      const hidden = (r.players as RoomState["players"]).find((p) => p.role === options.hiddenRole)!;
+      keyword.hiddenCitizenSeats = [hidden.seat];
+    }
+    return { ...r, keyword };
+  });
   await advanceTo(room.code, socks, "keyword");
   for (const sock of socks) await settle(sock, mark(sock));
   const stored = (await storedRoom(room.code)) as KeywordRoom;
@@ -182,12 +189,13 @@ describe("키워드 답 접수 (D-07·D-10)", () => {
     ]);
   }, 40_000);
 
-  it("제시어 보유자만 금지 초안 안내를 받고, 마피아와 가려진 시민의 제출은 같은 응답으로 접수한다", async () => {
-    const { room, socks, word } = await inKeyword();
+  it.each(["citizen", "police", "doctor"] as const)("제시어 보유자만 금지 초안 안내를 받고, 가려진 %s는 마피아와 같은 접수 응답을 받는다", async (hiddenRole) => {
+    const { room, socks, word } = await inKeyword({ hiddenRole });
     const actors = actorsOf(room);
-    const citizen = actors.find((x) => x.role === "police")!;
+    const citizen = actors.find((x) => x.role === "citizen" && Object.hasOwn(lastViewOf(x.sock).me, "keyword"))!;
     const mafia = actors.find((x) => x.role === "mafia")!;
-    const hidden = actors.find((x) => x.role === "citizen" && !Object.hasOwn(lastViewOf(x.sock).me, "keyword"))!;
+    const hidden = actors.find((x) => x.role === hiddenRole && !Object.hasOwn(lastViewOf(x.sock).me, "keyword"))!;
+    expect(lastViewOf(hidden.sock).me.role).toBe(hiddenRole);
     const others = (me: TestSocket): TestSocket[] => socks.filter((s) => s !== me);
 
     const drafts = socks.map((s) => mark(s));

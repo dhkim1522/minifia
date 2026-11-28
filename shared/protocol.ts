@@ -336,7 +336,7 @@ export interface MyInfo {
   pick?: number; // 밤에 본인이 고른 seat(본인에게만)
   allyPicks?: number[]; // 생존 마피아에게만: 동료들이 고른 대상 seat 오름차순·중복 없음(누가 골랐는지는 싣지 않는다)
   answer?: { text: string; final: boolean; keywordBlocked?: true }; // keyword 단계의 본인 글. 금지된 초안의 안내는 제시어를 아는 작성자에게만 보낸다.
-  keyword?: string; // keyword 단계에서 제시어를 받는 생존자 본인에게만 보낸다. 마피아와 무작위로 선택된 일반 시민에게는 키가 없다
+  keyword?: string; // keyword 단계에서 제시어를 받는 생존자 본인에게만 보낸다. 마피아와 추첨으로 선택된 시민팀 플레이어에게는 키가 없다
   records?: RoleRecord[]; // 본인 역할의 일지 하나(경찰 수사·마피아 암살·의사 치료), 본인에게만
   testMode?: true; // 테스트 방 방장 본인만(결정 0022). 손님·일반 방·미리보기에는 키 자체가 없다
   testRole?: RoleId; // 그 방장의 대기실 view 에서만, 고른 직업이 있을 때(없으면 무작위, 결정 0022)

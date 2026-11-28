@@ -385,8 +385,8 @@ function phaseKeyViolations(s: RoomState, viewer: Player, view: RoomView, phase:
   else if (answerOpen && day.keyword?.answer !== s.keyword?.word) out.push(`${tag}: day.keyword.answer value`);
   else if (answerOpen && flat(day.keyword?.answers) !== flat(s.keywordAnswers ?? [])) out.push(`${tag}: day.keyword.answers value`);
   else if (row && flat(day.keyword?.presentation) !== flat({ order: row.order, total: s.keywordAnswers?.length, seat: row.seat, text: row.text })) out.push(`${tag}: day.keyword.presentation value`);
-  const hiddenCitizen = viewer.role === "citizen" && s.keyword?.hiddenCitizenSeats?.includes(viewer.seat) === true;
-  const wantMeKeyword = phase === "keyword" && s.keyword !== undefined && isAlive(viewer) && viewer.role !== undefined && viewer.role !== "mafia" && !hiddenCitizen;
+  const hiddenSeat = s.keyword?.hiddenCitizenSeats?.includes(viewer.seat) === true;
+  const wantMeKeyword = phase === "keyword" && s.keyword !== undefined && isAlive(viewer) && viewer.role !== undefined && viewer.role !== "mafia" && !hiddenSeat;
   if (("keyword" in view.me) !== wantMeKeyword) out.push(`${tag}: me.keyword presence ${"keyword" in view.me}`);
   else if (wantMeKeyword && view.me.keyword !== s.keyword?.word) out.push(`${tag}: me.keyword value`);
   // 내 답(23-06): keyword 단계의 산 본인에게만, 쓴 것이 있을 때만(확정 우선). 남의 것은 값으로도 닿지 않는다.
