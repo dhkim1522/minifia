@@ -6,7 +6,7 @@
 
 - **v3.0 시험판**(`v3`)은 [B안 달빛 누아르](docs/decisions/0093-v3-noir-visual-redesign.md)의 재즈 바와 공통 화면을 쓴다. **22** 낮은 토론 → 찬반 → 지목 → 유언 → 처형(결정 0090). **23** 첫날 라이어게임과 정답 공개, 조기 진행, D1 판 기록(결정 0091). **24-01~07** 구현 완료.
 - [동물 12종](docs/decisions/0102-animal-characters.md)은 3D 모델·초상·의상을 공유한다. [공용 화면](docs/decisions/0100-home-art-and-discussion-controls.md)의 채팅은 하단에 두고, [단계의 선택과 결과](docs/decisions/0103-phase-events.md)는 중앙에서 진행한다.
-- **공개 v3** `2026-11-28T02:15:39Z+5b6efd7a`. [시민팀의 첫날 제시어 배정](docs/decisions/0119-keyword-clue-time-and-validation.md), [탈락 먼지와 관전 유령](docs/decisions/0108-seated-bar-play.md), [유언 작성과 발표 글꼴](docs/decisions/0124-v3-public-will-reading-time.md), [승리·역할 공개와 대기실 복귀](docs/decisions/0069-v2-result-rematch-plan-values.md), [게임 하단 탭](docs/decisions/0116-table-dock.md). 휴대폰 실기기 검수는 대기 중이다. [테스트 방](https://minifia-v3.dhplay.workers.dev/?test=1)
+- **공개 v3** `2026-11-28T06:58:00Z+aebf22b0`. [작은 대기실 이름표·감정 표현](docs/decisions/0112-jazz-bar-fixed-view.md), [시민팀의 첫날 제시어 배정](docs/decisions/0119-keyword-clue-time-and-validation.md), [탈락 먼지와 관전 유령](docs/decisions/0108-seated-bar-play.md), [유언 작성과 발표 글꼴](docs/decisions/0124-v3-public-will-reading-time.md), [승리·역할 공개와 대기실 복귀](docs/decisions/0069-v2-result-rematch-plan-values.md), [게임 하단 탭](docs/decisions/0116-table-dock.md). 휴대폰 실기기 검수는 대기 중이다. [테스트 방](https://minifia-v3.dhplay.workers.dev/?test=1)
 - **v2.0 완료 처리(2026-11-07)**: 태그 `v2.0`, 문서는 `.planning/milestones/v2.0-*`. 열린 감사 항목 26개는 STATE.md 미룬 항목. main 은 v1.0 그대로, v3.0 실테스트 통과 뒤 반영.
 - **캐릭터·맵**의 B안 모델은 `src/world/character.ts`, `src/world/ghost3d.ts`, `src/world/maps/`에 있다. 시안은 `design/v3.0/redesign/b-noir.png`. 이미지 재생성은 [에셋 자동 검사](docs/screen-map.md#에셋-자동-검사) 참고.
 - **맵**: 일반·테스트·다시 하기 모두 재즈 바. 이전 광장 방은 역할·단계를 유지해 원탁으로 옮긴다. 광장 자료는 개발 측정에서만 쓴다.
@@ -31,4 +31,3 @@
 
 - [남은 작업 로드맵](TODO.md)을 이어간다. 첫날 라이어 4·8인 밸런스와 팀·휴대폰 실기기 검수가 남았다.
 - **11-28 모바일 Chrome**: 로컬 48개 흐름·150건이 재검사까지 모두 통과했다. 작은 대기실 이름표와 감정 표현판을 수정했다. 320×568·360×560·360×640에서 8인 이름표와 감정 표현, 320×568에서 키보드·단서·낮밤 탭·결과를 확인했다. 성능 재검사 13개 통과. E2E 준비 실패 뒤 참가자 탭을 정리하며 대량 검사는 비영속 Worker에서 나누어 돌린다.
-- **배포 대기**: 화면 수정은 `f17b605b`. 타입과 집중 시험 335개 통과. 브라우저 검사와 병행 중 시간 초과가 난 전체 `npm test`는 단독 재실행한다. 이후 `npm run deploy`로 v3 배포하고 `/api/health`와 공개 360×560의 8인 대기실·감정 표현을 확인한다.
